@@ -14,6 +14,7 @@ export interface Category {
   type: TransactionType
   icon: string
   color: string
+  parentId?: string | null  // null = 대분류, string = 소분류, undefined = 레거시
 }
 
 export type PaymentMethod = 'account' | 'card'
@@ -27,7 +28,7 @@ export interface Transaction {
   accountId: string
   categoryId: string
   paymentMethod: PaymentMethod
-  cardId?: string        // 카드 결제인 경우
+  cardId?: string
   note?: string
   isInstallment?: boolean
   installmentMonths?: number

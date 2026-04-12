@@ -1,30 +1,48 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal } from '@/types'
+import { supabase } from './supabase'
+import type { User } from '@supabase/supabase-js'
 
-// ── 기본 카테고리 (변경 불필요) ───────────────────────────────────────────────
+// ── 기본 카테고리 (대분류/소분류 계층 구조) ───────────────────────────────────
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'salary',       name: '급여',     type: 'income',  icon: '💰', color: '#00B493' },
-  { id: 'interest',     name: '이자',     type: 'income',  icon: '🏦', color: '#00B493' },
-  { id: 'saving_return',name: '적금 만기',type: 'income',  icon: '🎉', color: '#00B493' },
-  { id: 'other_income', name: '기타수입', type: 'income',  icon: '💵', color: '#00B493' },
-  { id: 'living',       name: '생활비',   type: 'expense', icon: '🏠', color: '#FF6B6B' },
-  { id: 'food',         name: '식비',     type: 'expense', icon: '🍽️', color: '#FF8E53' },
-  { id: 'transport',    name: '교통비',   type: 'expense', icon: '🚌', color: '#4ECDC4' },
-  { id: 'communication',name: '통신비',   type: 'expense', icon: '📱', color: '#45B7D1' },
-  { id: 'insurance',    name: '보험료',   type: 'expense', icon: '🛡️', color: '#96CEB4' },
-  { id: 'subscription', name: '구독료',   type: 'expense', icon: '📺', color: '#DDA0DD' },
-  { id: 'shopping',     name: '쇼핑·미용',type: 'expense', icon: '🛍️', color: '#F7DC6F' },
-  { id: 'selfdev',      name: '자기계발', type: 'expense', icon: '📚', color: '#82E0AA' },
-  { id: 'gift',         name: '선물·경조',type: 'expense', icon: '🎁', color: '#F1948A' },
-  { id: 'travel',       name: '여행',     type: 'expense', icon: '✈️', color: '#85C1E9' },
-  { id: 'drink',        name: '술·음료',  type: 'expense', icon: '🍺', color: '#F0B27A' },
-  { id: 'daily',        name: '생필품',   type: 'expense', icon: '🧴', color: '#A9CCE3' },
-  { id: 'loan',         name: '대출이자', type: 'expense', icon: '🏦', color: '#EC7063' },
-  { id: 'saving',       name: '적금',     type: 'expense', icon: '💰', color: '#A8D8EA' },
-  { id: 'card',         name: '카드대금', type: 'expense', icon: '💳', color: '#B0BEC5' },
-  { id: 'etc',          name: '기타',     type: 'expense', icon: '📦', color: '#CFD8DC' },
+  // 수입 대분류
+  { id: 'pg_income',     name: '수입',       type: 'income',  icon: '💰', color: '#00B493', parentId: null },
+  // 수입 소분류
+  { id: 'salary',        name: '급여',        type: 'income',  icon: '💰', color: '#00B493', parentId: 'pg_income' },
+  { id: 'interest',      name: '이자',        type: 'income',  icon: '🏦', color: '#00B493', parentId: 'pg_income' },
+  { id: 'saving_return', name: '적금 만기',   type: 'income',  icon: '🎉', color: '#00B493', parentId: 'pg_income' },
+  { id: 'other_income',  name: '기타수입',    type: 'income',  icon: '💵', color: '#00B493', parentId: 'pg_income' },
+  // 지출 대분류
+  { id: 'pg_living',     name: '관리비',      type: 'expense', icon: '🏠', color: '#FF6B6B', parentId: null },
+  { id: 'pg_loan',       name: '대출이자',    type: 'expense', icon: '🏦', color: '#EC7063', parentId: null },
+  { id: 'pg_saving',     name: '적금',        type: 'expense', icon: '💰', color: '#A8D8EA', parentId: null },
+  { id: 'pg_transport',  name: '교통비',      type: 'expense', icon: '🚌', color: '#4ECDC4', parentId: null },
+  { id: 'pg_comm',       name: '통신비',      type: 'expense', icon: '📱', color: '#45B7D1', parentId: null },
+  { id: 'pg_insurance',  name: '보험료',      type: 'expense', icon: '🛡️', color: '#96CEB4', parentId: null },
+  { id: 'pg_food',       name: '식비',        type: 'expense', icon: '🍽️', color: '#FF8E53', parentId: null },
+  { id: 'pg_etc',        name: '기타지출',    type: 'expense', icon: '📦', color: '#CFD8DC', parentId: null },
+  // 지출 소분류
+  { id: 'living',        name: '생활비',      type: 'expense', icon: '🏠', color: '#FF6B6B', parentId: 'pg_living' },
+  { id: 'gas',           name: '가스',        type: 'expense', icon: '🔥', color: '#FF6B6B', parentId: 'pg_living' },
+  { id: 'water',         name: '수도',        type: 'expense', icon: '💧', color: '#4ECDC4', parentId: 'pg_living' },
+  { id: 'electricity',   name: '전기',        type: 'expense', icon: '⚡', color: '#FFB800', parentId: 'pg_living' },
+  { id: 'loan',          name: '대출이자',    type: 'expense', icon: '🏦', color: '#EC7063', parentId: 'pg_loan' },
+  { id: 'saving',        name: '적금',        type: 'expense', icon: '💰', color: '#A8D8EA', parentId: 'pg_saving' },
+  { id: 'transport',     name: '교통비',      type: 'expense', icon: '🚌', color: '#4ECDC4', parentId: 'pg_transport' },
+  { id: 'communication', name: '통신비',      type: 'expense', icon: '📱', color: '#45B7D1', parentId: 'pg_comm' },
+  { id: 'insurance',     name: '보험료',      type: 'expense', icon: '🛡️', color: '#96CEB4', parentId: 'pg_insurance' },
+  { id: 'food',          name: '식비',        type: 'expense', icon: '🍽️', color: '#FF8E53', parentId: 'pg_food' },
+  { id: 'drink',         name: '술·음료',     type: 'expense', icon: '🍺', color: '#F0B27A', parentId: 'pg_food' },
+  { id: 'shopping',      name: '쇼핑·미용',   type: 'expense', icon: '🛍️', color: '#F7DC6F', parentId: 'pg_etc' },
+  { id: 'selfdev',       name: '자기계발',    type: 'expense', icon: '📚', color: '#82E0AA', parentId: 'pg_etc' },
+  { id: 'gift',          name: '선물·경조',   type: 'expense', icon: '🎁', color: '#F1948A', parentId: 'pg_etc' },
+  { id: 'travel',        name: '여행',        type: 'expense', icon: '✈️', color: '#85C1E9', parentId: 'pg_etc' },
+  { id: 'daily',         name: '생필품',      type: 'expense', icon: '🧴', color: '#A9CCE3', parentId: 'pg_etc' },
+  { id: 'subscription',  name: '구독료',      type: 'expense', icon: '📺', color: '#DDA0DD', parentId: 'pg_etc' },
+  { id: 'card',          name: '카드대금',    type: 'expense', icon: '💳', color: '#B0BEC5', parentId: 'pg_etc' },
+  { id: 'etc',           name: '기타',        type: 'expense', icon: '📦', color: '#CFD8DC', parentId: 'pg_etc' },
 ]
 
 export const DEFAULT_ACCOUNTS: Account[] = [
@@ -42,6 +60,7 @@ export const DEFAULT_CARDS: Card[] = [
 
 // ── 앱 데이터 타입 ────────────────────────────────────────────────────────────
 interface AppData {
+  categories: Category[]
   accounts: Account[]
   transactions: Transaction[]
   budgets: Budget[]
@@ -54,6 +73,7 @@ interface AppData {
 }
 
 const INITIAL_DATA: AppData = {
+  categories: DEFAULT_CATEGORIES,
   accounts: DEFAULT_ACCOUNTS,
   transactions: [],
   budgets: [],
@@ -71,6 +91,12 @@ const STORAGE_KEY = 'household_budget_v1'
 interface AppContextType {
   data: AppData
   categories: Category[]
+  user: User | null
+  isLoading: boolean
+  // Auth
+  signIn: (email: string, password: string) => Promise<string | null>
+  signUp: (email: string, password: string) => Promise<string | null>
+  signOut: () => Promise<void>
   // 계좌
   setAccounts: (accounts: Account[]) => void
   // 거래
@@ -87,6 +113,8 @@ interface AppContextType {
   setSavings: (savings: Saving[]) => void
   // 목표
   setGoals: (goals: Goal[]) => void
+  // 카테고리
+  setCategories: (categories: Category[]) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -95,95 +123,234 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null)
 
+// ── AppProvider ───────────────────────────────────────────────────────────────
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<AppData>(INITIAL_DATA)
+  const [user, setUser] = useState<User | null>(null)
   const [hydrated, setHydrated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const userRef = useRef<User | null>(null)
 
-  // localStorage에서 불러오기
-  useEffect(() => {
+  userRef.current = user
+
+  // ── localStorage → Supabase 동기화 ─────────────────────────────────────────
+  async function syncToSupabase(userId: string, nextData: AppData) {
+    if (!supabase) return
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored) as AppData
-        setData(parsed)
-      }
-    } catch {
-      // ignore
-    }
-    setHydrated(true)
-  }, [])
+      await supabase.from('user_data').upsert(
+        { user_id: userId, data: nextData, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
+    } catch { /* ignore */ }
+  }
 
-  // 변경 시 localStorage에 저장
-  const save = useCallback((next: AppData) => {
-    setData(next)
+  // ── 저장: localStorage 즉시 + Supabase debounce ─────────────────────────────
+  function saveToStorage(next: AppData) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
-      // ignore
+    } catch { /* ignore */ }
+    if (supabase && userRef.current) {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = setTimeout(() => {
+        if (userRef.current) syncToSupabase(userRef.current.id, next)
+      }, 2000)
     }
+  }
+
+  // ── 최초 초기화 ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function init() {
+      // 1. localStorage 먼저 읽기
+      let localData: AppData | null = null
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+          const parsed = JSON.parse(stored) as Partial<AppData>
+          localData = {
+            ...INITIAL_DATA,
+            ...parsed,
+            // 마이그레이션: 구버전에 categories 없는 경우 기본값 적용
+            categories: (parsed.categories && parsed.categories.length > 0)
+              ? parsed.categories
+              : DEFAULT_CATEGORIES,
+          }
+        }
+      } catch { /* ignore */ }
+
+      // 2. Supabase auth 확인
+      if (supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            setUser(session.user)
+            userRef.current = session.user
+
+            const { data: remoteRow } = await supabase
+              .from('user_data')
+              .select('data')
+              .eq('user_id', session.user.id)
+              .single()
+
+            if (remoteRow?.data) {
+              const remoteData: AppData = {
+                ...INITIAL_DATA,
+                ...remoteRow.data,
+                categories: remoteRow.data.categories?.length > 0
+                  ? remoteRow.data.categories
+                  : DEFAULT_CATEGORIES,
+              }
+              setData(remoteData)
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData))
+            } else if (localData) {
+              setData(localData)
+              await syncToSupabase(session.user.id, localData)
+            }
+          } else {
+            if (localData) setData(localData)
+          }
+
+          // auth 상태 변화 구독
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            setUser(session?.user ?? null)
+            userRef.current = session?.user ?? null
+
+            if (event === 'SIGNED_OUT') {
+              setData(INITIAL_DATA)
+              localStorage.removeItem(STORAGE_KEY)
+            }
+            if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+              const { data: remoteRow } = await supabase!
+                .from('user_data')
+                .select('data')
+                .eq('user_id', session.user.id)
+                .single()
+              if (remoteRow?.data) {
+                const merged: AppData = {
+                  ...INITIAL_DATA,
+                  ...remoteRow.data,
+                  categories: remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES,
+                }
+                setData(merged)
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+              }
+            }
+          })
+
+          return () => subscription.unsubscribe()
+        } catch { /* ignore */ }
+      } else {
+        // Supabase 미설정: localStorage만 사용
+        if (localData) setData(localData)
+      }
+
+      setHydrated(true)
+      setIsLoading(false)
+    }
+
+    init().then(() => {
+      setHydrated(true)
+      setIsLoading(false)
+    })
+  }, [])
+
+  // ── 상태 업데이트 헬퍼 ─────────────────────────────────────────────────────
+  const update = useCallback((updater: (d: AppData) => AppData) => {
+    setData(d => {
+      const next = updater(d)
+      saveToStorage(next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const now = () => new Date().toISOString()
 
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
+    if (!supabase) return 'Supabase가 설정되지 않았습니다. 환경변수를 확인하세요.'
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    return error ? error.message : null
+  }, [])
+
+  const signUp = useCallback(async (email: string, password: string): Promise<string | null> => {
+    if (!supabase) return 'Supabase가 설정되지 않았습니다. 환경변수를 확인하세요.'
+    const { error } = await supabase.auth.signUp({ email, password })
+    return error ? error.message : null
+  }, [])
+
+  const signOut = useCallback(async () => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    if (supabase) await supabase.auth.signOut()
+    setUser(null)
+    userRef.current = null
+    setData(INITIAL_DATA)
+    localStorage.removeItem(STORAGE_KEY)
+  }, [])
+
+  // ── Data Actions ────────────────────────────────────────────────────────────
   const setAccounts = useCallback((accounts: Account[]) => {
-    setData(d => { const n = { ...d, accounts, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, accounts, lastModified: now() }))
+  }, [update])
 
   const addTransaction = useCallback((tx: Transaction) => {
-    setData(d => {
-      const n = { ...d, transactions: [...d.transactions, tx], lastModified: now() }
-      save(n); return n
-    })
-  }, [save])
+    update(d => ({ ...d, transactions: [...d.transactions, tx], lastModified: now() }))
+  }, [update])
 
   const deleteTransaction = useCallback((id: string) => {
-    setData(d => {
-      const n = { ...d, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }
-      save(n); return n
-    })
-  }, [save])
+    update(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }))
+  }, [update])
 
   const setTransactions = useCallback((transactions: Transaction[]) => {
-    setData(d => { const n = { ...d, transactions, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, transactions, lastModified: now() }))
+  }, [update])
 
   const setBudgets = useCallback((budgets: Budget[]) => {
-    setData(d => { const n = { ...d, budgets, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, budgets, lastModified: now() }))
+  }, [update])
 
   const setCards = useCallback((cards: Card[]) => {
-    setData(d => { const n = { ...d, cards, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, cards, lastModified: now() }))
+  }, [update])
 
   const setInstallments = useCallback((installments: Installment[]) => {
-    setData(d => { const n = { ...d, installments, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, installments, lastModified: now() }))
+  }, [update])
 
   const setSavings = useCallback((savings: Saving[]) => {
-    setData(d => { const n = { ...d, savings, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, savings, lastModified: now() }))
+  }, [update])
 
   const setGoals = useCallback((goals: Goal[]) => {
-    setData(d => { const n = { ...d, goals, lastModified: now() }; save(n); return n })
-  }, [save])
+    update(d => ({ ...d, goals, lastModified: now() }))
+  }, [update])
+
+  const setCategories = useCallback((categories: Category[]) => {
+    update(d => ({ ...d, categories, lastModified: now() }))
+  }, [update])
 
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
-    setData(d => {
-      const n = { ...d, ...setupData, isSetupComplete: true, lastModified: now() }
-      save(n); return n
-    })
-  }, [save])
+    update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
+  }, [update])
 
   const resetAll = useCallback(() => {
-    save(INITIAL_DATA)
-  }, [save])
+    const reset = { ...INITIAL_DATA }
+    setData(reset)
+    saveToStorage(reset)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (!hydrated) return null
 
   return (
     <AppContext.Provider value={{
       data,
-      categories: DEFAULT_CATEGORIES,
+      categories: data.categories,
+      user,
+      isLoading,
+      signIn,
+      signUp,
+      signOut,
       setAccounts,
       addTransaction,
       deleteTransaction,
@@ -193,6 +360,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInstallments,
       setSavings,
       setGoals,
+      setCategories,
       completeSetup,
       resetAll,
     }}>

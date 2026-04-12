@@ -2,21 +2,26 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useApp } from '@/lib/AppContext'
 
 const navItems = [
   { href: '/', icon: '🏠', label: '대시보드' },
   { href: '/transactions', icon: '📋', label: '거래내역' },
   { href: '/budget', icon: '📊', label: '예산 관리' },
   { href: '/statistics', icon: '📈', label: '통계 & 차트' },
-  { href: '/accounts', icon: '🏦', label: '계좌 관리' },
-  { href: '/cards', icon: '💳', label: '카드·할부' },
   { href: '/savings', icon: '💰', label: '적금·예금' },
   { href: '/goals', icon: '🎯', label: '재무 목표' },
   { href: '/history', icon: '📚', label: '이전 가계부' },
+  { href: '/settings', icon: '⚙️', label: '기초 설정' },
 ]
+
+const mobileNavItems = navItems.slice(0, 4)
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { user } = useApp()
+
+  const isSettingsArea = ['/settings', '/accounts', '/cards'].includes(pathname)
 
   return (
     <>
@@ -51,14 +56,18 @@ export default function Sidebar() {
           })}
         </nav>
         <div className="p-4 border-t border-gray-100">
-          <div className="text-xs text-gray-400 text-center">v1.0 · 2026</div>
+          {user ? (
+            <div className="text-xs text-gray-500 truncate text-center">☁️ {user.email}</div>
+          ) : (
+            <Link href="/login" className="block text-xs text-blue-600 text-center hover:underline">🔑 로그인</Link>
+          )}
         </div>
       </aside>
 
       {/* 모바일 하단 탭바 */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30 safe-area-inset-bottom">
         <div className="flex items-center justify-around px-2 py-1">
-          {navItems.slice(0, 5).map(item => {
+          {mobileNavItems.map(item => {
             const isActive = pathname === item.href
             return (
               <Link
@@ -74,13 +83,13 @@ export default function Sidebar() {
             )
           })}
           <Link
-            href="/savings"
+            href="/settings"
             className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-colors ${
-              ['/savings', '/goals', '/cards'].includes(pathname) ? 'text-blue-600' : 'text-gray-400'
+              isSettingsArea ? 'text-blue-600' : 'text-gray-400'
             }`}
           >
-            <span className="text-xl">⋯</span>
-            <span className="text-[10px] font-medium">더보기</span>
+            <span className="text-xl">⚙️</span>
+            <span className="text-[10px] font-medium">설정</span>
           </Link>
         </div>
       </nav>

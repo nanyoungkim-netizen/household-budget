@@ -27,7 +27,7 @@ export default function StatisticsPage() {
   })
 
   const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
-  const catExpenses = categories.filter(c => c.type === 'expense').map(c => ({
+  const catExpenses = categories.filter(c => c.type === 'expense' && c.parentId !== null).map(c => ({
     name: c.name, icon: c.icon, value: transactions.filter(t => t.date.startsWith(currentMonth) && t.categoryId === c.id && t.type === 'expense').reduce((s,t) => s+t.amount, 0), color: c.color,
   })).filter(c => c.value > 0).sort((a,b) => b.value-a.value)
 

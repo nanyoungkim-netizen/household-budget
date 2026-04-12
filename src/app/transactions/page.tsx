@@ -25,7 +25,7 @@ export default function TransactionsPage() {
     amount: '',
     type: 'expense' as 'income' | 'expense',
     accountId: accounts[0]?.id || '',
-    categoryId: categories.find(c => c.type === 'expense')?.id || '',
+    categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || '',
     paymentMethod: 'account' as PaymentMethod,
     cardId: cards[0]?.id || '',
   })
@@ -69,7 +69,8 @@ export default function TransactionsPage() {
     setForm(f => ({ ...f, description: '', amount: '' }))
   }
 
-  const filteredCats = categories.filter(c => c.type === form.type)
+  // 소분류만 표시 (parentId가 string인 것 = 소분류, parentId === null인 것 = 대분류 제외)
+  const filteredCats = categories.filter(c => c.type === form.type && c.parentId !== null)
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -195,7 +196,7 @@ export default function TransactionsPage() {
             <div className="space-y-3">
               <div className="flex bg-gray-100 rounded-xl p-1">
                 {(['expense','income'] as const).map(type => (
-                  <button key={type} onClick={() => setForm(f => ({ ...f, type, categoryId: categories.find(c => c.type === type)?.id || '' }))}
+                  <button key={type} onClick={() => setForm(f => ({ ...f, type, categoryId: categories.find(c => c.type === type && c.parentId !== null)?.id || '' }))}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.type === type ? (type === 'income' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white') : 'text-gray-500'}`}>
                     {type === 'income' ? '수입' : '지출'}
                   </button>
