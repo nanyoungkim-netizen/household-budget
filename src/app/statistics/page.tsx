@@ -81,7 +81,7 @@ export default function StatisticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => formatKRW(v)} />
+                <Tooltip formatter={(v) => formatKRW(Number(v))} />
                 <Legend />
                 <Line type="monotone" dataKey="income" name="수입" stroke="#00B493" strokeWidth={2.5} dot={{ r: 4, fill: '#00B493' }} />
                 <Line type="monotone" dataKey="expense" name="지출" stroke="#FF3B30" strokeWidth={2.5} dot={{ r: 4, fill: '#FF3B30' }} />
@@ -95,7 +95,7 @@ export default function StatisticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => formatKRW(v)} />
+                <Tooltip formatter={(v) => formatKRW(Number(v))} />
                 <Bar dataKey="saving" name="절약" fill="#0064FF" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -126,7 +126,7 @@ export default function StatisticsPage() {
                       <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatKRW(v)} />
+                  <Tooltip formatter={(v) => formatKRW(Number(v))} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex-1 space-y-2 w-full">
@@ -154,7 +154,7 @@ export default function StatisticsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v: number) => formatKRW(v)} />
+              <Tooltip formatter={(v) => formatKRW(Number(v))} />
               <Legend />
               <Bar dataKey="income" name="수입" fill="#00B493" radius={[4, 4, 0, 0]} />
               <Bar dataKey="expense" name="지출" fill="#FF3B30" radius={[4, 4, 0, 0]} />
