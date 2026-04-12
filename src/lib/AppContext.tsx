@@ -145,7 +145,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   }
 
-  // ── 저장: localStorage 즉시 + Supabase debounce ─────────────────────────────
+  // ── 저장: localStorage 즉시 + Supabase debounce 500ms ───────────────────────
   function saveToStorage(next: AppData) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -154,12 +154,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
       syncTimerRef.current = setTimeout(() => {
         if (userRef.current) syncToSupabase(userRef.current.id, next)
-      }, 2000)
+      }, 500)
     }
+  }
+
+  // ── 데이터 병합: lastModified 기준으로 더 새로운 쪽 선택 ─────────────────────
+  function mergeData(localData: AppData | null, remoteData: AppData | null): AppData {
+    if (!localData && !remoteData) return INITIAL_DATA
+    if (!localData) return remoteData!
+    if (!remoteData) return localData
+
+    const localTime = localData.lastModified ? new Date(localData.lastModified).getTime() : 0
+    const remoteTime = remoteData.lastModified ? new Date(remoteData.lastModified).getTime() : 0
+    return localTime >= remoteTime ? localData : remoteData
   }
 
   // ── 최초 초기화 ─────────────────────────────────────────────────────────────
   useEffect(() => {
+    let cleanupFn: (() => void) | undefined
+
     async function init() {
       // 1. localStorage 먼저 읽기
       let localData: AppData | null = null
@@ -170,7 +183,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           localData = {
             ...INITIAL_DATA,
             ...parsed,
-            // 마이그레이션: 구버전에 categories 없는 경우 기본값 적용
             categories: (parsed.categories && parsed.categories.length > 0)
               ? parsed.categories
               : DEFAULT_CATEGORIES,
@@ -192,19 +204,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               .eq('user_id', session.user.id)
               .single()
 
+            let remoteData: AppData | null = null
             if (remoteRow?.data) {
-              const remoteData: AppData = {
+              remoteData = {
                 ...INITIAL_DATA,
                 ...remoteRow.data,
                 categories: remoteRow.data.categories?.length > 0
                   ? remoteRow.data.categories
                   : DEFAULT_CATEGORIES,
               }
-              setData(remoteData)
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData))
-            } else if (localData) {
-              setData(localData)
-              await syncToSupabase(session.user.id, localData)
+            }
+
+            // ✅ 더 최신 데이터를 사용 (새로고침해도 로컬 데이터 보존)
+            const winner = mergeData(localData, remoteData)
+            setData(winner)
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
+            // Supabase에 없거나 로컬이 더 새로우면 Supabase에 즉시 동기화
+            if (!remoteData || (localData && winner === localData)) {
+              await syncToSupabase(session.user.id, winner)
             }
           } else {
             if (localData) setData(localData)
@@ -219,25 +236,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               setData(INITIAL_DATA)
               localStorage.removeItem(STORAGE_KEY)
             }
-            if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+            // TOKEN_REFRESHED는 데이터를 덮어쓰지 않음 (세션만 갱신)
+            if (event === 'SIGNED_IN' && session?.user) {
               const { data: remoteRow } = await supabase!
                 .from('user_data')
                 .select('data')
                 .eq('user_id', session.user.id)
                 .single()
+
+              let remoteData: AppData | null = null
               if (remoteRow?.data) {
-                const merged: AppData = {
+                remoteData = {
                   ...INITIAL_DATA,
                   ...remoteRow.data,
                   categories: remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES,
                 }
-                setData(merged)
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+              }
+
+              // 현재 로컬 데이터와 비교해서 더 새로운 것 사용
+              let currentLocal: AppData | null = null
+              try {
+                const stored = localStorage.getItem(STORAGE_KEY)
+                if (stored) currentLocal = { ...INITIAL_DATA, ...JSON.parse(stored) }
+              } catch { /* ignore */ }
+
+              const winner = mergeData(currentLocal, remoteData)
+              if (winner) {
+                setData(winner)
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
+                if (currentLocal && winner === currentLocal) {
+                  await syncToSupabase(session.user.id, winner)
+                }
               }
             }
           })
 
-          return () => subscription.unsubscribe()
+          cleanupFn = () => subscription.unsubscribe()
         } catch { /* ignore */ }
       } else {
         // Supabase 미설정: localStorage만 사용
@@ -252,6 +286,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setHydrated(true)
       setIsLoading(false)
     })
+
+    // pagehide: 탭 닫거나 새로고침할 때 pending 타이머를 즉시 실행
+    const handlePageHide = () => {
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current)
+        syncTimerRef.current = null
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY)
+          if (stored && userRef.current) {
+            const data = JSON.parse(stored) as AppData
+            syncToSupabase(userRef.current.id, data)
+          }
+        } catch { /* ignore */ }
+      }
+    }
+    window.addEventListener('pagehide', handlePageHide)
+
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide)
+      cleanupFn?.()
+    }
   }, [])
 
   // ── 상태 업데이트 헬퍼 ─────────────────────────────────────────────────────
