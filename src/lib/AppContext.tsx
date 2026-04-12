@@ -101,6 +101,7 @@ interface AppContextType {
   setAccounts: (accounts: Account[]) => void
   // 거래
   addTransaction: (tx: Transaction) => void
+  updateTransaction: (id: string, tx: Transaction) => void
   deleteTransaction: (id: string) => void
   setTransactions: (txs: Transaction[]) => void
   // 예산
@@ -352,6 +353,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, transactions: [...d.transactions, tx], lastModified: now() }))
   }, [update])
 
+  const updateTransaction = useCallback((id: string, tx: Transaction) => {
+    update(d => ({ ...d, transactions: d.transactions.map(t => t.id === id ? { ...tx, id } : t), lastModified: now() }))
+  }, [update])
+
   const deleteTransaction = useCallback((id: string) => {
     update(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }))
   }, [update])
@@ -408,6 +413,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       setAccounts,
       addTransaction,
+      updateTransaction,
       deleteTransaction,
       setTransactions,
       setBudgets,

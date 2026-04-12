@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useApp, computeAccountBalance } from '@/lib/AppContext'
 import { Transaction, PaymentMethod } from '@/types'
 
@@ -11,41 +11,61 @@ const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padSta
 type PaymentTab = 'all' | 'account' | 'card'
 type TxFormType = 'expense' | 'income' | 'transfer'
 
+interface FormState {
+  date: string
+  description: string
+  amount: string
+  accountId: string
+  toAccountId: string
+  categoryId: string
+  paymentMethod: PaymentMethod
+  cardId: string
+}
+
 export default function TransactionsPage() {
-  const { data, categories, addTransaction, deleteTransaction } = useApp()
+  const { data, categories, addTransaction, updateTransaction, deleteTransaction } = useApp()
   const { accounts, transactions, cards } = data
 
   const [month, setMonth] = useState(currentMonth)
   const [filterAccount, setFilterAccount] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('all')
+
+  // 모달 상태 — editingId가 있으면 수정 모드
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [formType, setFormType] = useState<TxFormType>('expense')
-  const [form, setForm] = useState({
-    date: today.toISOString().slice(0,10),
+
+  const defaultForm = useCallback((): FormState => ({
+    date: today.toISOString().slice(0, 10),
     description: '',
     amount: '',
     accountId: accounts[0]?.id || '',
     toAccountId: accounts[1]?.id || accounts[0]?.id || '',
     categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || '',
-    paymentMethod: 'account' as PaymentMethod,
+    paymentMethod: 'account',
     cardId: cards[0]?.id || '',
-  })
+  }), [accounts, cards, categories])
 
+  const [form, setForm] = useState<FormState>(defaultForm)
+
+  // ── 필터링 ──────────────────────────────────────────────────────────────────
   const filtered = transactions
     .filter(t => t.date.startsWith(month))
     .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
     .filter(t => paymentTab === 'all' || (t.type !== 'transfer' && t.paymentMethod === paymentTab))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
-  const income = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const expense = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const income   = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const expense  = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const transfer = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
 
   const cardSummary = cards.map(card => ({
     card,
-    total: filtered.filter(t => t.paymentMethod === 'card' && t.cardId === card.id && t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+    total: filtered
+      .filter(t => t.paymentMethod === 'card' && t.cardId === card.id && t.type === 'expense')
+      .reduce((s, t) => s + t.amount, 0),
   })).filter(s => s.total > 0)
 
   const grouped = filtered.reduce<Record<string, Transaction[]>>((acc, t) => {
@@ -54,13 +74,47 @@ export default function TransactionsPage() {
     return acc
   }, {})
 
-  function handleAdd() {
+  // ── 모달 열기 ────────────────────────────────────────────────────────────────
+  function openAdd() {
+    setEditingId(null)
+    setFormType('expense')
+    setForm(defaultForm())
+    setShowModal(true)
+  }
+
+  function openEdit(t: Transaction) {
+    setEditingId(t.id)
+    const type = t.type as TxFormType
+    setFormType(type)
+    setForm({
+      date: t.date,
+      description: t.description,
+      amount: String(t.amount),
+      accountId: t.accountId,
+      toAccountId: t.toAccountId || accounts[1]?.id || accounts[0]?.id || '',
+      categoryId: t.categoryId,
+      paymentMethod: t.paymentMethod,
+      cardId: t.cardId || cards[0]?.id || '',
+    })
+    setShowModal(true)
+  }
+
+  function closeModal() {
+    setShowModal(false)
+    setEditingId(null)
+  }
+
+  // ── 저장 ─────────────────────────────────────────────────────────────────────
+  function handleSave() {
     if (!form.amount) return
+
+    let tx: Transaction
+
     if (formType === 'transfer') {
       if (!form.accountId || !form.toAccountId) return
       if (form.accountId === form.toAccountId) return alert('보내는 계좌와 받는 계좌가 같습니다.')
-      const newTx: Transaction = {
-        id: `t${Date.now()}`,
+      tx = {
+        id: editingId || `t${Date.now()}`,
         date: form.date,
         description: form.description || '계좌 이체',
         amount: Number(form.amount),
@@ -70,11 +124,10 @@ export default function TransactionsPage() {
         categoryId: 'transfer',
         paymentMethod: 'account',
       }
-      addTransaction(newTx)
     } else {
       if (!form.description) return
-      const newTx: Transaction = {
-        id: `t${Date.now()}`,
+      tx = {
+        id: editingId || `t${Date.now()}`,
         date: form.date,
         description: form.description,
         amount: Number(form.amount),
@@ -84,10 +137,14 @@ export default function TransactionsPage() {
         paymentMethod: form.paymentMethod,
         cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
       }
-      addTransaction(newTx)
     }
-    setShowModal(false)
-    setForm(f => ({ ...f, description: '', amount: '' }))
+
+    if (editingId) {
+      updateTransaction(editingId, tx)
+    } else {
+      addTransaction(tx)
+    }
+    closeModal()
   }
 
   function switchFormType(t: TxFormType) {
@@ -100,14 +157,14 @@ export default function TransactionsPage() {
     }
   }
 
-  // 소분류만 표시
   const filteredCats = categories.filter(c => c.type === formType && c.parentId !== null)
+  const isEditing = !!editingId
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">거래 내역</h1>
-        <button onClick={() => setShowModal(true)}
+        <button onClick={openAdd}
           className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">
           + 추가
         </button>
@@ -175,7 +232,7 @@ export default function TransactionsPage() {
 
       {/* 거래 목록 */}
       <div className="space-y-3">
-        {Object.keys(grouped).sort((a,b) => b.localeCompare(a)).map(date => (
+        {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
           <div key={date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
               <span className="text-xs font-semibold text-gray-500">{date}</span>
@@ -188,13 +245,16 @@ export default function TransactionsPage() {
               const isTransfer = t.type === 'transfer'
 
               return (
-                <div key={t.id} className="flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base ${isTransfer ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                <div key={t.id}
+                  className="flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                  onClick={() => openEdit(t)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${isTransfer ? 'bg-blue-50' : 'bg-gray-50'}`}>
                       {isTransfer ? '↔️' : cat?.icon}
                     </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{t.description}</div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{t.description}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {isTransfer ? (
                           <span className="text-xs text-blue-500 font-medium">
@@ -214,15 +274,24 @@ export default function TransactionsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <div className={`text-sm font-semibold ${
                       isTransfer ? 'text-blue-500' :
                       t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
                     }`}>
                       {isTransfer ? '' : t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
                     </div>
-                    <button onClick={() => deleteTransaction(t.id)}
-                      className="text-gray-300 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">삭제</button>
+                    {/* 수정 / 삭제 버튼 — hover 시 표시 */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={e => { e.stopPropagation(); openEdit(t) }}
+                        className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                      >수정</button>
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteTransaction(t.id) }}
+                        className="text-xs text-gray-300 hover:text-red-400 px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                      >삭제</button>
+                    </div>
                   </div>
                 </div>
               )
@@ -237,16 +306,19 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* 추가 모달 */}
+      {/* ── 추가 / 수정 모달 ────────────────────────────────────────────── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900">거래 추가</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 text-xl leading-none">×</button>
+              <h2 className="text-base font-bold text-gray-900">
+                {isEditing ? '거래 수정' : '거래 추가'}
+              </h2>
+              <button onClick={closeModal} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
-              {/* 유형 탭: 지출 / 수입 / 이체 */}
+
+              {/* 유형 탭 — 수정 모드에서는 변경 불가 */}
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                 {([
                   ['expense', '지출', 'bg-red-500'],
@@ -254,30 +326,33 @@ export default function TransactionsPage() {
                   ['transfer','이체', 'bg-blue-500'],
                 ] as const).map(([type, label, activeColor]) => (
                   <button key={type}
-                    onClick={() => switchFormType(type)}
+                    onClick={() => !isEditing && switchFormType(type)}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
                       formType === type ? `${activeColor} text-white` : 'text-gray-500'
-                    }`}>
+                    } ${isEditing ? 'cursor-default' : ''}`}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
 
-              {/* 이체 모드 */}
+              {/* ── 이체 ── */}
               {formType === 'transfer' ? (
                 <>
-                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  <input type="date" value={form.date}
+                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input type="number" placeholder="이체 금액" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  <input type="number" placeholder="이체 금액" value={form.amount}
+                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input type="text" placeholder="메모 (선택)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  <input type="text" placeholder="메모 (선택)" value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-
-                  {/* 보내는 계좌 → 받는 계좌 */}
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
                       <label className="text-xs text-gray-500 mb-1 block">보내는 계좌</label>
-                      <select value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+                      <select value={form.accountId}
+                        onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
                         className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
@@ -285,14 +360,13 @@ export default function TransactionsPage() {
                     <div className="text-xl text-blue-400 mt-5">→</div>
                     <div className="flex-1">
                       <label className="text-xs text-gray-500 mb-1 block">받는 계좌</label>
-                      <select value={form.toAccountId} onChange={e => setForm(f => ({ ...f, toAccountId: e.target.value }))}
+                      <select value={form.toAccountId}
+                        onChange={e => setForm(f => ({ ...f, toAccountId: e.target.value }))}
                         className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     </div>
                   </div>
-
-                  {/* 이체 후 잔액 미리보기 (실시간 잔액 기준) */}
                   {form.amount && form.accountId !== form.toAccountId && (
                     <div className="bg-blue-50 rounded-xl p-3 space-y-1.5">
                       <div className="text-xs font-medium text-blue-700 mb-1">이체 후 잔액</div>
@@ -301,7 +375,11 @@ export default function TransactionsPage() {
                         { acc: accounts.find(a => a.id === form.toAccountId), delta: +Number(form.amount) },
                       ].map(({ acc, delta }) => {
                         if (!acc) return null
-                        const cur = computeAccountBalance(acc.id, acc.balance, transactions)
+                        // 수정 모드면 기존 이체는 제외하고 계산
+                        const baseTxs = isEditing
+                          ? transactions.filter(t => t.id !== editingId)
+                          : transactions
+                        const cur = computeAccountBalance(acc.id, acc.balance, baseTxs)
                         return (
                           <div key={acc.id} className="flex justify-between text-xs">
                             <span className="text-blue-600">{acc.name}</span>
@@ -315,47 +393,66 @@ export default function TransactionsPage() {
                   )}
                 </>
               ) : (
-                /* 일반 수입/지출 모드 */
+                /* ── 수입 / 지출 ── */
                 <>
                   <div className="flex bg-gray-100 rounded-xl p-1">
                     {(['account','card'] as const).map(method => (
-                      <button key={method} onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
+                      <button key={method}
+                        onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
                         className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
                         {method === 'account' ? '🏦 통장' : '💳 카드'}
                       </button>
                     ))}
                   </div>
-                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  <input type="date" value={form.date}
+                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input type="text" placeholder="내용" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  <input type="text" placeholder="내용"
+                    value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus={!isEditing}
+                  />
+                  <input type="number" placeholder="금액" value={form.amount}
+                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input type="number" placeholder="금액" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <select value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+                  <select value={form.accountId}
+                    onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                   {form.paymentMethod === 'card' && (
-                    <select value={form.cardId} onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
+                    <select value={form.cardId}
+                      onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   )}
-                  <select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
+                  <select value={form.categoryId}
+                    onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                   </select>
                 </>
               )}
 
-              <button onClick={handleAdd}
-                className={`w-full text-white font-semibold py-3 rounded-xl transition-colors ${
-                  formType === 'transfer' ? 'bg-blue-500 hover:bg-blue-600' :
-                  formType === 'income'   ? 'bg-emerald-500 hover:bg-emerald-600' :
-                                           'bg-red-500 hover:bg-red-600'
-                }`}>
-                {formType === 'transfer' ? '이체하기' : '추가하기'}
-              </button>
+              <div className="flex gap-2 pt-1">
+                {isEditing && (
+                  <button
+                    onClick={() => { deleteTransaction(editingId!); closeModal() }}
+                    className="px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-50 transition-colors border border-red-100">
+                    삭제
+                  </button>
+                )}
+                <button onClick={handleSave}
+                  className={`flex-1 text-white font-semibold py-3 rounded-xl transition-colors ${
+                    formType === 'transfer' ? 'bg-blue-500 hover:bg-blue-600' :
+                    formType === 'income'   ? 'bg-emerald-500 hover:bg-emerald-600' :
+                                             'bg-red-500 hover:bg-red-600'
+                  }`}>
+                  {isEditing ? '수정 완료' : formType === 'transfer' ? '이체하기' : '추가하기'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
