@@ -5,6 +5,120 @@ import * as XLSX from 'xlsx'
 import { useApp } from '@/lib/AppContext'
 import { Transaction, PaymentMethod } from '@/types'
 
+// ── PDF 파싱 (pdfjs-dist) ─────────────────────────────────────────────────────
+async function extractPDFRows(file: File, password?: string): Promise<string[][]> {
+  const pdfjsLib = await import('pdfjs-dist')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+
+  const buf = await file.arrayBuffer()
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buf),
+    password: password || '',
+  })
+
+  const pdf = await loadingTask.promise
+  const allRows: string[][] = []
+
+  for (let pn = 1; pn <= pdf.numPages; pn++) {
+    const page = await pdf.getPage(pn)
+    const content = await page.getTextContent()
+
+    // y좌표 기준으로 텍스트 그룹핑 (3px 허용오차)
+    const byY = new Map<number, Array<{ x: number; text: string }>>()
+    for (const item of content.items) {
+      if (!('str' in item) || !(item.str as string).trim()) continue
+      const raw = item as { str: string; transform: number[] }
+      const y = Math.round(raw.transform[5] / 3) * 3
+      const x = raw.transform[4]
+      if (!byY.has(y)) byY.set(y, [])
+      byY.get(y)!.push({ x, text: raw.str.trim() })
+    }
+
+    // 위→아래 정렬, 각 행은 왼→오른쪽
+    const rows = [...byY.entries()]
+      .sort(([ya], [yb]) => yb - ya)
+      .map(([, cells]) => cells.sort((a, b) => a.x - b.x).map(c => c.text))
+
+    allRows.push(...rows)
+  }
+
+  return allRows
+}
+
+// ── KB 국민은행 PDF 형식 파싱 ─────────────────────────────────────────────────
+// 컬럼: 거래일시 | 적요 | 보낸분/받는분 | 출금액 | 입금액 | 잔액 | 송금메모 | 거래점
+function parseKBBankRows(rows: string[][], defaultAccountId: string, secondAccountId: string): ImportRow[] {
+  // 헤더 행 찾기
+  const headerIdx = rows.findIndex(r =>
+    r.some(c => c.includes('거래일시')) && r.some(c => c.includes('출금액'))
+  )
+  if (headerIdx < 0) return []
+
+  const header = rows[headerIdx]
+  const ci = (candidates: string[]) =>
+    header.findIndex(h => candidates.some(c => h.includes(c)))
+
+  const cDate    = ci(['거래일시', '거래일자'])
+  const cDesc    = ci(['적요'])
+  const cSender  = ci(['보낸분', '받는분'])
+  const cOut     = ci(['출금액'])
+  const cIn      = ci(['입금액'])
+
+  if (cDate < 0 || cOut < 0 || cIn < 0) return []
+
+  const importRows: ImportRow[] = []
+
+  rows.slice(headerIdx + 1).forEach((row, i) => {
+    const dateStr = row[cDate] || ''
+    if (!dateStr.match(/\d{4}[.\-]\d{2}[.\-]\d{2}/)) return
+
+    const desc    = [row[cDesc], row[cSender]].filter(Boolean).join(' ').trim()
+    const outAmt  = parseAmountSigned(row[cOut] || '0')
+    const inAmt   = parseAmountSigned(row[cIn]  || '0')
+    const txType  = row[cDesc] || ''
+
+    const withdrawal = Math.abs(outAmt)
+    const deposit    = Math.abs(inAmt)
+
+    let amount: number
+    let type: 'income' | 'expense' | 'transfer'
+
+    if (deposit > 0 && withdrawal === 0) {
+      amount = deposit; type = 'income'
+    } else if (withdrawal > 0 && deposit === 0) {
+      amount = withdrawal; type = 'expense'
+    } else {
+      return // 둘 다 0이거나 둘 다 있으면 스킵
+    }
+
+    // 이체 자동 감지
+    if (isTransferLike(desc, txType)) type = 'transfer'
+
+    const date = parseDate(dateStr)
+    const sugCatId = type !== 'transfer' ? suggestCategory(desc, txType, type as 'income' | 'expense') : 'transfer'
+    const catList  = type === 'income' ? [] : []  // 나중에 채움
+    const autoSuggested = type !== 'transfer' && sugCatId !== (type === 'income' ? 'other_income' : 'etc')
+
+    importRows.push({
+      _key: `pdf_${i}_${Date.now()}`,
+      date,
+      description: desc || '(내용 없음)',
+      txType,
+      amount,
+      type,
+      categoryId: sugCatId,
+      accountId: defaultAccountId,
+      toAccountId: secondAccountId,
+      paymentMethod: 'account',
+      cardId: undefined,
+      include: true,
+      autoSuggested,
+    })
+  })
+
+  return importRows
+}
+
 // ── 키워드 → 카테고리 자동 매핑 ────────────────────────────────────────────
 const KEYWORD_MAP: { keywords: string[]; catId: string; type: 'income' | 'expense' }[] = [
   // 수입
@@ -182,6 +296,13 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState('')
 
+  // PDF 관련
+  const [isPDF, setIsPDF] = useState(false)
+  const [pdfPassword, setPdfPassword] = useState('')
+  const [pdfError, setPdfError] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+
   const [rawHeaders, setRawHeaders] = useState<string[]>([])
   const [rawRows, setRawRows]       = useState<unknown[][]>([])
 
@@ -196,10 +317,21 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   const defaultAccountId = accounts[0]?.id || ''
   const defaultCardId    = cards[0]?.id || ''
+  const secondAccountId  = accounts.find(a => a.id !== defaultAccountId)?.id || defaultAccountId
 
   // ── 파일 파싱 ──────────────────────────────────────────────────────────────
   async function handleFile(file: File) {
     setFileName(file.name)
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      setIsPDF(true)
+      setPendingFile(file)
+      setPdfPassword('')
+      setPdfError('')
+      return  // PDF는 업로드 화면에서 비밀번호 입력 후 처리
+    }
+
+    setIsPDF(false)
     const buf = await file.arrayBuffer()
     const wb  = XLSX.read(buf, { type: 'array', cellDates: false })
     const ws  = wb.Sheets[wb.SheetNames[0]]
@@ -221,6 +353,44 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setColAmount(detected.amount ?? -1)
 
     setStep('map')
+  }
+
+  // ── PDF 파싱 실행 ──────────────────────────────────────────────────────────
+  async function handlePDFParse() {
+    if (!pendingFile) return
+    setPdfLoading(true)
+    setPdfError('')
+    try {
+      const rawTextRows = await extractPDFRows(pendingFile, pdfPassword || undefined)
+      const parsed = parseKBBankRows(rawTextRows, defaultAccountId, secondAccountId)
+
+      if (parsed.length === 0) {
+        setPdfError('거래 내역을 인식하지 못했습니다. 지원 형식: KB국민은행')
+        setPdfLoading(false)
+        return
+      }
+
+      // 카테고리 검증 및 보정
+      const incomeLeaf  = categories.filter(c => c.type === 'income'  && c.parentId !== null)
+      const expenseLeaf = categories.filter(c => c.type === 'expense' && c.parentId !== null)
+      const fixed = parsed.map(r => {
+        if (r.type === 'transfer') return r
+        const catList = r.type === 'income' ? incomeLeaf : expenseLeaf
+        const exists  = catList.some(c => c.id === r.categoryId)
+        return { ...r, categoryId: exists ? r.categoryId : (catList[0]?.id || '') }
+      })
+
+      setRows(fixed)
+      setStep('review')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.toLowerCase().includes('password')) {
+        setPdfError('비밀번호가 틀렸습니다.')
+      } else {
+        setPdfError('PDF 파싱 중 오류가 발생했습니다.')
+      }
+    }
+    setPdfLoading(false)
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -405,23 +575,84 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
         {/* ── Step 1: 업로드 ── */}
         {step === 'upload' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <div
-              className={`w-full max-w-md border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
-              onDragOver={e => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              onClick={() => fileRef.current?.click()}
-            >
-              <div className="text-5xl mb-4">📊</div>
-              <div className="text-sm font-semibold text-gray-700 mb-1">엑셀 파일을 드래그하거나 클릭해서 선택</div>
-              <div className="text-xs text-gray-400">.xlsx, .xls, .csv 지원</div>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
-            </div>
-            <div className="mt-6 text-xs text-gray-400 text-center space-y-1">
-              <p>💡 토스뱅크 · 카카오뱅크 · 국민은행 등 거래내역 엑셀 파일을 지원합니다</p>
-              <p>음수 금액은 지출, 양수는 수입으로 자동 구분됩니다</p>
-            </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
+            {/* 파일 드롭존 */}
+            {!isPDF ? (
+              <>
+                <div
+                  className={`w-full max-w-md border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
+                  onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={onDrop}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <div className="text-5xl mb-4">📊</div>
+                  <div className="text-sm font-semibold text-gray-700 mb-1">거래내역 파일을 드래그하거나 클릭해서 선택</div>
+                  <div className="text-xs text-gray-400">.xlsx, .xls, .csv, .pdf 지원</div>
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.pdf" className="hidden" onChange={onFileChange} />
+                </div>
+                <div className="text-xs text-gray-400 text-center space-y-1">
+                  <p>💡 토스뱅크(엑셀) · KB국민은행(PDF) 등 지원</p>
+                  <p>PDF는 비밀번호 보호 파일도 가능합니다</p>
+                </div>
+              </>
+            ) : (
+              /* PDF 감지됨 → 비밀번호 입력 */
+              <div className="w-full max-w-md">
+                <div className="bg-red-50 border border-red-100 rounded-2xl p-5 mb-4 flex items-start gap-3">
+                  <span className="text-2xl">📄</span>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">{fileName}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">PDF 거래내역 파일이 감지됐습니다</div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">
+                      🔒 비밀번호 <span className="font-normal text-gray-400">(없으면 비워두세요)</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={pdfPassword}
+                      onChange={e => { setPdfPassword(e.target.value); setPdfError('') }}
+                      onKeyDown={e => e.key === 'Enter' && handlePDFParse()}
+                      placeholder="예: 생년월일 8자리 (19980915)"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    {pdfError && (
+                      <p className="text-xs text-red-500 mt-1.5">⚠️ {pdfError}</p>
+                    )}
+                  </div>
+
+                  <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-600 space-y-0.5">
+                    <p>• KB국민은행: 생년월일 8자리 (예: 19980915)</p>
+                    <p>• 비밀번호 없는 PDF는 그냥 확인 버튼을 누르세요</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setIsPDF(false); setFileName('') }}
+                      className="px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                    >
+                      ← 다시 선택
+                    </button>
+                    <button
+                      onClick={handlePDFParse}
+                      disabled={pdfLoading}
+                      className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {pdfLoading ? (
+                        <><span className="animate-spin">⏳</span> 분석 중...</>
+                      ) : (
+                        '확인 → 내역 분석'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -505,17 +736,25 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
             <div className="flex-1 overflow-y-auto">
               {/* 상단 요약 */}
               <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between flex-shrink-0">
-                <div className="text-sm text-blue-700">
+                <div className="text-sm text-blue-700 flex items-center gap-2 flex-wrap">
+                  {isPDF && (
+                    <span className="bg-red-100 text-red-600 text-xs font-semibold px-2 py-0.5 rounded-full">📄 PDF 자동인식</span>
+                  )}
                   총 <span className="font-bold">{rows.length}</span>건 중{' '}
                   <span className="font-bold">{selectedCount}</span>건 선택
                   {suggestedCount > 0 && (
-                    <span className="ml-2 text-xs text-blue-500">✨ {suggestedCount}건 카테고리 자동추천됨</span>
+                    <span className="text-xs text-blue-500">✨ {suggestedCount}건 카테고리 자동추천됨</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
                   <button onClick={() => toggleAll(true)}  className="text-xs text-blue-600 hover:underline">전체 선택</button>
                   <button onClick={() => toggleAll(false)} className="text-xs text-gray-400 hover:underline">전체 해제</button>
-                  <button onClick={() => setStep('map')}   className="text-xs text-gray-400 hover:underline">← 컬럼 재설정</button>
+                  {!isPDF && (
+                    <button onClick={() => setStep('map')} className="text-xs text-gray-400 hover:underline">← 컬럼 재설정</button>
+                  )}
+                  {isPDF && (
+                    <button onClick={() => { setStep('upload'); setRows([]) }} className="text-xs text-gray-400 hover:underline">← 다시 업로드</button>
+                  )}
                 </div>
               </div>
 
