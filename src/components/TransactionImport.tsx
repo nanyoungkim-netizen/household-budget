@@ -47,7 +47,7 @@ async function extractPDFRows(file: File, password?: string): Promise<string[][]
 
 // ── KB 국민은행 PDF 형식 파싱 ─────────────────────────────────────────────────
 // 컬럼: 거래일시 | 적요 | 보낸분/받는분 | 출금액 | 입금액 | 잔액 | 송금메모 | 거래점
-function parseKBBankRows(rows: string[][], defaultAccountId: string, secondAccountId: string): ImportRow[] {
+function parseKBBankRows(rows: string[][], importAccountId: string, secondAccountId: string): ImportRow[] {
   // 헤더 행 찾기
   const headerIdx = rows.findIndex(r =>
     r.some(c => c.includes('거래일시')) && r.some(c => c.includes('출금액'))
@@ -107,7 +107,7 @@ function parseKBBankRows(rows: string[][], defaultAccountId: string, secondAccou
       amount,
       type,
       categoryId: sugCatId,
-      accountId: defaultAccountId,
+      accountId: importAccountId,
       toAccountId: secondAccountId,
       paymentMethod: 'account',
       cardId: undefined,
@@ -123,7 +123,9 @@ function parseKBBankRows(rows: string[][], defaultAccountId: string, secondAccou
 const KEYWORD_MAP: { keywords: string[]; catId: string; type: 'income' | 'expense' }[] = [
   // 수입
   { keywords: ['급여','월급','임금','급료','상여','인센티브','성과금'], catId: 'salary', type: 'income' },
-  { keywords: ['통장이자','이자입금','이자수익','예금이자','적금이자'], catId: 'interest', type: 'income' },
+  // 이자 (결산이자, 이자세금 포함, FBS/모니모적립 포함)
+  { keywords: ['결산이자','이자세금','통장이자','이자입금','이자수익','예금이자','적금이자'], catId: 'interest', type: 'income' },
+  { keywords: ['fbs입금','모니모적립','적립금','포인트적립','리워드'], catId: 'interest', type: 'income' },
   { keywords: ['적금만기','만기해지','만기'], catId: 'saving_return', type: 'income' },
   { keywords: ['환급','국세환급','지방세환급','건보환급','보험환급'], catId: 'other_income', type: 'income' },
   { keywords: ['입출금지원금','지원금','보조금'], catId: 'other_income', type: 'income' },
@@ -194,7 +196,7 @@ function isKoreanName(s: string): boolean {
 }
 
 // 이체로 자동 분류할 키워드
-const TRANSFER_KEYWORDS = ['이체','송금','계좌이동','모임통장','잔돈모으기','달러로모으기','외화저축','계좌간']
+const TRANSFER_KEYWORDS = ['이체','송금','계좌이동','모임통장','잔돈모으기','달러로모으기','외화저축','계좌간','오픈뱅킹출금','오픈뱅킹입금','전자금융']
 
 function isTransferLike(desc: string, txType: string): boolean {
   const lower = (desc + txType).toLowerCase().replace(/\s/g, '')
@@ -317,7 +319,10 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   const defaultAccountId = accounts[0]?.id || ''
   const defaultCardId    = cards[0]?.id || ''
-  const secondAccountId  = accounts.find(a => a.id !== defaultAccountId)?.id || defaultAccountId
+
+  // 파일에 해당하는 계좌/카드 선택
+  const [importAccountId, setImportAccountId] = useState(defaultAccountId)
+  const secondAccountId = accounts.find(a => a.id !== importAccountId)?.id || importAccountId
 
   // ── 파일 파싱 ──────────────────────────────────────────────────────────────
   async function handleFile(file: File) {
@@ -362,7 +367,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setPdfError('')
     try {
       const rawTextRows = await extractPDFRows(pendingFile, pdfPassword || undefined)
-      const parsed = parseKBBankRows(rawTextRows, defaultAccountId, secondAccountId)
+      const parsed = parseKBBankRows(rawTextRows, importAccountId, secondAccountId)
 
       if (parsed.length === 0) {
         setPdfError('거래 내역을 인식하지 못했습니다. 지원 형식: KB국민은행')
@@ -470,8 +475,6 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         autoSuggested = catExists && suggestedCatId !== (type === 'income' ? 'other_income' : 'etc')
       }
 
-      const secondAccountId = accounts.find(a => a.id !== defaultAccountId)?.id || defaultAccountId
-
       importRows.push({
         _key: `import_${i}_${Date.now()}`,
         date,
@@ -480,7 +483,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         amount,
         type: finalType,
         categoryId,
-        accountId: defaultAccountId,
+        accountId: importAccountId,
         toAccountId: secondAccountId,
         paymentMethod: 'account',
         cardId: defaultCardId,
@@ -597,7 +600,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                 </div>
               </>
             ) : (
-              /* PDF 감지됨 → 비밀번호 입력 */
+              /* PDF 감지됨 → 계좌 선택 + 비밀번호 입력 */
               <div className="w-full max-w-md">
                 <div className="bg-red-50 border border-red-100 rounded-2xl p-5 mb-4 flex items-start gap-3">
                   <span className="text-2xl">📄</span>
@@ -608,6 +611,26 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                 </div>
 
                 <div className="space-y-3">
+                  {/* 계좌 선택 */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">
+                      🏦 이 파일은 어느 계좌 내역인가요?
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {accounts.map(acc => (
+                        <button key={acc.id}
+                          onClick={() => setImportAccountId(acc.id)}
+                          className={`px-3 py-2 rounded-xl text-sm border transition-all ${
+                            importAccountId === acc.id
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                          }`}>
+                          {acc.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-xs font-semibold text-gray-600 block mb-1.5">
                       🔒 비밀번호 <span className="font-normal text-gray-400">(없으면 비워두세요)</span>
@@ -662,6 +685,26 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-1">📄 <span className="font-medium">{fileName}</span></p>
               <p className="text-xs text-gray-400">자동으로 컬럼을 감지했습니다. 맞지 않으면 직접 선택하세요.</p>
+            </div>
+
+            {/* 계좌 선택 */}
+            <div className="mb-5 p-4 bg-gray-50 rounded-2xl">
+              <label className="text-xs font-semibold text-gray-600 block mb-2">
+                🏦 이 파일은 어느 계좌/카드 내역인가요?
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {accounts.map(acc => (
+                  <button key={acc.id}
+                    onClick={() => setImportAccountId(acc.id)}
+                    className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${
+                      importAccountId === acc.id
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                    }`}>
+                    {acc.name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
