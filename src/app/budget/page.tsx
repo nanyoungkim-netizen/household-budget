@@ -12,6 +12,12 @@ function fmtShort(n: number) {
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 
+function prevMonth(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(y, m - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 const PRESET_ICONS = ['🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','📦','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️']
 const PRESET_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6F','#DDA0DD','#82E0AA','#F1948A','#85C1E9','#F0B27A','#A9CCE3','#EC7063','#A8D8EA','#B0BEC5','#CFD8DC']
 
@@ -21,13 +27,23 @@ export default function BudgetPage() {
   const { data, categories, setBudgets, setCategories } = useApp()
   const { budgets, transactions } = data
   const [month, setMonth] = useState(currentMonth)
+
+  // 예산 편집
   const [editing, setEditing] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+
+  // 이름 편집
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [editNameValue, setEditNameValue] = useState('')
+
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [modal, setModal] = useState<ModalType>(null)
   const [modalParentId, setModalParentId] = useState<string>('')
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC' })
   const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income' })
+
+  // 이월 확인 모달
+  const [showCarryOver, setShowCarryOver] = useState(false)
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
@@ -42,6 +58,8 @@ export default function BudgetPage() {
   function getBudget(catId: string) {
     return budgets.find(b => b.categoryId === catId && b.month === month)?.amount || 0
   }
+
+  // ── 예산 저장 ────────────────────────────────────────────────────────────
   function saveBudget(catId: string) {
     const amount = Number(editValue)
     if (isNaN(amount) || amount < 0) { setEditing(null); return }
@@ -49,6 +67,51 @@ export default function BudgetPage() {
     if (amount > 0) next.push({ id: `b${Date.now()}`, categoryId: catId, month, amount } as Budget)
     setBudgets(next)
     setEditing(null)
+  }
+
+  // ── 이름 저장 ────────────────────────────────────────────────────────────
+  function saveName(catId: string) {
+    const name = editNameValue.trim()
+    if (name) {
+      setCategories(categories.map(c => c.id === catId ? { ...c, name } : c))
+    }
+    setEditingName(null)
+    setEditNameValue('')
+  }
+
+  function startEditName(cat: Category) {
+    setEditingName(cat.id)
+    setEditNameValue(cat.name)
+    setEditing(null) // 예산 편집 중이면 닫기
+  }
+
+  // ── 이전달 이월 ──────────────────────────────────────────────────────────
+  function doCarryOver() {
+    const prev = prevMonth(month)
+    const prevBudgets = budgets.filter(b => b.month === prev)
+    if (prevBudgets.length === 0) {
+      setShowCarryOver(false)
+      return
+    }
+    // 현재 달 기존 예산 제거 후 이전 달 예산을 현재 달로 복사
+    const kept = budgets.filter(b => b.month !== month)
+    const copied = prevBudgets.map(b => ({
+      ...b,
+      id: `b${Date.now()}_${b.categoryId}`,
+      month,
+    }))
+    setBudgets([...kept, ...copied])
+    setShowCarryOver(false)
+  }
+
+  function handleCarryOverClick() {
+    const prev = prevMonth(month)
+    const prevBudgets = budgets.filter(b => b.month === prev)
+    if (prevBudgets.length === 0) {
+      alert(`${prev} 예산이 없습니다.`)
+      return
+    }
+    setShowCarryOver(true)
   }
 
   // ── 대분류 집계 ─────────────────────────────────────────────────────────
@@ -112,13 +175,32 @@ export default function BudgetPage() {
     })
   }
 
+  const prevM = prevMonth(month)
+  const hasPrevBudget = budgets.some(b => b.month === prevM)
+  const hasCurrentBudget = budgets.some(b => b.month === month)
+
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-5 gap-2 flex-wrap">
         <h1 className="text-xl font-bold text-gray-900">예산 관리</h1>
-        <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-          className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <div className="flex items-center gap-2">
+          {/* 이전달 이월 버튼 */}
+          <button
+            onClick={handleCarryOverClick}
+            disabled={!hasPrevBudget}
+            className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-colors ${
+              hasPrevBudget
+                ? 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                : 'border-gray-100 text-gray-300 cursor-not-allowed'
+            }`}
+            title={hasPrevBudget ? `${prevM} 예산을 이월합니다` : '이전 달 예산 없음'}
+          >
+            ← 이전달 이월
+          </button>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+            className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
       </div>
 
       {/* 총계 카드 */}
@@ -165,34 +247,53 @@ export default function BudgetPage() {
           return (
             <div key={parent.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
               {/* 대분류 헤더 */}
-              <button
-                onClick={() => toggleCollapse(parent.id)}
+              <div
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
                 style={{ borderLeft: `4px solid ${parent.color}` }}
               >
-                <div className="flex items-center gap-2">
+                <button onClick={() => toggleCollapse(parent.id)} className="flex items-center gap-2 flex-1 text-left">
                   <span className="text-base">{parent.icon}</span>
-                  <span className="text-sm font-bold text-gray-900">{parent.name}</span>
-                  <span className="text-xs text-gray-400">({children.length}개 항목)</span>
-                </div>
-                <div className="flex items-center gap-3">
+                  {/* 대분류 이름 인라인 편집 */}
+                  {editingName === parent.id ? (
+                    <input
+                      value={editNameValue}
+                      onChange={e => setEditNameValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveName(parent.id); if (e.key === 'Escape') setEditingName(null) }}
+                      onBlur={() => saveName(parent.id)}
+                      onClick={e => e.stopPropagation()}
+                      className="text-sm font-bold text-gray-900 border-b-2 border-blue-400 bg-transparent outline-none w-32"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="text-sm font-bold text-gray-900">{parent.name}</span>
+                  )}
+                  <span className="text-xs text-gray-400">({children.length}개)</span>
+                </button>
+                <div className="flex items-center gap-2">
                   {grpBudget > 0 && (
                     <span className={`text-xs font-medium ${grpOver ? 'text-red-500' : 'text-emerald-600'}`}>
                       {grpOver ? '▲' : '▼'} {fmtShort(Math.abs(grpDiff))}
                     </span>
                   )}
                   <span className="text-xs text-gray-500">{fmtShort(grpActual)} / {grpBudget > 0 ? fmtShort(grpBudget) : '-'}</span>
-                  <span className={`text-xs text-gray-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}>▲</span>
+                  {/* 이름 편집 버튼 */}
+                  <button
+                    onClick={e => { e.stopPropagation(); startEditName(parent) }}
+                    className="text-gray-300 hover:text-blue-400 text-xs transition-colors"
+                    title="이름 수정">✏️</button>
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleCollapse(parent.id) }}
+                    className={`text-xs text-gray-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}>▲</button>
                   <button
                     onClick={e => { e.stopPropagation(); deleteCategory(parent.id) }}
-                    className="text-gray-300 hover:text-red-400 text-xs ml-1">✕</button>
+                    className="text-gray-300 hover:text-red-400 text-xs">✕</button>
                 </div>
-              </button>
+              </div>
 
               {/* 소분류 리스트 */}
               {!isCollapsed && (
                 <div>
-                  {/* 헤더 */}
+                  {/* 컬럼 헤더 */}
                   <div className="grid grid-cols-4 px-4 py-1.5 bg-gray-50 border-t border-b border-gray-100 text-xs font-semibold text-gray-400">
                     <span>소분류</span>
                     <span className="text-right">예산</span>
@@ -215,30 +316,46 @@ export default function BudgetPage() {
                       <div key={cat.id} className="border-b border-gray-50 last:border-0 group">
                         <div className="grid grid-cols-4 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors">
                           {/* 소분류명 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">{cat.icon}</span>
-                            <span className="text-sm text-gray-700">{cat.name}</span>
-                            <button
-                              onClick={() => deleteCategory(cat.id)}
-                              className="text-gray-200 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-1">✕</button>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-sm flex-shrink-0">{cat.icon}</span>
+                            {editingName === cat.id ? (
+                              <input
+                                value={editNameValue}
+                                onChange={e => setEditNameValue(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveName(cat.id); if (e.key === 'Escape') setEditingName(null) }}
+                                onBlur={() => saveName(cat.id)}
+                                className="text-sm text-gray-700 border-b-2 border-blue-400 bg-transparent outline-none w-20"
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="text-sm text-gray-700 truncate">{cat.name}</span>
+                            )}
+                            {/* 편집/삭제 버튼 (hover 시 표시) */}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <button
+                                onClick={() => startEditName(cat)}
+                                className="text-gray-300 hover:text-blue-400 text-xs"
+                                title="이름 수정">✏️</button>
+                              <button
+                                onClick={() => deleteCategory(cat.id)}
+                                className="text-gray-200 hover:text-red-400 text-xs">✕</button>
+                            </div>
                           </div>
                           {/* 예산 (클릭 편집) */}
                           <div className="text-right">
                             {editing === cat.id ? (
-                              <div className="flex items-center justify-end gap-1">
-                                <input
-                                  type="number"
-                                  value={editValue}
-                                  onChange={e => setEditValue(e.target.value)}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveBudget(cat.id); if (e.key === 'Escape') setEditing(null) }}
-                                  onBlur={() => saveBudget(cat.id)}
-                                  className="w-20 text-right text-xs border border-blue-300 rounded-lg px-2 py-1 focus:outline-none"
-                                  autoFocus
-                                />
-                              </div>
+                              <input
+                                type="number"
+                                value={editValue}
+                                onChange={e => setEditValue(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveBudget(cat.id); if (e.key === 'Escape') setEditing(null) }}
+                                onBlur={() => saveBudget(cat.id)}
+                                className="w-20 text-right text-xs border border-blue-300 rounded-lg px-2 py-1 focus:outline-none"
+                                autoFocus
+                              />
                             ) : (
                               <button
-                                onClick={() => { setEditing(cat.id); setEditValue(String(budgetAmt)) }}
+                                onClick={() => { setEditing(cat.id); setEditValue(String(budgetAmt)); setEditingName(null) }}
                                 className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
                                 {budgetAmt > 0 ? fmtKRW(budgetAmt) : <span className="text-gray-300 text-xs">설정</span>}
                               </button>
@@ -297,6 +414,37 @@ export default function BudgetPage() {
         className="mt-4 w-full bg-white rounded-2xl shadow-sm py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">
         <span className="text-lg">+</span> 대분류 추가
       </button>
+
+      {/* ── 이전달 이월 확인 모달 ─────────────────────────────────── */}
+      {showCarryOver && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+            <div className="text-center mb-5">
+              <div className="text-3xl mb-3">📋</div>
+              <h2 className="text-base font-bold text-gray-900 mb-1">이전달 예산 이월</h2>
+              <p className="text-sm text-gray-500">
+                <span className="font-medium text-blue-600">{prevM}</span>의 예산을{' '}
+                <span className="font-medium text-blue-600">{month}</span>으로 복사합니다.
+              </p>
+              {hasCurrentBudget && (
+                <p className="text-xs text-amber-600 mt-2 bg-amber-50 rounded-xl px-3 py-2">
+                  ⚠️ {month}에 이미 설정된 예산은 덮어씌워집니다.
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowCarryOver(false)}
+                className="flex-1 bg-gray-100 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-200 transition-colors text-sm">
+                취소
+              </button>
+              <button onClick={doCarryOver}
+                className="flex-1 bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">
+                이월하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 소분류 추가 모달 ──────────────────────────────────────── */}
       {modal === 'addChild' && (
