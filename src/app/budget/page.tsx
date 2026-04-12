@@ -47,13 +47,19 @@ export default function BudgetPage() {
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
-  const monthTx = transactions.filter(t => t.date.startsWith(month) && t.type === 'expense')
+  // 지출 + 환급(차감) 모두 포함
+  const monthTx = transactions.filter(t =>
+    t.date.startsWith(month) && (t.type === 'expense' || t.type === 'refund')
+  )
 
   function getChildren(parentId: string) {
     return categories.filter(c => c.parentId === parentId)
   }
   function getActual(catId: string) {
-    return monthTx.filter(t => t.categoryId === catId).reduce((s, t) => s + t.amount, 0)
+    // 지출은 +, 환급은 - (차감)
+    return monthTx
+      .filter(t => t.categoryId === catId)
+      .reduce((s, t) => t.type === 'refund' ? s - t.amount : s + t.amount, 0)
   }
   function getBudget(catId: string) {
     return budgets.find(b => b.categoryId === catId && b.month === month)?.amount || 0

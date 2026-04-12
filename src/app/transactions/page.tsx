@@ -10,7 +10,7 @@ function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
 type PaymentTab = 'all' | 'account' | 'card'
-type TxFormType = 'expense' | 'income' | 'transfer'
+type TxFormType = 'expense' | 'income' | 'transfer' | 'refund'
 
 interface FormState {
   date: string
@@ -105,7 +105,7 @@ export default function TransactionsPage() {
     let bal = acc.balance
     const map = new Map<string, number>()
     for (const t of accTxs) {
-      if (t.type === 'income' && t.accountId === filterAccount) bal += t.amount
+      if ((t.type === 'income' || t.type === 'refund') && t.accountId === filterAccount) bal += t.amount
       else if (t.type === 'expense' && t.accountId === filterAccount && t.paymentMethod === 'account') bal -= t.amount
       else if (t.type === 'transfer') {
         if (t.accountId === filterAccount) bal -= t.amount
@@ -191,7 +191,13 @@ export default function TransactionsPage() {
 
   function switchFormType(t: TxFormType) {
     setFormType(t)
-    if (t !== 'transfer') {
+    if (t === 'refund') {
+      // 환급은 지출 카테고리를 사용
+      setForm(f => ({
+        ...f,
+        categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || ''
+      }))
+    } else if (t !== 'transfer') {
       setForm(f => ({
         ...f,
         categoryId: categories.find(c => c.type === t && c.parentId !== null)?.id || ''
@@ -199,7 +205,10 @@ export default function TransactionsPage() {
     }
   }
 
-  const filteredCats = categories.filter(c => c.type === formType && c.parentId !== null)
+  // 환급은 지출 카테고리 목록 사용
+  const filteredCats = formType === 'refund'
+    ? categories.filter(c => c.type === 'expense' && c.parentId !== null)
+    : categories.filter(c => c.type === formType && c.parentId !== null)
   const isEditing = !!editingId
 
   return (
@@ -316,6 +325,7 @@ export default function TransactionsPage() {
           <option value="income">수입</option>
           <option value="expense">지출</option>
           <option value="transfer">이체</option>
+          <option value="refund">환급</option>
         </select>
       </div>
 
@@ -348,6 +358,7 @@ export default function TransactionsPage() {
               const toAcc = accounts.find(a => a.id === t.toAccountId)
               const usedCard = t.paymentMethod === 'card' ? cards.find(c => c.id === t.cardId) : null
               const isTransfer = t.type === 'transfer'
+              const isRefund   = t.type === 'refund'
               const runningBalance = runningBalanceMap.get(t.id)
 
               return (
@@ -356,11 +367,14 @@ export default function TransactionsPage() {
                   onClick={() => openEdit(t)}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${isTransfer ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                      {isTransfer ? '↔️' : cat?.icon}
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${isTransfer ? 'bg-blue-50' : isRefund ? 'bg-purple-50' : 'bg-gray-50'}`}>
+                      {isTransfer ? '↔️' : isRefund ? '↩️' : cat?.icon}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{t.description}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
+                        {isRefund && <span className="text-xs bg-purple-100 text-purple-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">환급</span>}
+                      </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {isTransfer ? (
                           <span className="text-xs text-blue-500 font-medium">
@@ -385,9 +399,10 @@ export default function TransactionsPage() {
                       {/* 거래 금액 */}
                       <div className={`text-sm font-semibold ${
                         isTransfer ? 'text-blue-500' :
+                        isRefund   ? 'text-purple-600' :
                         t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
                       }`}>
-                        {isTransfer ? '' : t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
+                        {isTransfer ? '' : (t.type === 'income' || isRefund) ? '+' : '-'}{fmtKRW(t.amount)}
                       </div>
                       {/* 거래 후 잔액 — 계좌 필터 선택 시에만 표시 */}
                       {runningBalance !== undefined && (
@@ -436,13 +451,14 @@ export default function TransactionsPage() {
               {/* 유형 탭 — 수정 모드에서는 변경 불가 */}
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                 {([
-                  ['expense', '지출', 'bg-red-500'],
-                  ['income',  '수입', 'bg-emerald-500'],
-                  ['transfer','이체', 'bg-blue-500'],
+                  ['expense', '지출',   'bg-red-500'],
+                  ['income',  '수입',   'bg-emerald-500'],
+                  ['transfer','이체',   'bg-blue-500'],
+                  ['refund',  '환급',   'bg-purple-500'],
                 ] as const).map(([type, label, activeColor]) => (
                   <button key={type}
                     onClick={() => !isEditing && switchFormType(type)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
                       formType === type ? `${activeColor} text-white` : 'text-gray-500'
                     } ${isEditing ? 'cursor-default' : ''}`}
                   >
@@ -450,6 +466,12 @@ export default function TransactionsPage() {
                   </button>
                 ))}
               </div>
+              {/* 환급 안내 */}
+              {formType === 'refund' && (
+                <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5 text-xs text-purple-700 leading-relaxed">
+                  💜 <strong>환급/차감</strong>: 통장에는 <strong>입금</strong>되고, 선택한 지출 항목에서는 <strong>차감</strong>됩니다.
+                </div>
+              )}
 
               {/* ── 이체 ── */}
               {formType === 'transfer' ? (
@@ -508,17 +530,20 @@ export default function TransactionsPage() {
                   )}
                 </>
               ) : (
-                /* ── 수입 / 지출 ── */
+                /* ── 수입 / 지출 / 환급 ── */
                 <>
-                  <div className="flex bg-gray-100 rounded-xl p-1">
-                    {(['account','card'] as const).map(method => (
-                      <button key={method}
-                        onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-                        {method === 'account' ? '🏦 통장' : '💳 카드'}
-                      </button>
-                    ))}
-                  </div>
+                  {/* 환급은 항상 통장 입금이므로 결제수단 탭 숨김 */}
+                  {formType !== 'refund' && (
+                    <div className="flex bg-gray-100 rounded-xl p-1">
+                      {(['account','card'] as const).map(method => (
+                        <button key={method}
+                          onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
+                          {method === 'account' ? '🏦 통장' : '💳 카드'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <input type="date" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -543,9 +568,14 @@ export default function TransactionsPage() {
                       {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   )}
+                  {formType === 'refund' && (
+                    <label className="text-xs text-gray-500 -mb-1 block">차감할 지출 항목 선택</label>
+                  )}
                   <select value={form.categoryId}
                     onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
+                      formType === 'refund' ? 'border-purple-200 focus:ring-purple-400' : 'border-gray-200 focus:ring-blue-500'
+                    }`}>
                     {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                   </select>
                 </>
@@ -563,9 +593,10 @@ export default function TransactionsPage() {
                   className={`flex-1 text-white font-semibold py-3 rounded-xl transition-colors ${
                     formType === 'transfer' ? 'bg-blue-500 hover:bg-blue-600' :
                     formType === 'income'   ? 'bg-emerald-500 hover:bg-emerald-600' :
+                    formType === 'refund'   ? 'bg-purple-500 hover:bg-purple-600' :
                                              'bg-red-500 hover:bg-red-600'
                   }`}>
-                  {isEditing ? '수정 완료' : formType === 'transfer' ? '이체하기' : '추가하기'}
+                  {isEditing ? '수정 완료' : formType === 'transfer' ? '이체하기' : formType === 'refund' ? '환급 추가' : '추가하기'}
                 </button>
               </div>
             </div>

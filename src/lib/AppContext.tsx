@@ -460,6 +460,9 @@ export function computeAccountBalance(
     if (tx.type === 'income' && tx.accountId === accountId) {
       return bal + tx.amount
     }
+    if (tx.type === 'refund' && tx.accountId === accountId) {
+      return bal + tx.amount   // 환급 = 통장 입금
+    }
     if (tx.type === 'expense' && tx.accountId === accountId && tx.paymentMethod === 'account') {
       return bal - tx.amount
     }
