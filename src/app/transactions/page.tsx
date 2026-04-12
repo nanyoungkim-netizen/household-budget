@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useApp, computeAccountBalance } from '@/lib/AppContext'
 import { Transaction, PaymentMethod } from '@/types'
+import TransactionImport from '@/components/TransactionImport'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 
@@ -34,6 +35,7 @@ export default function TransactionsPage() {
   // 모달 상태 — editingId가 있으면 수정 모드
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [formType, setFormType] = useState<TxFormType>('expense')
 
   const defaultForm = useCallback((): FormState => ({
@@ -164,10 +166,16 @@ export default function TransactionsPage() {
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">거래 내역</h1>
-        <button onClick={openAdd}
-          className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">
-          + 추가
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowImport(true)}
+            className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 transition-colors">
+            📊 엑셀 가져오기
+          </button>
+          <button onClick={openAdd}
+            className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">
+            + 추가
+          </button>
+        </div>
       </div>
 
       {/* 통장/카드 탭 */}
@@ -456,6 +464,10 @@ export default function TransactionsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showImport && (
+        <TransactionImport onClose={() => setShowImport(false)} />
       )}
     </div>
   )
