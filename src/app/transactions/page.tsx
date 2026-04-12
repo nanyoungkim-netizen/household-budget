@@ -57,7 +57,12 @@ export default function TransactionsPage() {
     .filter(t => t.date.startsWith(month))
     .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
-    .filter(t => paymentTab === 'all' || (t.type !== 'transfer' && t.paymentMethod === paymentTab))
+    .filter(t => {
+      if (paymentTab === 'all') return true
+      if (paymentTab === 'account') return t.type === 'transfer' || t.paymentMethod === 'account'
+      // 카드 탭: 카드 결제만 (이체 제외)
+      return t.type !== 'transfer' && t.paymentMethod === 'card'
+    })
     .filter(t => filterCard === 'all' || (t.paymentMethod === 'card' && t.cardId === filterCard))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
