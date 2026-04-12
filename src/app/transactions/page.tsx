@@ -29,6 +29,7 @@ export default function TransactionsPage() {
 
   const [month, setMonth] = useState(currentMonth)
   const [filterAccount, setFilterAccount] = useState('all')
+  const [filterCard, setFilterCard] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('all')
 
@@ -57,18 +58,26 @@ export default function TransactionsPage() {
     .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
     .filter(t => paymentTab === 'all' || (t.type !== 'transfer' && t.paymentMethod === paymentTab))
+    .filter(t => filterCard === 'all' || (t.paymentMethod === 'card' && t.cardId === filterCard))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
   const income   = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expense  = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const transfer = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
 
-  const cardSummary = cards.map(card => ({
+  // 계좌별 실시간 잔액 (전체 거래 기준, 월 필터 없음)
+  const accountBalances = accounts.map(acc => ({
+    acc,
+    balance: computeAccountBalance(acc.id, acc.balance, transactions),
+  }))
+
+  // 카드별 이번 달 누적 (월 필터 적용)
+  const cardMonthlyTotals = cards.map(card => ({
     card,
-    total: filtered
-      .filter(t => t.paymentMethod === 'card' && t.cardId === card.id && t.type === 'expense')
+    total: transactions
+      .filter(t => t.date.startsWith(month) && t.paymentMethod === 'card' && t.cardId === card.id && t.type === 'expense')
       .reduce((s, t) => s + t.amount, 0),
-  })).filter(s => s.total > 0)
+  }))
 
   const grouped = filtered.reduce<Record<string, Transaction[]>>((acc, t) => {
     if (!acc[t.date]) acc[t.date] = []
@@ -179,27 +188,81 @@ export default function TransactionsPage() {
       </div>
 
       {/* 통장/카드 탭 */}
-      <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 gap-1 w-fit">
+      <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-3 gap-1 w-fit">
         {([['all','전체'],['account','🏦 통장'],['card','💳 카드']] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setPaymentTab(key)}
+          <button key={key}
+            onClick={() => {
+              setPaymentTab(key)
+              setFilterAccount('all')
+              setFilterCard('all')
+            }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${paymentTab === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}
       </div>
 
-      {/* 카드별 요약 */}
-      {paymentTab === 'card' && cardSummary.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {cardSummary.map(({ card, total }) => (
-            <div key={card.id} className="bg-white rounded-2xl p-3 shadow-sm flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                style={{ backgroundColor: card.color }}>{card.name.charAt(0)}</div>
-              <div>
-                <div className="text-xs text-gray-500">{card.name}</div>
-                <div className="text-sm font-bold text-gray-900">{fmtKRW(total)}</div>
-              </div>
-            </div>
+      {/* 통장 탭: 계좌 칩 (실시간 잔액) */}
+      {paymentTab === 'account' && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setFilterAccount('all')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+              filterAccount === 'all'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+            }`}>
+            전체
+          </button>
+          {accountBalances.map(({ acc, balance }) => (
+            <button
+              key={acc.id}
+              onClick={() => setFilterAccount(acc.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+                filterAccount === acc.id
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              }`}>
+              <span>{acc.name}</span>
+              <span className={`text-xs font-normal ${filterAccount === acc.id ? 'text-blue-100' : 'text-gray-400'}`}>
+                {balance >= 0 ? '' : '-'}{Math.abs(balance).toLocaleString('ko-KR')}원
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 카드 탭: 카드 칩 (월별 누적) */}
+      {paymentTab === 'card' && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setFilterCard('all')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+              filterCard === 'all'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+            }`}>
+            전체 카드
+          </button>
+          {cardMonthlyTotals.map(({ card, total }) => (
+            <button
+              key={card.id}
+              onClick={() => setFilterCard(filterCard === card.id ? 'all' : card.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+                filterCard === card.id
+                  ? 'text-white border-transparent'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+              }`}
+              style={filterCard === card.id ? { backgroundColor: card.color, borderColor: card.color } : {}}>
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${filterCard === card.id ? 'bg-white/60' : ''}`}
+                style={filterCard !== card.id ? { backgroundColor: card.color } : {}}
+              />
+              <span>{card.name}</span>
+              <span className={`text-xs font-normal ${filterCard === card.id ? 'text-white/80' : 'text-red-400'}`}>
+                {total > 0 ? `${total.toLocaleString('ko-KR')}원` : '0원'}
+              </span>
+            </button>
           ))}
         </div>
       )}
@@ -208,11 +271,14 @@ export default function TransactionsPage() {
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="all">전체 계좌</option>
-          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
+        {/* 전체 탭일 때만 계좌 드롭다운 표시 */}
+        {paymentTab === 'all' && (
+          <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="all">전체 계좌</option>
+            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        )}
         <select value={filterType} onChange={e => setFilterType(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="all">전체</option>
