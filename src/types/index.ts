@@ -16,6 +16,8 @@ export interface Category {
   color: string
 }
 
+export type PaymentMethod = 'account' | 'card'
+
 export interface Transaction {
   id: string
   date: string
@@ -24,6 +26,8 @@ export interface Transaction {
   type: TransactionType
   accountId: string
   categoryId: string
+  paymentMethod: PaymentMethod
+  cardId?: string        // 카드 결제인 경우
   note?: string
   isInstallment?: boolean
   installmentMonths?: number

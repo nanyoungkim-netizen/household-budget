@@ -1,0 +1,1848 @@
+﻿id,date,description,amount,type,accountId,categoryId,paymentMethod,cardId,note
+0a88018d,2017-01-01,전월이월,187683,income,gwangju,other_income,account,,이전: 17년 광주은행
+56fbee3d,2017-04-01,전월이월,641323,income,gwangju,other_income,account,,이전: 17년 광주은행
+7f74aee3,2017-07-01,전월이월,397153,income,gwangju,other_income,account,,이전: 17년 광주은행
+1a7f45cc,2017-10-01,전월이월,319257,income,gwangju,other_income,account,,이전: 17년 광주은행
+d3ee81e0,2017-01-01,이모부용돈,500000,expense,gwangju,etc,account,,이전: 17년 광주은행
+a4b3b037,2017-04-01,이모부용돈,1364040,expense,gwangju,etc,account,,이전: 17년 광주은행
+e9b7c490,2017-07-01,이모부용돈,1364040,expense,gwangju,etc,account,,이전: 17년 광주은행
+8f4c0309,2017-10-01,이모부용돈,380390,expense,gwangju,etc,account,,이전: 17년 광주은행
+6b0967e4,2017-01-01,엔텍스(10일),1364040,expense,gwangju,etc,account,,이전: 17년 광주은행
+9d08dca6,2017-04-01,엔텍스(10일),97500,expense,gwangju,etc,account,,이전: 17년 광주은행
+4470a29d,2017-07-01,엔텍스(10일),164,expense,gwangju,etc,account,,이전: 17년 광주은행
+fb7578dd,2017-01-01,적금,1000000,expense,gwangju,saving,account,,이전: 17년 광주은행
+49616f08,2017-04-01,적금,1000000,expense,gwangju,saving,account,,이전: 17년 광주은행
+7657cb4b,2017-07-01,적금,1000000,expense,gwangju,saving,account,,이전: 17년 광주은행
+b582a9d7,2017-10-01,적금,300000,expense,gwangju,saving,account,,이전: 17년 광주은행
+0c5a14ff,2017-01-01,국민은행이체,200000,expense,gwangju,etc,account,,이전: 17년 광주은행
+71d7d3b1,2017-04-01,국민은행이체,130000,expense,gwangju,etc,account,,이전: 17년 광주은행
+12ba1499,2017-07-01,국민은행이체,200000,expense,gwangju,etc,account,,이전: 17년 광주은행
+82301b41,2017-10-01,국민은행이체,87700,expense,gwangju,etc,account,,이전: 17년 광주은행
+9234350f,2017-01-01,김지연용돈,50400,expense,gwangju,etc,account,,이전: 17년 광주은행
+1b8bc548,2017-04-01,김지연용돈,51500,expense,gwangju,etc,account,,이전: 17년 광주은행
+30128b2b,2017-07-01,김지연용돈,242100,expense,gwangju,etc,account,,이전: 17년 광주은행
+708a54f9,2017-01-01,기타,160000,income,gwangju,other_income,account,,이전: 17년 광주은행
+0768e7a5,2017-04-01,기타,200000,income,gwangju,other_income,account,,이전: 17년 광주은행
+1116bbb5,2017-01-01,전월이월,42865,income,gwangju,other_income,account,,이전: 17년 광주은행
+e9dd765e,2017-04-01,전월이월,26715,income,gwangju,other_income,account,,이전: 17년 광주은행
+96555ab9,2017-07-01,전월이월,26700,income,gwangju,other_income,account,,이전: 17년 광주은행
+b8880dbe,2017-10-01,전월이월,26677,income,gwangju,other_income,account,,이전: 17년 광주은행
+e1fb703f,2017-01-01,마운틴마트,2400,expense,gwangju,etc,account,,이전: 17년 광주은행
+83bc4dab,2017-04-01,마운틴마트,15,expense,gwangju,etc,account,,이전: 17년 광주은행
+1df2a482,2017-07-01,마운틴마트,30,expense,gwangju,etc,account,,이전: 17년 광주은행
+c4e4e9c7,2017-10-01,마운틴마트,110,expense,gwangju,etc,account,,이전: 17년 광주은행
+4cfda8d0,2017-01-01,티켓링크,13600,expense,gwangju,etc,account,,이전: 17년 광주은행
+0c41678a,2017-01-01,기타,150,income,gwangju,other_income,account,,이전: 17년 광주은행
+43fe8901,2018-01-01,전월이월,22178,income,gwangju,other_income,account,,이전: 18년 광주은행
+267f92a6,2018-04-01,전월이월,22163,income,gwangju,other_income,account,,이전: 18년 광주은행
+ce6814dc,2018-07-01,전월이월,22148,income,gwangju,other_income,account,,이전: 18년 광주은행
+90f55458,2018-10-01,전월이월,22153,income,gwangju,other_income,account,,이전: 18년 광주은행
+099ab51a,2018-01-01,이자,15,income,gwangju,interest,account,,이전: 18년 광주은행
+fad1f4d0,2018-04-01,이자,15,income,gwangju,interest,account,,이전: 18년 광주은행
+1b5c4301,2017-01-01,국민은행,210000,expense,kb,etc,account,,이전: 17년 국민은행
+8320b466,2017-04-01,국민은행,210000,expense,kb,etc,account,,이전: 17년 국민은행
+09bee71e,2017-07-01,국민은행,146200,expense,kb,etc,account,,이전: 17년 국민은행
+8fad4592,2017-10-01,국민은행,96200,expense,kb,etc,account,,이전: 17년 국민은행
+0c1aa960,2017-01-01,전월이월,1469999,income,kb,other_income,account,,이전: 17년 국민은행
+ea68a12e,2017-04-01,전월이월,1471848,income,kb,other_income,account,,이전: 17년 국민은행
+04949184,2017-07-01,전월이월,242369,income,kb,other_income,account,,이전: 17년 국민은행
+70c37c93,2017-10-01,전월이월,263319,income,kb,other_income,account,,이전: 17년 국민은행
+26fbe17f,2017-01-01,화신볼트(15일),1524000,expense,kb,etc,account,,이전: 17년 국민은행
+a19001c4,2017-04-01,화신볼트(15일),1,expense,kb,etc,account,,이전: 17년 국민은행
+10110a7e,2017-07-01,화신볼트(15일),34500,expense,kb,etc,account,,이전: 17년 국민은행
+a332a045,2017-10-01,화신볼트(15일),350000,expense,kb,etc,account,,이전: 17년 국민은행
+00dc9ff4,2017-01-01,이수미입금,3508,expense,kb,etc,account,,이전: 17년 국민은행
+82cca550,2017-04-01,이수미입금,100000,expense,kb,etc,account,,이전: 17년 국민은행
+bed32c88,2017-07-01,이수미입금,1524000,expense,kb,etc,account,,이전: 17년 국민은행
+c8e52404,2017-10-01,이수미입금,14000,expense,kb,etc,account,,이전: 17년 국민은행
+afd4c828,2017-01-01,카카오페이,1,expense,kb,etc,account,,이전: 17년 국민은행
+d7ce373b,2017-04-01,카카오페이,1524000,expense,kb,etc,account,,이전: 17년 국민은행
+24d33b16,2017-07-01,카카오페이,7000,expense,kb,etc,account,,이전: 17년 국민은행
+3f4a4b12,2017-10-01,카카오페이,1524000,expense,kb,etc,account,,이전: 17년 국민은행
+dbcf2f8f,2017-01-01,기타,320160,income,kb,other_income,account,,이전: 17년 국민은행
+c7562a8e,2017-04-01,기타,193480,income,kb,other_income,account,,이전: 17년 국민은행
+e65cdd7e,2017-07-01,기타,274550,income,kb,other_income,account,,이전: 17년 국민은행
+c604b42e,2017-10-01,기타,364450,income,kb,other_income,account,,이전: 17년 국민은행
+2b4d4732,2017-01-01,엄마생신용돈,201300,expense,kb,etc,account,,이전: 17년 국민은행
+49d61284,2017-04-01,엄마생신용돈,700000,expense,kb,etc,account,,이전: 17년 국민은행
+8f76e531,2017-07-01,엄마생신용돈,1300000,expense,kb,etc,account,,이전: 17년 국민은행
+37774106,2017-10-01,엄마생신용돈,1300000,expense,kb,etc,account,,이전: 17년 국민은행
+5345be77,2017-01-01,수영비(7월),58000,expense,kb,etc,account,,이전: 17년 국민은행
+e5a24e4a,2017-04-01,수영비(7월),400000,expense,kb,etc,account,,이전: 17년 국민은행
+035d6b8c,2017-01-01,김지연유니폼,65000,expense,kb,etc,account,,이전: 17년 국민은행
+329bfab0,2017-04-01,김지연유니폼,200000,expense,kb,etc,account,,이전: 17년 국민은행
+2ec91c6d,2017-01-01,동백열차(왕복),3200,expense,kb,etc,account,,이전: 17년 국민은행
+f61473e5,2017-04-01,동백열차(왕복),1000000,expense,kb,etc,account,,이전: 17년 국민은행
+bcbee429,2017-01-01,이오카츠(여수저녁),22000,expense,kb,etc,account,,이전: 17년 국민은행
+53f428fb,2017-04-01,이오카츠(여수저녁),150000,expense,kb,etc,account,,이전: 17년 국민은행
+dbf55dc7,2017-01-01,SRT(왕복),26000,expense,kb,etc,account,,이전: 17년 국민은행
+bb7342ee,2017-04-01,SRT(왕복),210000,expense,kb,etc,account,,이전: 17년 국민은행
+c7f051b6,2017-01-01,적금,800000,expense,kb,saving,account,,이전: 17년 국민은행
+f79fb34a,2017-01-01,게스트하우스비,30000,expense,kb,etc,account,,이전: 17년 국민은행
+86e20625,2018-01-01,전월이월,510240,income,kb,other_income,account,,이전: 18년 국민은행
+1044719d,2018-04-01,전월이월,258460,income,kb,other_income,account,,이전: 18년 국민은행
+341f6798,2018-07-01,전월이월,671350,income,kb,other_income,account,,이전: 18년 국민은행
+39cf4e18,2018-10-01,전월이월,294892,income,kb,other_income,account,,이전: 18년 국민은행
+c4a40407,2018-01-01,12월카드대금 입금(엄마),354060,expense,kb,card,account,,이전: 18년 국민은행
+687fc80a,2018-04-01,12월카드대금 입금(엄마),82000,expense,kb,card,account,,이전: 18년 국민은행
+e5088e64,2018-07-01,12월카드대금 입금(엄마),979960,expense,kb,card,account,,이전: 18년 국민은행
+6192acd3,2018-10-01,12월카드대금 입금(엄마),962570,expense,kb,card,account,,이전: 18년 국민은행
+5ac23333,2018-01-01,화신볼트(15일),1524000,expense,kb,etc,account,,이전: 18년 국민은행
+592ab9a8,2018-04-01,화신볼트(15일),802000,expense,kb,etc,account,,이전: 18년 국민은행
+a91f1ad3,2018-07-01,화신볼트(15일),1670000,expense,kb,etc,account,,이전: 18년 국민은행
+c39bc2c2,2018-10-01,화신볼트(15일),1670000,expense,kb,etc,account,,이전: 18년 국민은행
+0ab7dbc6,2018-01-01,적금만기,12137513,expense,kb,saving,account,,이전: 18년 국민은행
+2de03dc6,2018-04-01,적금만기,19250,expense,kb,saving,account,,이전: 18년 국민은행
+70c812d6,2018-01-01,전수빈빌려준돈,10000,expense,kb,etc,account,,이전: 18년 국민은행
+13809616,2018-04-01,전수빈빌려준돈,1,expense,kb,etc,account,,이전: 18년 국민은행
+5f531d12,2018-01-01,치과,12700,expense,kb,etc,account,,이전: 18년 국민은행
+6de9b52b,2018-04-01,치과,82000,expense,kb,etc,account,,이전: 18년 국민은행
+9fbf304f,2018-07-01,치과,334820,expense,kb,etc,account,,이전: 18년 국민은행
+ddeeb47a,2018-10-01,치과,50000,expense,kb,etc,account,,이전: 18년 국민은행
+80c010b5,2018-01-01,영화(남자친구신과함께),18000,expense,kb,etc,account,,이전: 18년 국민은행
+4d77bb3d,2018-04-01,영화(남자친구신과함께),182140,expense,kb,etc,account,,이전: 18년 국민은행
+c66b0afd,2018-07-01,영화(남자친구신과함께),1291598,expense,kb,etc,account,,이전: 18년 국민은행
+68591078,2018-10-01,영화(남자친구신과함께),1300000,expense,kb,etc,account,,이전: 18년 국민은행
+b77de778,2018-01-01,샤오미보조배터리,18700,expense,kb,etc,account,,이전: 18년 국민은행
+f7757c2f,2018-04-01,샤오미보조배터리,121941,expense,kb,etc,account,,이전: 18년 국민은행
+ba07fd4b,2018-07-01,샤오미보조배터리,1300000,expense,kb,etc,account,,이전: 18년 국민은행
+dfe6b1db,2018-10-01,샤오미보조배터리,50000,expense,kb,etc,account,,이전: 18년 국민은행
+44c891de,2018-01-01,12월카드대금선결제,104840,expense,kb,card,account,,이전: 18년 국민은행
+bf7f31f2,2018-04-01,12월카드대금선결제,182300,expense,kb,card,account,,이전: 18년 국민은행
+eb51e056,2018-07-01,12월카드대금선결제,50000,expense,kb,card,account,,이전: 18년 국민은행
+e3f72588,2018-10-01,12월카드대금선결제,1323795,expense,kb,card,account,,이전: 18년 국민은행
+684292de,2018-01-01,12월카드대금결제,823113,expense,kb,card,account,,이전: 18년 국민은행
+8e2ad07a,2018-04-01,12월카드대금결제,573410,expense,kb,card,account,,이전: 18년 국민은행
+32cc9547,2018-07-01,12월카드대금결제,50000,expense,kb,card,account,,이전: 18년 국민은행
+e8c2b297,2018-10-01,12월카드대금결제,6900,expense,kb,card,account,,이전: 18년 국민은행
+19a2e791,2018-01-01,1월적금,1300000,expense,kb,saving,account,,이전: 18년 국민은행
+0e60d899,2018-04-01,1월적금,393300,expense,kb,saving,account,,이전: 18년 국민은행
+b943ff2b,2018-01-01,카카오적금,12000000,expense,kb,saving,account,,이전: 18년 국민은행
+586ed115,2018-04-01,카카오적금,1300000,expense,kb,saving,account,,이전: 18년 국민은행
+c7d149cc,2018-01-01,전월이월,76031,expense,kb,etc,account,,이전: 18년 국민은행
+0fa74998,2018-04-01,전월이월,68853,expense,kb,etc,account,,이전: 18년 국민은행
+fe4fe3f9,2018-07-01,전월이월,441259,expense,kb,etc,account,,이전: 18년 국민은행
+1209fad3,2018-10-01,전월이월,3723745,expense,kb,etc,account,,이전: 18년 국민은행
+1667822a,2018-01-01,카카오페이,1,expense,kb,etc,account,,이전: 18년 국민은행
+409f8485,2018-04-01,카카오페이,100000,expense,kb,etc,account,,이전: 18년 국민은행
+67f25436,2018-07-01,카카오페이,3638000,expense,kb,etc,account,,이전: 18년 국민은행
+d6bbd110,2018-10-01,카카오페이,12500,expense,kb,etc,account,,이전: 18년 국민은행
+3d1fc433,2018-01-01,민정이(마포갈매기),14500,expense,kb,etc,account,,이전: 18년 국민은행
+2f9ba54c,2018-04-01,민정이(마포갈매기),1670000,expense,kb,etc,account,,이전: 18년 국민은행
+eec29018,2018-07-01,민정이(마포갈매기),19000,expense,kb,etc,account,,이전: 18년 국민은행
+57508733,2018-10-01,민정이(마포갈매기),14800,expense,kb,etc,account,,이전: 18년 국민은행
+c8ce10c9,2018-01-01,홍준원(주유비),30000,expense,kb,etc,account,,이전: 18년 국민은행
+eb488036,2018-04-01,홍준원(주유비),10000,expense,kb,etc,account,,이전: 18년 국민은행
+3dbc99d6,2018-07-01,홍준원(주유비),517975,expense,kb,etc,account,,이전: 18년 국민은행
+21445865,2018-10-01,홍준원(주유비),486480,expense,kb,etc,account,,이전: 18년 국민은행
+b1377edb,2018-01-01,김지연(아빠 어버이날선물),26705,expense,kb,gift,account,,이전: 18년 국민은행
+eec63d05,2018-04-01,김지연(아빠 어버이날선물),868930,expense,kb,gift,account,,이전: 18년 국민은행
+04faaef1,2018-07-01,김지연(아빠 어버이날선물),100000,expense,kb,gift,account,,이전: 18년 국민은행
+b52a18d2,2018-10-01,김지연(아빠 어버이날선물),182886,expense,kb,gift,account,,이전: 18년 국민은행
+bc519e14,2018-01-01,화신볼트(15일),1670000,expense,kb,etc,account,,이전: 18년 국민은행
+14bcf1b4,2018-04-01,화신볼트(15일),15000,expense,kb,etc,account,,이전: 18년 국민은행
+242c5da1,2018-07-01,화신볼트(15일),851616,expense,kb,etc,account,,이전: 18년 국민은행
+16643ac7,2018-10-01,화신볼트(15일),15000,expense,kb,etc,account,,이전: 18년 국민은행
+e46020ef,2018-01-01,엄마아빠카드대금,556300,expense,kb,card,account,,이전: 18년 국민은행
+bd9c6721,2018-07-01,엄마아빠카드대금,190000,expense,kb,card,account,,이전: 18년 국민은행
+1d73d8dd,2018-10-01,엄마아빠카드대금,200000,expense,kb,card,account,,이전: 18년 국민은행
+c181f472,2018-01-01,치킨먹으려고 돈뽑음,20000,expense,kb,etc,account,,이전: 18년 국민은행
+23a9565b,2018-04-01,치킨먹으려고 돈뽑음,1000000,expense,kb,etc,account,,이전: 18년 국민은행
+54caa4ba,2018-07-01,치킨먹으려고 돈뽑음,27000,expense,kb,etc,account,,이전: 18년 국민은행
+ce5ece3c,2018-10-01,치킨먹으려고 돈뽑음,1568775,expense,kb,etc,account,,이전: 18년 국민은행
+c1b5397c,2018-01-01,데이트통장,40000,expense,kb,etc,account,,이전: 18년 국민은행
+666c069b,2018-04-01,데이트통장,50000,expense,kb,etc,account,,이전: 18년 국민은행
+8e7ebed5,2018-07-01,데이트통장,15000,expense,kb,etc,account,,이전: 18년 국민은행
+91975a54,2018-10-01,데이트통장,50000,expense,kb,etc,account,,이전: 18년 국민은행
+3e7a53b4,2018-01-01,7월적금,1300000,expense,kb,saving,account,,이전: 18년 국민은행
+e035ec24,2018-04-01,7월적금,1127524,expense,kb,saving,account,,이전: 18년 국민은행
+38ef1323,2018-07-01,7월적금,2935825,expense,kb,saving,account,,이전: 18년 국민은행
+76fe625e,2018-10-01,7월적금,15500,expense,kb,saving,account,,이전: 18년 국민은행
+48a047c1,2018-01-01,카드대금결제,775684,expense,kb,card,account,,이전: 18년 국민은행
+66d47d55,2018-04-01,카드대금결제,100000,expense,kb,card,account,,이전: 18년 국민은행
+16900bc7,2018-07-01,카드대금결제,10000,expense,kb,card,account,,이전: 18년 국민은행
+4ec57c9c,2018-10-01,카드대금결제,1000000,expense,kb,card,account,,이전: 18년 국민은행
+2d3e7bcc,2018-01-01,교통비 오빠,50000,expense,kb,transport,account,,이전: 18년 국민은행
+0676dff5,2018-04-01,교통비 오빠,14000,expense,kb,transport,account,,이전: 18년 국민은행
+f78cefba,2018-07-01,교통비 오빠,606943,expense,kb,transport,account,,이전: 18년 국민은행
+c522f129,2018-10-01,교통비 오빠,30000,expense,kb,transport,account,,이전: 18년 국민은행
+4bb2686f,2018-01-01,엄마생신용돈,100000,expense,kb,etc,account,,이전: 18년 국민은행
+bc83afa5,2018-07-01,엄마생신용돈,1000000,expense,kb,etc,account,,이전: 18년 국민은행
+873b842b,2018-10-01,엄마생신용돈,7000,expense,kb,etc,account,,이전: 18년 국민은행
+f01bac77,2018-01-01,BHC치킨(수미),14000,expense,kb,etc,account,,이전: 18년 국민은행
+beaee323,2018-07-01,BHC치킨(수미),10000,expense,kb,etc,account,,이전: 18년 국민은행
+a53b6685,2018-10-01,BHC치킨(수미),1500,expense,kb,etc,account,,이전: 18년 국민은행
+c561caea,2018-01-01,침대커버추가비용,5000,expense,kb,etc,account,,이전: 18년 국민은행
+f79e8c93,2018-10-01,침대커버추가비용,29500,expense,kb,etc,account,,이전: 18년 국민은행
+788216f3,2019-01-01,전월이월,1196452,income,kb,other_income,account,,이전: 19년 국민은행
+de411d43,2019-04-01,전월이월,1345263,income,kb,other_income,account,,이전: 19년 국민은행
+b7331a6a,2019-07-01,전월이월,1091439,income,kb,other_income,account,,이전: 19년 국민은행
+4d6d8a5c,2019-10-01,전월이월,507128,income,kb,other_income,account,,이전: 19년 국민은행
+aa64a365,2019-01-01,제이원통상(15일),1845810,expense,kb,etc,account,,이전: 19년 국민은행
+c6090d2d,2019-04-01,제이원통상(15일),1711320,expense,kb,etc,account,,이전: 19년 국민은행
+2c6fa6ed,2019-07-01,제이원통상(15일),1711320,expense,kb,etc,account,,이전: 19년 국민은행
+defbaba2,2019-10-01,제이원통상(15일),1686470,expense,kb,etc,account,,이전: 19년 국민은행
+95d9112c,2019-01-01,엄마아빠카드대금,543227,expense,kb,card,account,,이전: 19년 국민은행
+37d140b6,2019-04-01,엄마아빠카드대금,1089152,expense,kb,card,account,,이전: 19년 국민은행
+7136cd0f,2019-07-01,엄마아빠카드대금,543330,expense,kb,card,account,,이전: 19년 국민은행
+3beb9fa9,2019-10-01,엄마아빠카드대금,819742,expense,kb,card,account,,이전: 19년 국민은행
+81462c1c,2019-01-01,이수미 더치,34450,expense,kb,etc,account,,이전: 19년 국민은행
+b67fbf3e,2019-04-01,이수미 더치,250000,expense,kb,etc,account,,이전: 19년 국민은행
+9fb68c5e,2019-07-01,이수미 더치,50000,expense,kb,etc,account,,이전: 19년 국민은행
+1fa48a2a,2019-10-01,이수미 더치,259,expense,kb,etc,account,,이전: 19년 국민은행
+a53a0e0d,2019-01-01,양승익 더치,10000,expense,kb,etc,account,,이전: 19년 국민은행
+bc27c347,2019-04-01,양승익 더치,11700,expense,kb,etc,account,,이전: 19년 국민은행
+0fd379da,2019-07-01,양승익 더치,13500,expense,kb,etc,account,,이전: 19년 국민은행
+aad446c3,2019-10-01,양승익 더치,100000,expense,kb,etc,account,,이전: 19년 국민은행
+db3e6c4e,2019-01-01,김민정 더치,12500,expense,kb,etc,account,,이전: 19년 국민은행
+00015154,2019-04-01,김민정 더치,28700,expense,kb,etc,account,,이전: 19년 국민은행
+5c80ba31,2019-07-01,김민정 더치,19500,expense,kb,etc,account,,이전: 19년 국민은행
+26b3b3b3,2019-10-01,김민정 더치,108073,expense,kb,etc,account,,이전: 19년 국민은행
+42aaef55,2019-01-01,신명기 더치,26200,expense,kb,etc,account,,이전: 19년 국민은행
+ce1976ea,2019-04-01,신명기 더치,40300,expense,kb,etc,account,,이전: 19년 국민은행
+9d1f0e8a,2019-07-01,신명기 더치,20000,expense,kb,etc,account,,이전: 19년 국민은행
+d780c286,2019-10-01,신명기 더치,34000,expense,kb,etc,account,,이전: 19년 국민은행
+d6c821eb,2019-01-01,전아연 더치,1800,expense,kb,etc,account,,이전: 19년 국민은행
+c19d98c6,2019-07-01,전아연 더치,8000,expense,kb,etc,account,,이전: 19년 국민은행
+8a45f59f,2019-10-01,전아연 더치,12700,expense,kb,etc,account,,이전: 19년 국민은행
+1d05d29a,2019-01-01,1월적금,1100000,expense,kb,saving,account,,이전: 19년 국민은행
+d9951fb9,2019-04-01,1월적금,1300000,expense,kb,saving,account,,이전: 19년 국민은행
+51693129,2019-07-01,1월적금,1300000,expense,kb,saving,account,,이전: 19년 국민은행
+3c9c4813,2019-10-01,1월적금,1200000,expense,kb,saving,account,,이전: 19년 국민은행
+a4e5fa42,2019-01-01,카드대금결제,984676,expense,kb,card,account,,이전: 19년 국민은행
+d9b6dbf9,2019-04-01,카드대금결제,1602496,expense,kb,card,account,,이전: 19년 국민은행
+511abb66,2019-07-01,카드대금결제,1343211,expense,kb,card,account,,이전: 19년 국민은행
+f1278991,2019-10-01,카드대금결제,1419040,expense,kb,card,account,,이전: 19년 국민은행
+bb72fdcd,2019-01-01,교통비,50000,expense,kb,transport,account,,이전: 19년 국민은행
+c24fdcf5,2019-04-01,교통비,400000,expense,kb,transport,account,,이전: 19년 국민은행
+bba8538a,2019-07-01,교통비,20000,expense,kb,transport,account,,이전: 19년 국민은행
+e6943ac2,2019-10-01,교통비,5000,expense,kb,transport,account,,이전: 19년 국민은행
+419d81a9,2019-01-01,네일 회원권,100000,expense,kb,etc,account,,이전: 19년 국민은행
+8a87ce3d,2019-04-01,네일 회원권,30000,expense,kb,etc,account,,이전: 19년 국민은행
+36775599,2019-07-01,네일 회원권,20000,expense,kb,etc,account,,이전: 19년 국민은행
+61585327,2019-10-01,네일 회원권,50000,expense,kb,etc,account,,이전: 19년 국민은행
+61f5da89,2019-01-01,김치찌개 + 불고기,16500,expense,kb,etc,account,,이전: 19년 국민은행
+eb5c38a6,2019-04-01,김치찌개 + 불고기,20000,expense,kb,etc,account,,이전: 19년 국민은행
+6012e321,2019-07-01,김치찌개 + 불고기,58000,expense,kb,etc,account,,이전: 19년 국민은행
+27e8b765,2019-10-01,김치찌개 + 불고기,20000,expense,kb,etc,account,,이전: 19년 국민은행
+2e185e6d,2019-01-01,수면잠옷,10000,expense,kb,etc,account,,이전: 19년 국민은행
+a4fab842,2019-04-01,수면잠옷,5000,expense,kb,etc,account,,이전: 19년 국민은행
+3e144f74,2019-07-01,수면잠옷,19350,expense,kb,etc,account,,이전: 19년 국민은행
+9d075d8a,2019-10-01,수면잠옷,20000,expense,kb,etc,account,,이전: 19년 국민은행
+23fe1f5a,2019-01-01,포켓,15000,expense,kb,etc,account,,이전: 19년 국민은행
+5c1783a5,2019-04-01,포켓,17000,expense,kb,etc,account,,이전: 19년 국민은행
+c81c526c,2019-07-01,포켓,110000,expense,kb,etc,account,,이전: 19년 국민은행
+d642fa0b,2019-10-01,포켓,13000,expense,kb,etc,account,,이전: 19년 국민은행
+7eb2a90e,2019-01-01,장현영 더치,5000,expense,kb,etc,account,,이전: 19년 국민은행
+7790971c,2019-04-01,장현영 더치,10500,expense,kb,etc,account,,이전: 19년 국민은행
+04ff9109,2019-07-01,장현영 더치,4400,expense,kb,etc,account,,이전: 19년 국민은행
+2958513b,2019-10-01,장현영 더치,21900,expense,kb,etc,account,,이전: 19년 국민은행
+ab7eee53,2019-01-01,정명진 더치,19000,expense,kb,etc,account,,이전: 19년 국민은행
+70532f7c,2019-07-01,정명진 더치,10000,expense,kb,etc,account,,이전: 19년 국민은행
+33b966dd,2019-10-01,정명진 더치,50000,expense,kb,etc,account,,이전: 19년 국민은행
+45b831f4,2019-01-01,양승익 더치,25000,expense,kb,etc,account,,이전: 19년 국민은행
+63e769c2,2019-07-01,양승익 더치,50000,expense,kb,etc,account,,이전: 19년 국민은행
+900d8e4e,2019-10-01,양승익 더치,50000,expense,kb,etc,account,,이전: 19년 국민은행
+76c8aa22,2019-01-01,전월이월,360959,expense,kb,etc,account,,이전: 19년 국민은행
+e5d86731,2019-04-01,전월이월,278998,expense,kb,etc,account,,이전: 19년 국민은행
+06a01a9e,2019-07-01,전월이월,317519,expense,kb,etc,account,,이전: 19년 국민은행
+517a4504,2019-10-01,전월이월,514313,expense,kb,etc,account,,이전: 19년 국민은행
+448300b1,2019-01-01,제이원통상(15일),1730640,expense,kb,etc,account,,이전: 19년 국민은행
+275250d5,2019-04-01,제이원통상(15일),1732440,expense,kb,etc,account,,이전: 19년 국민은행
+e12cc4e1,2019-07-01,제이원통상(15일),21650,expense,kb,etc,account,,이전: 19년 국민은행
+68ce7f44,2019-10-01,제이원통상(15일),596712,expense,kb,etc,account,,이전: 19년 국민은행
+18ad7227,2019-01-01,엄마아빠카드대금,465332,expense,kb,card,account,,이전: 19년 국민은행
+6819c2cd,2019-04-01,엄마아빠카드대금,513012,expense,kb,card,account,,이전: 19년 국민은행
+672629bf,2019-07-01,엄마아빠카드대금,14750,expense,kb,card,account,,이전: 19년 국민은행
+110c826a,2019-10-01,엄마아빠카드대금,16500,expense,kb,card,account,,이전: 19년 국민은행
+c30ca77e,2019-01-01,다낭 비행기(난영),476900,expense,kb,etc,account,,이전: 19년 국민은행
+d27252d3,2019-04-01,다낭 비행기(난영),1581,expense,kb,etc,account,,이전: 19년 국민은행
+b3b00096,2019-07-01,다낭 비행기(난영),11000,expense,kb,etc,account,,이전: 19년 국민은행
+6772c530,2019-10-01,다낭 비행기(난영),100000,expense,kb,etc,account,,이전: 19년 국민은행
+57a3a2fd,2019-01-01,오션버스비,61800,expense,kb,transport,account,,이전: 19년 국민은행
+360b9983,2019-04-01,오션버스비,5000,expense,kb,transport,account,,이전: 19년 국민은행
+50936c97,2019-07-01,오션버스비,1764850,expense,kb,transport,account,,이전: 19년 국민은행
+a5563857,2019-10-01,오션버스비,16000,expense,kb,transport,account,,이전: 19년 국민은행
+c782867f,2019-01-01,워터파크 남은돈,18025,expense,kb,etc,account,,이전: 19년 국민은행
+4ad84dcb,2019-04-01,워터파크 남은돈,796630,expense,kb,etc,account,,이전: 19년 국민은행
+5df9d94d,2019-07-01,워터파크 남은돈,915472,expense,kb,etc,account,,이전: 19년 국민은행
+8b08d0de,2019-10-01,워터파크 남은돈,12206,expense,kb,etc,account,,이전: 19년 국민은행
+792b5851,2019-01-01,카뱅이자,2,income,kb,interest,account,,이전: 19년 국민은행
+722fcd6c,2019-04-01,카뱅이자,133440,income,kb,interest,account,,이전: 19년 국민은행
+e693c8c1,2019-07-01,카뱅이자,100000,income,kb,interest,account,,이전: 19년 국민은행
+134a188a,2019-10-01,카뱅이자,1683360,income,kb,interest,account,,이전: 19년 국민은행
+c311afcd,2019-01-01,장현영 더치,8000,income,kb,other_income,account,,이전: 19년 국민은행
+4ff9bc12,2019-04-01,장현영 더치,77607,income,kb,other_income,account,,이전: 19년 국민은행
+9cd02971,2019-07-01,장현영 더치,18350,income,kb,other_income,account,,이전: 19년 국민은행
+65fda2f8,2019-01-01,김지연 더치,753550,income,kb,other_income,account,,이전: 19년 국민은행
+0c48e9c4,2019-04-01,김지연 더치,7000,income,kb,other_income,account,,이전: 19년 국민은행
+5eda2e7a,2019-07-01,김지연 더치,50000,income,kb,other_income,account,,이전: 19년 국민은행
+9086680e,2019-01-01,7월적금,1000000,income,kb,other_income,account,,이전: 19년 국민은행
+287b087f,2019-04-01,7월적금,796630,income,kb,other_income,account,,이전: 19년 국민은행
+2b4a8088,2019-07-01,7월적금,10625,income,kb,other_income,account,,이전: 19년 국민은행
+b2a497e9,2019-10-01,7월적금,100000,income,kb,other_income,account,,이전: 19년 국민은행
+18c48354,2019-01-01,카드대금결제,1852251,expense,kb,card,account,,이전: 19년 국민은행
+ab39961b,2019-04-01,카드대금결제,1300,expense,kb,card,account,,이전: 19년 국민은행
+258d3ddc,2019-07-01,카드대금결제,5000,expense,kb,card,account,,이전: 19년 국민은행
+2d578e7b,2019-10-01,카드대금결제,5000,expense,kb,card,account,,이전: 19년 국민은행
+967b08a3,2019-01-01,26주적금,5000,expense,kb,saving,account,,이전: 19년 국민은행
+7a61332a,2019-04-01,26주적금,2950,expense,kb,saving,account,,이전: 19년 국민은행
+306a0938,2019-07-01,26주적금,3000,expense,kb,saving,account,,이전: 19년 국민은행
+a3fe340c,2019-10-01,26주적금,19000,expense,kb,saving,account,,이전: 19년 국민은행
+4ab5bf67,2019-01-01,드래곤힐스파 예매취소,24000,expense,kb,etc,account,,이전: 19년 국민은행
+f2535e78,2019-04-01,드래곤힐스파 예매취소,3000,expense,kb,etc,account,,이전: 19년 국민은행
+09d69ada,2019-07-01,드래곤힐스파 예매취소,6500,expense,kb,etc,account,,이전: 19년 국민은행
+3e37f43a,2019-10-01,드래곤힐스파 예매취소,40000,expense,kb,etc,account,,이전: 19년 국민은행
+907553dc,2019-01-01,팀비트 단체티,25000,expense,kb,etc,account,,이전: 19년 국민은행
+4a24462b,2019-04-01,팀비트 단체티,5000,expense,kb,etc,account,,이전: 19년 국민은행
+f2860221,2019-07-01,팀비트 단체티,1578545,expense,kb,etc,account,,이전: 19년 국민은행
+5fea4a99,2019-10-01,팀비트 단체티,10000,expense,kb,etc,account,,이전: 19년 국민은행
+9086a9b6,2019-01-01,배드민턴 7월 회비,5000,expense,kb,selfdev,account,,이전: 19년 국민은행
+27a74ea7,2019-04-01,배드민턴 7월 회비,60000,expense,kb,selfdev,account,,이전: 19년 국민은행
+9867fc10,2019-07-01,배드민턴 7월 회비,1000000,expense,kb,selfdev,account,,이전: 19년 국민은행
+0ff8cffe,2019-10-01,배드민턴 7월 회비,20300,expense,kb,selfdev,account,,이전: 19년 국민은행
+fc14fb24,2019-01-01,교통비,60000,expense,kb,transport,account,,이전: 19년 국민은행
+78680006,2019-04-01,교통비,30000,expense,kb,transport,account,,이전: 19년 국민은행
+026bc0fb,2019-07-01,교통비,20000,expense,kb,transport,account,,이전: 19년 국민은행
+d04e67fd,2019-10-01,교통비,20000,expense,kb,transport,account,,이전: 19년 국민은행
+8fdc5c60,2019-01-01,생신케이크,511000,expense,kb,etc,account,,이전: 19년 국민은행
+e046e319,2019-04-01,생신케이크,1000000,expense,kb,etc,account,,이전: 19년 국민은행
+74707a22,2019-07-01,생신케이크,8500,expense,kb,etc,account,,이전: 19년 국민은행
+2a7fde8d,2019-10-01,생신케이크,35000,expense,kb,etc,account,,이전: 19년 국민은행
+c05392a2,2019-01-01,경나정모(서울) 숙박비,23980,expense,kb,etc,account,,이전: 19년 국민은행
+8866d62b,2019-04-01,경나정모(서울) 숙박비,26020,expense,kb,etc,account,,이전: 19년 국민은행
+21ff8ba3,2019-07-01,경나정모(서울) 숙박비,10000,expense,kb,etc,account,,이전: 19년 국민은행
+3961bf87,2019-10-01,경나정모(서울) 숙박비,12400,expense,kb,etc,account,,이전: 19년 국민은행
+acb921e1,2019-01-01,경나정모 교통비,2750,expense,kb,transport,account,,이전: 19년 국민은행
+457339aa,2019-04-01,경나정모 교통비,100000,expense,kb,transport,account,,이전: 19년 국민은행
+1d254283,2019-07-01,경나정모 교통비,10000,expense,kb,transport,account,,이전: 19년 국민은행
+055b01f3,2019-10-01,경나정모 교통비,941950,expense,kb,transport,account,,이전: 19년 국민은행
+4a0751be,2019-01-01,7월 피아노,50000,expense,kb,selfdev,account,,이전: 19년 국민은행
+fdda2a50,2019-04-01,7월 피아노,1154789,expense,kb,selfdev,account,,이전: 19년 국민은행
+92bd9663,2019-07-01,7월 피아노,480960,expense,kb,selfdev,account,,이전: 19년 국민은행
+807ad1e8,2019-10-01,7월 피아노,57000,expense,kb,selfdev,account,,이전: 19년 국민은행
+23665733,2019-01-01,김지연 더치,33049,expense,kb,etc,account,,이전: 19년 국민은행
+ef2f4fb9,2019-04-01,김지연 더치,6600,expense,kb,etc,account,,이전: 19년 국민은행
+ef336698,2019-07-01,김지연 더치,20000,expense,kb,etc,account,,이전: 19년 국민은행
+bc5cdbc9,2019-10-01,김지연 더치,12000,expense,kb,etc,account,,이전: 19년 국민은행
+dae097b6,2019-01-01,이모티콘 2개,4180,expense,kb,etc,account,,이전: 19년 국민은행
+e721ba21,2019-04-01,이모티콘 2개,38900,expense,kb,etc,account,,이전: 19년 국민은행
+91360fba,2019-07-01,이모티콘 2개,50000,expense,kb,etc,account,,이전: 19년 국민은행
+cd971957,2019-10-01,이모티콘 2개,1000000,expense,kb,etc,account,,이전: 19년 국민은행
+5374a6ec,2020-01-01,전월이월,1395155,income,kb,other_income,account,,이전: 20년 국민은행
+55441ac2,2020-04-01,전월이월,1169943,income,kb,other_income,account,,이전: 20년 국민은행
+7499fc0b,2020-07-01,전월이월,470227,income,kb,other_income,account,,이전: 20년 국민은행
+f08954de,2020-10-01,전월이월,108882,income,kb,other_income,account,,이전: 20년 국민은행
+c9caf0c9,2020-01-01,아빠카드대금(신한),301700,expense,kb,card,account,,이전: 20년 국민은행
+c56d30d6,2020-04-01,아빠카드대금(신한),264500,expense,kb,card,account,,이전: 20년 국민은행
+8a657245,2020-07-01,아빠카드대금(신한),149880,expense,kb,card,account,,이전: 20년 국민은행
+7a90dfd3,2020-10-01,아빠카드대금(신한),294660,expense,kb,card,account,,이전: 20년 국민은행
+3c2a303e,2020-01-01,이수미 더치,13550,expense,kb,etc,account,,이전: 20년 국민은행
+0baae8be,2020-04-01,이수미 더치,41300,expense,kb,etc,account,,이전: 20년 국민은행
+a0162c46,2020-07-01,이수미 더치,16500,expense,kb,etc,account,,이전: 20년 국민은행
+7b7522c6,2020-10-01,이수미 더치,88450,expense,kb,etc,account,,이전: 20년 국민은행
+7a5c91fa,2020-01-01,엄마카드대금,232262,expense,kb,card,account,,이전: 20년 국민은행
+d90aaa8a,2020-04-01,엄마카드대금,1,expense,kb,card,account,,이전: 20년 국민은행
+cf3d05ae,2020-07-01,엄마카드대금,3000,expense,kb,card,account,,이전: 20년 국민은행
+672e4ad2,2020-10-01,엄마카드대금,1000000,expense,kb,card,account,,이전: 20년 국민은행
+e2a9d4e7,2020-01-01,비상금 출금,430000,expense,kb,etc,account,,이전: 20년 국민은행
+1963e925,2020-04-01,비상금 출금,24500,expense,kb,etc,account,,이전: 20년 국민은행
+b05ce6db,2020-07-01,비상금 출금,2688420,expense,kb,etc,account,,이전: 20년 국민은행
+0ec3cb66,2020-10-01,비상금 출금,1878170,expense,kb,etc,account,,이전: 20년 국민은행
+bbb0267d,2020-01-01,예금 이자,268,income,kb,interest,account,,이전: 20년 국민은행
+97a79974,2020-04-01,예금 이자,5000,income,kb,interest,account,,이전: 20년 국민은행
+bac437f1,2020-07-01,예금 이자,8554,income,kb,interest,account,,이전: 20년 국민은행
+c88def7c,2020-10-01,예금 이자,10500,income,kb,interest,account,,이전: 20년 국민은행
+13aa82e6,2020-01-01,㈜소린+상여금,2262390,income,kb,other_income,account,,이전: 20년 국민은행
+54a18214,2020-04-01,㈜소린+상여금,9070,income,kb,other_income,account,,이전: 20년 국민은행
+8ba2fe10,2020-01-01,정명진더치,20950,income,kb,other_income,account,,이전: 20년 국민은행
+adc0c109,2020-04-01,정명진더치,1476080,income,kb,other_income,account,,이전: 20년 국민은행
+ca0f6ff1,2020-01-01,새뱃돈,220000,income,kb,other_income,account,,이전: 20년 국민은행
+c1279ad5,2020-04-01,새뱃돈,100000,income,kb,other_income,account,,이전: 20년 국민은행
+b29f8a3e,2020-01-01,노래방,5000,income,kb,other_income,account,,이전: 20년 국민은행
+e4530636,2020-04-01,노래방,100000,income,kb,other_income,account,,이전: 20년 국민은행
+3e812b5e,2020-07-01,노래방,100000,income,kb,other_income,account,,이전: 20년 국민은행
+bc6f8f2b,2020-10-01,노래방,15000,income,kb,other_income,account,,이전: 20년 국민은행
+de8730ae,2020-01-01,비상금,1000000,income,kb,other_income,account,,이전: 20년 국민은행
+8a5ef437,2020-04-01,비상금,300000,income,kb,other_income,account,,이전: 20년 국민은행
+e4fb90c8,2020-07-01,비상금,45000,income,kb,other_income,account,,이전: 20년 국민은행
+9c4bacfb,2020-10-01,비상금,50000,income,kb,other_income,account,,이전: 20년 국민은행
+232f1ee0,2020-01-01,롯데카드결제,379402,income,kb,other_income,account,,이전: 20년 국민은행
+2ceb64f7,2020-04-01,롯데카드결제,369432,income,kb,other_income,account,,이전: 20년 국민은행
+26b18748,2020-07-01,롯데카드결제,58000,income,kb,other_income,account,,이전: 20년 국민은행
+dd980082,2020-10-01,롯데카드결제,10000,income,kb,other_income,account,,이전: 20년 국민은행
+f5601728,2020-01-01,국민카드대금결제,223512,expense,kb,card,account,,이전: 20년 국민은행
+5f6f6c71,2020-04-01,국민카드대금결제,80000,expense,kb,card,account,,이전: 20년 국민은행
+d8eb5ce5,2020-07-01,국민카드대금결제,315199,expense,kb,card,account,,이전: 20년 국민은행
+260a44b9,2020-10-01,국민카드대금결제,383373,expense,kb,card,account,,이전: 20년 국민은행
+7f1b8f9c,2020-01-01,신명기,11000,expense,kb,etc,account,,이전: 20년 국민은행
+0364d418,2020-04-01,신명기,423291,expense,kb,etc,account,,이전: 20년 국민은행
+a2b85a34,2020-07-01,신명기,21000,expense,kb,etc,account,,이전: 20년 국민은행
+f09520b0,2020-10-01,신명기,399337,expense,kb,etc,account,,이전: 20년 국민은행
+9edef216,2020-01-01,데이트통장,100000,expense,kb,etc,account,,이전: 20년 국민은행
+210cc6ec,2020-04-01,데이트통장,45000,expense,kb,etc,account,,이전: 20년 국민은행
+46d29b44,2020-07-01,데이트통장,80000,expense,kb,etc,account,,이전: 20년 국민은행
+db510eb2,2020-10-01,데이트통장,80000,expense,kb,etc,account,,이전: 20년 국민은행
+63d9b7b1,2020-01-01,정명진더치,47550,expense,kb,etc,account,,이전: 20년 국민은행
+fbd35e5d,2020-04-01,정명진더치,1000000,expense,kb,etc,account,,이전: 20년 국민은행
+3e605205,2020-07-01,정명진더치,20900,expense,kb,etc,account,,이전: 20년 국민은행
+c5fa77ed,2020-10-01,정명진더치,7600,expense,kb,etc,account,,이전: 20년 국민은행
+745f67cc,2020-01-01,신한카드대금결제,338968,expense,kb,card,account,,이전: 20년 국민은행
+1ea1b2b4,2020-04-01,신한카드대금결제,281444,expense,kb,card,account,,이전: 20년 국민은행
+81f8955f,2020-07-01,신한카드대금결제,1000000,expense,kb,card,account,,이전: 20년 국민은행
+eb8ea9c1,2020-10-01,신한카드대금결제,22000,expense,kb,card,account,,이전: 20년 국민은행
+5f2a5467,2020-01-01,1월적금,1500000,expense,kb,saving,account,,이전: 20년 국민은행
+6792a039,2020-04-01,1월적금,15000,expense,kb,saving,account,,이전: 20년 국민은행
+53007148,2020-07-01,1월적금,1000000,expense,kb,saving,account,,이전: 20년 국민은행
+ac0e52f6,2020-10-01,1월적금,1000000,expense,kb,saving,account,,이전: 20년 국민은행
+b1b0dbcf,2020-01-01,김지연더치,44900,expense,kb,etc,account,,이전: 20년 국민은행
+ddecc8d2,2020-04-01,김지연더치,6000,expense,kb,etc,account,,이전: 20년 국민은행
+7bb8098d,2020-07-01,김지연더치,13000,expense,kb,etc,account,,이전: 20년 국민은행
+8c7a940c,2020-10-01,김지연더치,10000,expense,kb,etc,account,,이전: 20년 국민은행
+eb3b11dc,2020-01-01,피아노+책값,56000,expense,kb,selfdev,account,,이전: 20년 국민은행
+e0fc7cc2,2020-07-01,피아노+책값,38800,expense,kb,selfdev,account,,이전: 20년 국민은행
+b574fbf6,2020-10-01,피아노+책값,44200,expense,kb,selfdev,account,,이전: 20년 국민은행
+a4b4fb59,2020-01-01,전월이월,856264,expense,kb,etc,account,,이전: 20년 국민은행
+ca83565e,2020-04-01,전월이월,736707,expense,kb,etc,account,,이전: 20년 국민은행
+65f7d5df,2020-07-01,전월이월,616223,expense,kb,etc,account,,이전: 20년 국민은행
+3f1b5b85,2020-10-01,전월이월,1592423,expense,kb,etc,account,,이전: 20년 국민은행
+7702b6c7,2020-01-01,아빠카드대금(신한),211650,expense,kb,card,account,,이전: 20년 국민은행
+ef7a2d4c,2020-04-01,아빠카드대금(신한),259270,expense,kb,card,account,,이전: 20년 국민은행
+15b3004d,2020-07-01,아빠카드대금(신한),7200,expense,kb,card,account,,이전: 20년 국민은행
+777ec834,2020-10-01,아빠카드대금(신한),293840,expense,kb,card,account,,이전: 20년 국민은행
+9eabfc4e,2020-01-01,겸스 환불,32300,expense,kb,etc,account,,이전: 20년 국민은행
+b3f5d89b,2020-04-01,겸스 환불,90270,expense,kb,etc,account,,이전: 20년 국민은행
+8b043811,2020-07-01,겸스 환불,288470,expense,kb,etc,account,,이전: 20년 국민은행
+aa858eff,2020-10-01,겸스 환불,867000,expense,kb,etc,account,,이전: 20년 국민은행
+49bb21e8,2020-01-01,"이수미,박지현 더치",34600,expense,kb,etc,account,,이전: 20년 국민은행
+42963280,2020-04-01,"이수미,박지현 더치",52920,expense,kb,etc,account,,이전: 20년 국민은행
+772b0ea8,2020-07-01,"이수미,박지현 더치",10450,expense,kb,etc,account,,이전: 20년 국민은행
+45946ad5,2020-10-01,"이수미,박지현 더치",71700,expense,kb,etc,account,,이전: 20년 국민은행
+a0e2d209,2020-01-01,카뱅이자,32,income,kb,interest,account,,이전: 20년 국민은행
+bfe8b60e,2020-04-01,카뱅이자,74423,income,kb,interest,account,,이전: 20년 국민은행
+202f3a51,2020-07-01,카뱅이자,13680,income,kb,interest,account,,이전: 20년 국민은행
+fe3ed0b2,2020-10-01,카뱅이자,1867040,income,kb,interest,account,,이전: 20년 국민은행
+83ce96ad,2020-01-01,전수빈더치,25000,income,kb,other_income,account,,이전: 20년 국민은행
+67e7a47a,2020-04-01,전수빈더치,53,income,kb,other_income,account,,이전: 20년 국민은행
+354b69da,2020-07-01,전수빈더치,2600,income,kb,other_income,account,,이전: 20년 국민은행
+e81db534,2020-10-01,전수빈더치,1174,income,kb,other_income,account,,이전: 20년 국민은행
+dc0a0fd7,2020-01-01,최민지더치,54800,income,kb,other_income,account,,이전: 20년 국민은행
+d8ea2060,2020-04-01,최민지더치,13950,income,kb,other_income,account,,이전: 20년 국민은행
+6933de14,2020-07-01,최민지더치,100000,income,kb,other_income,account,,이전: 20년 국민은행
+d5104afc,2020-01-01,㈜소린+휴가비,2038420,income,kb,other_income,account,,이전: 20년 국민은행
+0283484f,2020-04-01,㈜소린+휴가비,20250,income,kb,other_income,account,,이전: 20년 국민은행
+56f663c1,2020-07-01,㈜소린+휴가비,30000,income,kb,other_income,account,,이전: 20년 국민은행
+5059a878,2020-01-01,주택청약,50000,expense,kb,saving,account,,이전: 20년 국민은행
+850e7629,2020-04-01,주택청약,72000,expense,kb,saving,account,,이전: 20년 국민은행
+f7419ee6,2020-07-01,주택청약,50000,expense,kb,saving,account,,이전: 20년 국민은행
+315599ae,2020-10-01,주택청약,50000,expense,kb,saving,account,,이전: 20년 국민은행
+a7ab84ce,2020-01-01,피아노 동아리,5000,expense,kb,selfdev,account,,이전: 20년 국민은행
+768f0f5f,2020-04-01,피아노 동아리,5000,expense,kb,selfdev,account,,이전: 20년 국민은행
+f3711cf2,2020-07-01,피아노 동아리,5000,expense,kb,selfdev,account,,이전: 20년 국민은행
+2000b3a2,2020-10-01,피아노 동아리,950000,expense,kb,selfdev,account,,이전: 20년 국민은행
+979c277a,2020-01-01,데이트통장,180000,expense,kb,etc,account,,이전: 20년 국민은행
+70eddf50,2020-04-01,데이트통장,200000,expense,kb,etc,account,,이전: 20년 국민은행
+09c666a7,2020-07-01,데이트통장,50000,expense,kb,etc,account,,이전: 20년 국민은행
+7d6bffe0,2020-10-01,데이트통장,50000,expense,kb,etc,account,,이전: 20년 국민은행
+88340f76,2020-01-01,신한카드대금결제,323664,expense,kb,card,account,,이전: 20년 국민은행
+b23c9e31,2020-04-01,신한카드대금결제,50000,expense,kb,card,account,,이전: 20년 국민은행
+9fbb4559,2020-07-01,신한카드대금결제,100000,expense,kb,card,account,,이전: 20년 국민은행
+8d907c59,2020-10-01,신한카드대금결제,359839,expense,kb,card,account,,이전: 20년 국민은행
+ede67b97,2020-01-01,우체국보험,31710,expense,kb,insurance,account,,이전: 20년 국민은행
+503cbea6,2020-04-01,우체국보험,100000,expense,kb,insurance,account,,이전: 20년 국민은행
+dab94e4a,2020-07-01,우체국보험,35000,expense,kb,insurance,account,,이전: 20년 국민은행
+4ff10ba4,2020-10-01,우체국보험,31710,expense,kb,insurance,account,,이전: 20년 국민은행
+43e78a87,2020-01-01,수빈이 생일케이크 선금,6000,expense,kb,etc,account,,이전: 20년 국민은행
+17a95be9,2020-04-01,수빈이 생일케이크 선금,26050,expense,kb,etc,account,,이전: 20년 국민은행
+566c6a67,2020-07-01,수빈이 생일케이크 선금,150000,expense,kb,etc,account,,이전: 20년 국민은행
+e0eee0ac,2020-10-01,수빈이 생일케이크 선금,867000,expense,kb,etc,account,,이전: 20년 국민은행
+a3e223b0,2020-01-01,"쇼핑(옷,원피스,쪼리)",62900,expense,kb,shopping,account,,이전: 20년 국민은행
+5326acde,2020-04-01,"쇼핑(옷,원피스,쪼리)",50000,expense,kb,shopping,account,,이전: 20년 국민은행
+8dbf555f,2020-07-01,"쇼핑(옷,원피스,쪼리)",27200,expense,kb,shopping,account,,이전: 20년 국민은행
+e31584ce,2020-10-01,"쇼핑(옷,원피스,쪼리)",1000000,expense,kb,shopping,account,,이전: 20년 국민은행
+2eef483a,2020-01-01,나과장님 생신선물,49800,expense,kb,gift,account,,이전: 20년 국민은행
+bf9c43d5,2020-04-01,나과장님 생신선물,40000,expense,kb,gift,account,,이전: 20년 국민은행
+fd6e6b7c,2020-07-01,나과장님 생신선물,423509,expense,kb,gift,account,,이전: 20년 국민은행
+58c9ab97,2020-10-01,나과장님 생신선물,318840,expense,kb,gift,account,,이전: 20년 국민은행
+76a2391c,2020-01-01,7월적금,1000000,expense,kb,saving,account,,이전: 20년 국민은행
+524cc4fc,2020-04-01,7월적금,376509,expense,kb,saving,account,,이전: 20년 국민은행
+b916bb2b,2020-07-01,7월적금,31710,expense,kb,saving,account,,이전: 20년 국민은행
+ad02e132,2020-10-01,7월적금,52200,expense,kb,saving,account,,이전: 20년 국민은행
+23209226,2020-01-01,제주여행2차(총 30만원),150000,expense,kb,travel,account,,이전: 20년 국민은행
+aafeb67b,2020-04-01,제주여행2차(총 30만원),90000,expense,kb,travel,account,,이전: 20년 국민은행
+7a4086ab,2020-07-01,제주여행2차(총 30만원),123000,expense,kb,travel,account,,이전: 20년 국민은행
+c0cc65d8,2020-10-01,제주여행2차(총 30만원),17000,expense,kb,travel,account,,이전: 20년 국민은행
+cd111ee6,2020-01-01,롯데카드대금결제,327155,expense,kb,card,account,,이전: 20년 국민은행
+3c0b0b87,2020-04-01,롯데카드대금결제,9000,expense,kb,card,account,,이전: 20년 국민은행
+081b4225,2020-07-01,롯데카드대금결제,288771,expense,kb,card,account,,이전: 20년 국민은행
+947d02cf,2020-10-01,롯데카드대금결제,4900,expense,kb,card,account,,이전: 20년 국민은행
+0ccb29e7,2020-01-01,엄마생신용돈,100000,expense,kb,etc,account,,이전: 20년 국민은행
+d2b85231,2020-04-01,엄마생신용돈,31710,expense,kb,etc,account,,이전: 20년 국민은행
+eefc425e,2020-07-01,엄마생신용돈,1000000,expense,kb,etc,account,,이전: 20년 국민은행
+55d35f42,2020-10-01,엄마생신용돈,1500,expense,kb,etc,account,,이전: 20년 국민은행
+9a06ec70,2020-01-01,"쇼핑(옷,구두)",51060,expense,kb,shopping,account,,이전: 20년 국민은행
+eed252e4,2020-04-01,"쇼핑(옷,구두)",150000,expense,kb,shopping,account,,이전: 20년 국민은행
+1c0ff739,2020-07-01,"쇼핑(옷,구두)",100000,expense,kb,shopping,account,,이전: 20년 국민은행
+352b8987,2020-10-01,"쇼핑(옷,구두)",10500,expense,kb,shopping,account,,이전: 20년 국민은행
+4bf71a64,2020-01-01,네일,50000,expense,kb,etc,account,,이전: 20년 국민은행
+d62ad2ca,2020-04-01,네일,318341,expense,kb,etc,account,,이전: 20년 국민은행
+d7bba070,2020-07-01,네일,5000,expense,kb,etc,account,,이전: 20년 국민은행
+535aea6f,2020-10-01,네일,5500,expense,kb,etc,account,,이전: 20년 국민은행
+69616911,2020-01-01,지연이생일선물,115370,expense,kb,gift,account,,이전: 20년 국민은행
+574d039e,2020-04-01,지연이생일선물,1000000,expense,kb,gift,account,,이전: 20년 국민은행
+dcb798be,2020-07-01,지연이생일선물,13500,expense,kb,gift,account,,이전: 20년 국민은행
+489b4a68,2020-10-01,지연이생일선물,4000,expense,kb,gift,account,,이전: 20년 국민은행
+f1f751b9,2020-01-01,과장님 집들이 선물,13700,expense,kb,gift,account,,이전: 20년 국민은행
+67529ff8,2020-07-01,과장님 집들이 선물,3000,expense,kb,gift,account,,이전: 20년 국민은행
+84a6f41d,2021-01-01,전월이월,1283473,income,kb,other_income,account,,이전: 21년 국민은행
+39ae28a4,2021-04-01,전월이월,1677376,income,kb,other_income,account,,이전: 21년 국민은행
+88cf83b4,2021-07-01,전월이월,2164589,income,kb,other_income,account,,이전: 21년 국민은행
+ca1fb373,2021-10-01,전월이월,1560214,income,kb,other_income,account,,이전: 21년 국민은행
+cb18713c,2021-01-01,아빠카드대금(신한),116430,expense,kb,card,account,,이전: 21년 국민은행
+f418efba,2021-04-01,아빠카드대금(신한),127270,expense,kb,card,account,,이전: 21년 국민은행
+d57180bc,2021-07-01,아빠카드대금(신한),106630,expense,kb,card,account,,이전: 21년 국민은행
+3dda30a4,2021-10-01,아빠카드대금(신한),2,expense,kb,card,account,,이전: 21년 국민은행
+9e6914e5,2021-01-01,최민지 더치,23000,expense,kb,etc,account,,이전: 21년 국민은행
+68bbc0f4,2021-04-01,최민지 더치,43600,expense,kb,etc,account,,이전: 21년 국민은행
+3a535757,2021-07-01,최민지 더치,10875,expense,kb,etc,account,,이전: 21년 국민은행
+91f21214,2021-10-01,최민지 더치,195730,expense,kb,etc,account,,이전: 21년 국민은행
+6fdb2d16,2021-01-01,장현영 더치,139350,expense,kb,etc,account,,이전: 21년 국민은행
+b6be76c4,2021-04-01,장현영 더치,3276550,expense,kb,etc,account,,이전: 21년 국민은행
+c1acec51,2021-07-01,장현영 더치,21168,expense,kb,etc,account,,이전: 21년 국민은행
+7cfaf108,2021-10-01,장현영 더치,11000,expense,kb,etc,account,,이전: 21년 국민은행
+14de1660,2021-01-01,신명기 더치,17500,expense,kb,etc,account,,이전: 21년 국민은행
+c0533986,2021-04-01,신명기 더치,2,expense,kb,etc,account,,이전: 21년 국민은행
+3acd2d12,2021-07-01,신명기 더치,10450,expense,kb,etc,account,,이전: 21년 국민은행
+d18ce63a,2021-10-01,신명기 더치,10875,expense,kb,etc,account,,이전: 21년 국민은행
+6817de74,2021-01-01,이자,2,income,kb,interest,account,,이전: 21년 국민은행
+2cb553cc,2021-04-01,이자,100000,income,kb,interest,account,,이전: 21년 국민은행
+2509f833,2021-07-01,이자,41000,income,kb,interest,account,,이전: 21년 국민은행
+bf18e457,2021-10-01,이자,15000,income,kb,interest,account,,이전: 21년 국민은행
+449f90ba,2021-01-01,㈜소린,2135750,income,kb,other_income,account,,이전: 21년 국민은행
+d6c2a572,2021-07-01,㈜소린,3285750,income,kb,other_income,account,,이전: 21년 국민은행
+9309a6e0,2021-10-01,㈜소린,18000,income,kb,other_income,account,,이전: 21년 국민은행
+45307708,2021-01-01,롯데카드 캐시백,11250,income,kb,other_income,account,,이전: 21년 국민은행
+24a53fa3,2021-07-01,롯데카드 캐시백,30800,income,kb,other_income,account,,이전: 21년 국민은행
+9be9a589,2021-10-01,롯데카드 캐시백,50000,income,kb,other_income,account,,이전: 21년 국민은행
+728ad99e,2021-01-01,네일,45000,income,kb,other_income,account,,이전: 21년 국민은행
+edb232ab,2021-04-01,네일,50000,income,kb,other_income,account,,이전: 21년 국민은행
+5958a6b0,2021-07-01,네일,35000,income,kb,other_income,account,,이전: 21년 국민은행
+37c27240,2021-10-01,네일,50000,income,kb,other_income,account,,이전: 21년 국민은행
+2b711ab8,2021-01-01,주택청약,50000,expense,kb,saving,account,,이전: 21년 국민은행
+0bf6c687,2021-04-01,주택청약,5000,expense,kb,saving,account,,이전: 21년 국민은행
+a2575644,2021-07-01,주택청약,5000,expense,kb,saving,account,,이전: 21년 국민은행
+e9ad8b1a,2021-10-01,주택청약,80000,expense,kb,saving,account,,이전: 21년 국민은행
+b3b9fd75,2021-01-01,피아노 동아리,5000,expense,kb,selfdev,account,,이전: 21년 국민은행
+f4b729f6,2021-04-01,피아노 동아리,50000,expense,kb,selfdev,account,,이전: 21년 국민은행
+b458e095,2021-07-01,피아노 동아리,100000,expense,kb,selfdev,account,,이전: 21년 국민은행
+7ec6c75f,2021-10-01,피아노 동아리,5000,expense,kb,selfdev,account,,이전: 21년 국민은행
+0358c718,2021-01-01,피부마사지,100000,expense,kb,etc,account,,이전: 21년 국민은행
+c3faad74,2021-04-01,피부마사지,200000,expense,kb,etc,account,,이전: 21년 국민은행
+a726b8d4,2021-07-01,피부마사지,50000,expense,kb,etc,account,,이전: 21년 국민은행
+508d0477,2021-10-01,피부마사지,22000,expense,kb,etc,account,,이전: 21년 국민은행
+05d3ceca,2021-01-01,신한카드대금결제,395669,expense,kb,card,account,,이전: 21년 국민은행
+6cb6e620,2021-04-01,신한카드대금결제,200000,expense,kb,card,account,,이전: 21년 국민은행
+3a8d10d8,2021-07-01,신한카드대금결제,9950,expense,kb,card,account,,이전: 21년 국민은행
+1a61b014,2021-10-01,신한카드대금결제,100000,expense,kb,card,account,,이전: 21년 국민은행
+c89c6052,2021-01-01,우체국보험,31710,expense,kb,insurance,account,,이전: 21년 국민은행
+0c5a2ddc,2021-04-01,우체국보험,180000,expense,kb,insurance,account,,이전: 21년 국민은행
+4d02d4d4,2021-07-01,우체국보험,50000,expense,kb,insurance,account,,이전: 21년 국민은행
+1f103cc5,2021-10-01,우체국보험,300000,expense,kb,insurance,account,,이전: 21년 국민은행
+2c7c24da,2021-01-01,데이트통장,100000,expense,kb,etc,account,,이전: 21년 국민은행
+36b82eeb,2021-04-01,데이트통장,31710,expense,kb,etc,account,,이전: 21년 국민은행
+02da9cef,2021-07-01,데이트통장,19500,expense,kb,etc,account,,이전: 21년 국민은행
+cb32e7b1,2021-10-01,데이트통장,543832,expense,kb,etc,account,,이전: 21년 국민은행
+11a64a8f,2021-01-01,정명진 더치,22000,expense,kb,etc,account,,이전: 21년 국민은행
+10c267fc,2021-04-01,정명진 더치,505790,expense,kb,etc,account,,이전: 21년 국민은행
+badf56c6,2021-07-01,정명진 더치,27500,expense,kb,etc,account,,이전: 21년 국민은행
+c4c8fc46,2021-10-01,정명진 더치,31710,expense,kb,etc,account,,이전: 21년 국민은행
+a1bebc66,2021-01-01,적금,1300000,expense,kb,saving,account,,이전: 21년 국민은행
+18008479,2021-04-01,적금,314709,expense,kb,saving,account,,이전: 21년 국민은행
+83ffd0e0,2021-07-01,적금,31710,expense,kb,saving,account,,이전: 21년 국민은행
+0a69efa6,2021-10-01,적금,1300000,expense,kb,saving,account,,이전: 21년 국민은행
+89e74378,2021-01-01,전월이월,1006951,expense,kb,etc,account,,이전: 21년 국민은행
+d95c2ce1,2021-04-01,전월이월,345591,expense,kb,etc,account,,이전: 21년 국민은행
+6e0aac56,2021-07-01,전월이월,1239956,expense,kb,etc,account,,이전: 21년 국민은행
+92f3b727,2021-10-01,전월이월,1352618,expense,kb,etc,account,,이전: 21년 국민은행
+bbbcba31,2021-01-01,회사비용,63000,expense,kb,etc,account,,이전: 21년 국민은행
+1784c4c5,2021-04-01,회사비용,129000,expense,kb,etc,account,,이전: 21년 국민은행
+cf9d65a7,2021-07-01,회사비용,171390,expense,kb,etc,account,,이전: 21년 국민은행
+7bc82017,2021-10-01,회사비용,116460,expense,kb,etc,account,,이전: 21년 국민은행
+716d6309,2021-01-01,아빠카드대금(신한),268900,expense,kb,card,account,,이전: 21년 국민은행
+02b5d53d,2021-04-01,아빠카드대금(신한),111530,expense,kb,card,account,,이전: 21년 국민은행
+555bfb6f,2021-07-01,아빠카드대금(신한),3000,expense,kb,card,account,,이전: 21년 국민은행
+776cace5,2021-10-01,아빠카드대금(신한),10875,expense,kb,card,account,,이전: 21년 국민은행
+98eb50fb,2021-01-01,장현영 더치(제주도),210366,expense,kb,etc,account,,이전: 21년 국민은행
+d0bd08cf,2021-04-01,장현영 더치(제주도),36734,expense,kb,etc,account,,이전: 21년 국민은행
+c78d4254,2021-07-01,장현영 더치(제주도),10875,expense,kb,etc,account,,이전: 21년 국민은행
+e81642e4,2021-10-01,장현영 더치(제주도),100000,expense,kb,etc,account,,이전: 21년 국민은행
+7076e3ae,2021-01-01,이수미 더치,70500,expense,kb,etc,account,,이전: 21년 국민은행
+69c6b473,2021-04-01,이수미 더치,10875,expense,kb,etc,account,,이전: 21년 국민은행
+6202b049,2021-07-01,이수미 더치,100000,expense,kb,etc,account,,이전: 21년 국민은행
+562c4543,2021-10-01,이수미 더치,20000,expense,kb,etc,account,,이전: 21년 국민은행
+000a0770,2021-01-01,넷플릭스,10875,expense,kb,subscription,account,,이전: 21년 국민은행
+134719d8,2021-04-01,넷플릭스,53900,expense,kb,subscription,account,,이전: 21년 국민은행
+276ff70e,2021-07-01,넷플릭스,3253160,expense,kb,subscription,account,,이전: 21년 국민은행
+4799bbb1,2021-10-01,넷플릭스,2,expense,kb,subscription,account,,이전: 21년 국민은행
+fc0951dd,2021-01-01,김지연(엄마생신선물+용돈),72115,expense,kb,gift,account,,이전: 21년 국민은행
+59d9ac10,2021-04-01,김지연(엄마생신선물+용돈),20000,expense,kb,gift,account,,이전: 21년 국민은행
+97ccd89a,2021-07-01,김지연(엄마생신선물+용돈),185000,expense,kb,gift,account,,이전: 21년 국민은행
+467624b2,2021-10-01,김지연(엄마생신선물+용돈),2900,expense,kb,gift,account,,이전: 21년 국민은행
+5ea98b29,2021-01-01,㈜소린,2333160,expense,kb,etc,account,,이전: 21년 국민은행
+e564c5d0,2021-04-01,㈜소린,50000,expense,kb,etc,account,,이전: 21년 국민은행
+eddbc563,2021-07-01,㈜소린,1600000,expense,kb,etc,account,,이전: 21년 국민은행
+42130f4b,2021-10-01,㈜소린,2103160,expense,kb,etc,account,,이전: 21년 국민은행
+dedadbbf,2021-01-01,주택청약,50000,expense,kb,saving,account,,이전: 21년 국민은행
+1ab8bcba,2021-04-01,주택청약,50000,expense,kb,saving,account,,이전: 21년 국민은행
+c8024ae9,2021-07-01,주택청약,50000,expense,kb,saving,account,,이전: 21년 국민은행
+5eff98b5,2021-10-01,주택청약,50000,expense,kb,saving,account,,이전: 21년 국민은행
+d896ee43,2021-01-01,데이트통장,100000,expense,kb,etc,account,,이전: 21년 국민은행
+77eccb52,2021-04-01,데이트통장,18500,expense,kb,etc,account,,이전: 21년 국민은행
+d2252262,2021-07-01,데이트통장,85000,expense,kb,etc,account,,이전: 21년 국민은행
+24923fb9,2021-10-01,데이트통장,50000,expense,kb,etc,account,,이전: 21년 국민은행
+86ed93f6,2021-01-01,롯데카드대금결제,379309,expense,kb,card,account,,이전: 21년 국민은행
+9fe5b942,2021-04-01,롯데카드대금결제,89000,expense,kb,card,account,,이전: 21년 국민은행
+f6fc5e82,2021-07-01,롯데카드대금결제,100000,expense,kb,card,account,,이전: 21년 국민은행
+066fd39b,2021-10-01,롯데카드대금결제,190000,expense,kb,card,account,,이전: 21년 국민은행
+d0a336cd,2021-01-01,피아노,80000,expense,kb,selfdev,account,,이전: 21년 국민은행
+61cae6d0,2021-04-01,피아노,10000,expense,kb,selfdev,account,,이전: 21년 국민은행
+c3ef37ea,2021-07-01,피아노,10000,expense,kb,selfdev,account,,이전: 21년 국민은행
+cefe6d0c,2021-10-01,피아노,15000,expense,kb,selfdev,account,,이전: 21년 국민은행
+4e0c3c17,2021-01-01,엄마 생신용돈,100000,expense,kb,etc,account,,이전: 21년 국민은행
+b422a61a,2021-04-01,엄마 생신용돈,31710,expense,kb,etc,account,,이전: 21년 국민은행
+d7c301cb,2021-07-01,엄마 생신용돈,69000,expense,kb,etc,account,,이전: 21년 국민은행
+470c7a1f,2021-10-01,엄마 생신용돈,80000,expense,kb,etc,account,,이전: 21년 국민은행
+bd89be75,2021-01-01,신한카드대금결제,415575,expense,kb,card,account,,이전: 21년 국민은행
+11c7c2dd,2021-04-01,신한카드대금결제,356305,expense,kb,card,account,,이전: 21년 국민은행
+c249eda0,2021-07-01,신한카드대금결제,12450,expense,kb,card,account,,이전: 21년 국민은행
+defd2a8e,2021-10-01,신한카드대금결제,50000,expense,kb,card,account,,이전: 21년 국민은행
+09739d26,2021-01-01,우체국보험,31710,expense,kb,insurance,account,,이전: 21년 국민은행
+cbe3f51f,2021-04-01,우체국보험,50000,expense,kb,insurance,account,,이전: 21년 국민은행
+c4d73247,2021-07-01,우체국보험,4000,expense,kb,insurance,account,,이전: 21년 국민은행
+9700fc61,2021-10-01,우체국보험,980000,expense,kb,insurance,account,,이전: 21년 국민은행
+dc7b70ef,2021-01-01,조유빈 더치,19600,expense,kb,etc,account,,이전: 21년 국민은행
+69b6ad67,2021-04-01,조유빈 더치,1300000,expense,kb,etc,account,,이전: 21년 국민은행
+e768b4d6,2021-07-01,조유빈 더치,28000,expense,kb,etc,account,,이전: 21년 국민은행
+1e0a7f2d,2021-10-01,조유빈 더치,15450,expense,kb,etc,account,,이전: 21년 국민은행
+bc767f4b,2021-01-01,적금,1300000,expense,kb,saving,account,,이전: 21년 국민은행
+24e65b21,2021-04-01,적금,923920,expense,kb,saving,account,,이전: 21년 국민은행
+6d97ee46,2021-07-01,적금,425065,expense,kb,saving,account,,이전: 21년 국민은행
+f751e9ab,2021-10-01,적금,373035,expense,kb,saving,account,,이전: 21년 국민은행
+f7516c9b,2021-01-01,피아노 동아리,5000,expense,kb,selfdev,account,,이전: 21년 국민은행
+648951e3,2021-04-01,피아노 동아리,20000,expense,kb,selfdev,account,,이전: 21년 국민은행
+c56e34ba,2021-07-01,피아노 동아리,2800,expense,kb,selfdev,account,,이전: 21년 국민은행
+8b72b567,2021-10-01,피아노 동아리,31710,expense,kb,selfdev,account,,이전: 21년 국민은행
+cb99ef65,2021-01-01,데이트통장,150000,expense,kb,etc,account,,이전: 21년 국민은행
+dd641d07,2021-07-01,데이트통장,31710,expense,kb,etc,account,,이전: 21년 국민은행
+24a9da87,2021-10-01,데이트통장,15000,expense,kb,etc,account,,이전: 21년 국민은행
+76fe033d,2021-01-01,아빠생신용돈,200000,expense,kb,etc,account,,이전: 21년 국민은행
+8421b636,2021-07-01,아빠생신용돈,31200,expense,kb,etc,account,,이전: 21년 국민은행
+addc0720,2021-10-01,아빠생신용돈,1000000,expense,kb,etc,account,,이전: 21년 국민은행
+14a69f88,2021-01-01,정명진 더치(수빈생일),69000,expense,kb,etc,account,,이전: 21년 국민은행
+8846468d,2021-07-01,정명진 더치(수빈생일),64000,expense,kb,etc,account,,이전: 21년 국민은행
+12a09297,2021-10-01,정명진 더치(수빈생일),5000,expense,kb,etc,account,,이전: 21년 국민은행
+4081a778,2021-01-01,롯데카드대금결제,790082,expense,kb,card,account,,이전: 21년 국민은행
+fca1ee8d,2021-07-01,롯데카드대금결제,1117799,expense,kb,card,account,,이전: 21년 국민은행
+749755bd,2021-10-01,롯데카드대금결제,776535,expense,kb,card,account,,이전: 21년 국민은행
+4d60395a,2022-01-01,전월이월,2584000,income,toss,other_income,account,,이전: 22년 토스뱅크
+0e30a8e1,2022-04-01,전월이월,2231000,income,toss,other_income,account,,이전: 22년 토스뱅크
+63d25110,2022-07-01,전월이월,1091264,income,toss,other_income,account,,이전: 22년 토스뱅크
+25a086de,2022-10-01,전월이월,2413000,income,toss,other_income,account,,이전: 22년 토스뱅크
+32286eb5,2022-01-01,피클플러스,10875,income,toss,saving_return,account,,이전: 22년 토스뱅크
+f177f9dd,2022-04-01,피클플러스,285000,income,toss,saving_return,account,,이전: 22년 토스뱅크
+72243ef1,2022-07-01,피클플러스,300000,income,toss,saving_return,account,,이전: 22년 토스뱅크
+4086eea9,2022-10-01,피클플러스,15500,income,toss,saving_return,account,,이전: 22년 토스뱅크
+be40c3e6,2022-01-01,이자,2752,income,toss,interest,account,,이전: 22년 토스뱅크
+ada5503e,2022-04-01,이자,3159,income,toss,interest,account,,이전: 22년 토스뱅크
+6706fcd4,2022-07-01,이자,12750,income,toss,interest,account,,이전: 22년 토스뱅크
+55e81817,2022-10-01,이자,330222,income,toss,interest,account,,이전: 22년 토스뱅크
+3cdadbd1,2022-01-01,보관하기 출금,2322176,income,toss,saving_return,account,,이전: 22년 토스뱅크
+19573aca,2022-04-01,보관하기 출금,334862,income,toss,saving_return,account,,이전: 22년 토스뱅크
+6134a959,2022-07-01,보관하기 출금,40000,income,toss,saving_return,account,,이전: 22년 토스뱅크
+2bf75084,2022-10-01,보관하기 출금,12750,income,toss,saving_return,account,,이전: 22년 토스뱅크
+d8e0358d,2022-01-01,회사비용,13000,income,toss,other_income,account,,이전: 22년 토스뱅크
+dced9f8c,2022-04-01,회사비용,12750,income,toss,other_income,account,,이전: 22년 토스뱅크
+385272f7,2022-07-01,회사비용,329622,income,toss,other_income,account,,이전: 22년 토스뱅크
+ef9c8978,2022-10-01,회사비용,20000,income,toss,other_income,account,,이전: 22년 토스뱅크
+a55cc21c,2022-01-01,(주)소린,3251020,income,toss,other_income,account,,이전: 22년 토스뱅크
+098b0e21,2022-04-01,(주)소린,7046716,income,toss,other_income,account,,이전: 22년 토스뱅크
+e5a810e6,2022-07-01,(주)소린,1050,income,toss,other_income,account,,이전: 22년 토스뱅크
+dce4f836,2022-10-01,(주)소린,2147,income,toss,other_income,account,,이전: 22년 토스뱅크
+f7972c6a,2022-01-01,케이뱅크 적금만기,2425013,income,toss,saving_return,account,,이전: 22년 토스뱅크
+84edf1f3,2022-04-01,케이뱅크 적금만기,11854690,income,toss,saving_return,account,,이전: 22년 토스뱅크
+085b0998,2022-07-01,케이뱅크 적금만기,25000,income,toss,saving_return,account,,이전: 22년 토스뱅크
+759e8ea2,2022-10-01,케이뱅크 적금만기,1951680,income,toss,saving_return,account,,이전: 22년 토스뱅크
+dbc78133,2022-01-01,케이뱅크 적금만기,3629363,income,toss,saving_return,account,,이전: 22년 토스뱅크
+baa164f0,2022-04-01,케이뱅크 적금만기,2101020,income,toss,saving_return,account,,이전: 22년 토스뱅크
+72741e10,2022-07-01,케이뱅크 적금만기,3251020,income,toss,saving_return,account,,이전: 22년 토스뱅크
+8f876163,2022-10-01,케이뱅크 적금만기,40000,income,toss,saving_return,account,,이전: 22년 토스뱅크
+36c5d645,2022-01-01,카카오 적금만기,8967600,income,toss,saving_return,account,,이전: 22년 토스뱅크
+21296597,2022-04-01,카카오 적금만기,109244,income,toss,saving_return,account,,이전: 22년 토스뱅크
+90ec3c37,2022-07-01,카카오 적금만기,19800,income,toss,saving_return,account,,이전: 22년 토스뱅크
+9b7ce1dd,2022-01-01,주택청약,50000,expense,toss,saving,account,,이전: 22년 토스뱅크
+87e86023,2022-04-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+cdb9ad00,2022-07-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+5fb830fe,2022-10-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+97c83cef,2022-01-01,신협이자,50000,income,toss,interest,account,,이전: 22년 토스뱅크
+a707f823,2022-04-01,신협이자,987139,income,toss,interest,account,,이전: 22년 토스뱅크
+090515be,2022-07-01,신협이자,646316,income,toss,interest,account,,이전: 22년 토스뱅크
+0b64a8e0,2022-10-01,신협이자,1027826,income,toss,interest,account,,이전: 22년 토스뱅크
+247573a7,2022-01-01,비상금,1000000,income,toss,other_income,account,,이전: 22년 토스뱅크
+521da161,2022-04-01,비상금,2546,income,toss,other_income,account,,이전: 22년 토스뱅크
+d6245904,2022-07-01,비상금,3294,income,toss,other_income,account,,이전: 22년 토스뱅크
+e52fd814,2022-10-01,비상금,200000,income,toss,other_income,account,,이전: 22년 토스뱅크
+ac2327d6,2022-01-01,피아노 동아리,5000,income,toss,other_income,account,,이전: 22년 토스뱅크
+15a2d746,2022-04-01,피아노 동아리,200000,income,toss,other_income,account,,이전: 22년 토스뱅크
+337a90b2,2022-07-01,피아노 동아리,200000,income,toss,other_income,account,,이전: 22년 토스뱅크
+ca3e736e,2022-10-01,피아노 동아리,2977,income,toss,other_income,account,,이전: 22년 토스뱅크
+5a4795ff,2022-01-01,피아노,80000,income,toss,other_income,account,,이전: 22년 토스뱅크
+9a69d03b,2022-04-01,피아노,50000,income,toss,other_income,account,,이전: 22년 토스뱅크
+6c805cad,2022-07-01,피아노,29500,income,toss,other_income,account,,이전: 22년 토스뱅크
+86383d1e,2022-10-01,피아노,80000,income,toss,other_income,account,,이전: 22년 토스뱅크
+ba85c56c,2022-01-01,낭맥이 밥,600000,income,toss,other_income,account,,이전: 22년 토스뱅크
+5dbf7a19,2022-04-01,낭맥이 밥,15000,income,toss,other_income,account,,이전: 22년 토스뱅크
+040c533b,2022-07-01,낭맥이 밥,40000,income,toss,other_income,account,,이전: 22년 토스뱅크
+063a87a7,2022-10-01,낭맥이 밥,16200,income,toss,other_income,account,,이전: 22년 토스뱅크
+cfc5b249,2022-01-01,적금,1200000,income,toss,other_income,account,,이전: 22년 토스뱅크
+4bd50f5d,2022-04-01,적금,41250,income,toss,other_income,account,,이전: 22년 토스뱅크
+4afd9417,2022-07-01,적금,50000,income,toss,other_income,account,,이전: 22년 토스뱅크
+1d6a57f4,2022-10-01,적금,45000,income,toss,other_income,account,,이전: 22년 토스뱅크
+e413388c,2022-01-01,데이트통장,100000,income,toss,other_income,account,,이전: 22년 토스뱅크
+079e4a39,2022-04-01,데이트통장,19000,income,toss,other_income,account,,이전: 22년 토스뱅크
+1f4d29c0,2022-07-01,데이트통장,330686,income,toss,other_income,account,,이전: 22년 토스뱅크
+29b4f01c,2022-10-01,데이트통장,6000,income,toss,other_income,account,,이전: 22년 토스뱅크
+8cdeb036,2022-01-01,교통카드,56250,income,toss,other_income,account,,이전: 22년 토스뱅크
+94818f29,2022-04-01,교통카드,380000,income,toss,other_income,account,,이전: 22년 토스뱅크
+fa2ff07c,2022-07-01,교통카드,31710,income,toss,other_income,account,,이전: 22년 토스뱅크
+57ed9a2f,2022-10-01,교통카드,331286,income,toss,other_income,account,,이전: 22년 토스뱅크
+b3a06e7e,2022-01-01,다이소,2000,income,toss,other_income,account,,이전: 22년 토스뱅크
+9b633c8e,2022-04-01,다이소,18901406,income,toss,other_income,account,,이전: 22년 토스뱅크
+0e65aeea,2022-07-01,다이소,5000,income,toss,other_income,account,,이전: 22년 토스뱅크
+314837c6,2022-10-01,다이소,31710,income,toss,other_income,account,,이전: 22년 토스뱅크
+6837a4eb,2022-01-01,잔돈모으기,3069,income,toss,other_income,account,,이전: 22년 토스뱅크
+36594ad6,2022-04-01,잔돈모으기,335926,income,toss,other_income,account,,이전: 22년 토스뱅크
+d41b39a8,2022-07-01,잔돈모으기,150000,income,toss,other_income,account,,이전: 22년 토스뱅크
+a35a6bd3,2022-10-01,잔돈모으기,20800,income,toss,other_income,account,,이전: 22년 토스뱅크
+116fe566,2022-01-01,롯데카드대금,10450,expense,toss,card,account,,이전: 22년 토스뱅크
+8677dd9e,2022-04-01,롯데카드대금,50000,expense,toss,card,account,,이전: 22년 토스뱅크
+f95f0b14,2022-07-01,롯데카드대금,1000000,expense,toss,card,account,,이전: 22년 토스뱅크
+cf9050b1,2022-10-01,롯데카드대금,1000000,expense,toss,card,account,,이전: 22년 토스뱅크
+0bd8d95c,2022-01-01,신한카드대금,339286,expense,toss,card,account,,이전: 22년 토스뱅크
+5dcae78b,2022-04-01,신한카드대금,31710,expense,toss,card,account,,이전: 22년 토스뱅크
+ec50a417,2022-07-01,신한카드대금,10000,expense,toss,card,account,,이전: 22년 토스뱅크
+1255a57c,2022-10-01,신한카드대금,65500,expense,toss,card,account,,이전: 22년 토스뱅크
+d19df7b2,2022-01-01,"미니스톱 카드대금/
+스타벅스/뚜레쥬르/다이소",36200,expense,toss,card,account,,이전: 22년 토스뱅크
+b9e50d32,2022-04-01,"미니스톱 카드대금/
+스타벅스/뚜레쥬르/다이소",1500000,expense,toss,card,account,,이전: 22년 토스뱅크
+b2552aeb,2022-07-01,"미니스톱 카드대금/
+스타벅스/뚜레쥬르/다이소",10000,expense,toss,card,account,,이전: 22년 토스뱅크
+67cb1c5b,2022-10-01,"미니스톱 카드대금/
+스타벅스/뚜레쥬르/다이소",100000,expense,toss,card,account,,이전: 22년 토스뱅크
+d67d5379,2022-01-01,구찌 지갑,640000,expense,toss,etc,account,,이전: 22년 토스뱅크
+c6c8ae9d,2022-04-01,구찌 지갑,2000,expense,toss,etc,account,,이전: 22년 토스뱅크
+71ced1e0,2022-07-01,구찌 지갑,51000,expense,toss,etc,account,,이전: 22년 토스뱅크
+d5e879b1,2022-01-01,우체국보험,31710,expense,toss,insurance,account,,이전: 22년 토스뱅크
+34186e57,2022-04-01,우체국보험,25000,expense,toss,insurance,account,,이전: 22년 토스뱅크
+15318f92,2022-01-01,저축은행 예금,16310834,expense,toss,etc,account,,이전: 22년 토스뱅크
+2911b653,2022-04-01,저축은행 예금,100000,expense,toss,etc,account,,이전: 22년 토스뱅크
+cd97e795,2022-01-01,뚱이 적금,10000,expense,toss,saving,account,,이전: 22년 토스뱅크
+da340426,2022-04-01,뚱이 적금,10000,expense,toss,saving,account,,이전: 22년 토스뱅크
+dddb9f05,2022-01-01,데이트통장,100000,expense,toss,etc,account,,이전: 22년 토스뱅크
+327179ab,2022-04-01,데이트통장,80000,expense,toss,etc,account,,이전: 22년 토스뱅크
+754b9ad6,2022-01-01,할머니 + 부모님 설 용돈,350000,expense,toss,etc,account,,이전: 22년 토스뱅크
+949094cc,2022-04-01,할머니 + 부모님 설 용돈,56200,expense,toss,etc,account,,이전: 22년 토스뱅크
+c72fa0cb,2022-01-01,전월이월,8025430,expense,toss,etc,account,,이전: 22년 토스뱅크
+88527a3c,2022-04-01,전월이월,1200000,expense,toss,etc,account,,이전: 22년 토스뱅크
+2f5b5de1,2022-07-01,전월이월,922919,expense,toss,etc,account,,이전: 22년 토스뱅크
+874df536,2022-10-01,전월이월,2221000,expense,toss,etc,account,,이전: 22년 토스뱅크
+4653fbe9,2022-01-01,동생 빌려준 돈,150700,expense,toss,etc,account,,이전: 22년 토스뱅크
+cceb644d,2022-04-01,동생 빌려준 돈,1427646,expense,toss,etc,account,,이전: 22년 토스뱅크
+e0f23304,2022-07-01,동생 빌려준 돈,30000,expense,toss,etc,account,,이전: 22년 토스뱅크
+df98c297,2022-10-01,동생 빌려준 돈,329262,expense,toss,etc,account,,이전: 22년 토스뱅크
+f5769dfd,2022-01-01,아빠카드대금(신한),331892,expense,toss,card,account,,이전: 22년 토스뱅크
+3ae86134,2022-04-01,아빠카드대금(신한),222,expense,toss,card,account,,이전: 22년 토스뱅크
+0ddfe061,2022-07-01,아빠카드대금(신한),337172,expense,toss,card,account,,이전: 22년 토스뱅크
+c8ac705f,2022-10-01,아빠카드대금(신한),456000,expense,toss,card,account,,이전: 22년 토스뱅크
+6296789f,2022-01-01,넷플릭스,12750,expense,toss,subscription,account,,이전: 22년 토스뱅크
+addb9b06,2022-04-01,넷플릭스,1739046,expense,toss,subscription,account,,이전: 22년 토스뱅크
+565e2962,2022-07-01,넷플릭스,1826,expense,toss,subscription,account,,이전: 22년 토스뱅크
+e8994aef,2022-10-01,넷플릭스,12750,expense,toss,subscription,account,,이전: 22년 토스뱅크
+8e33cdc3,2022-01-01,프리퀀시 당근,3000,expense,toss,etc,account,,이전: 22년 토스뱅크
+7179a232,2022-04-01,프리퀀시 당근,12750,expense,toss,etc,account,,이전: 22년 토스뱅크
+3940ce83,2022-07-01,프리퀀시 당근,12750,expense,toss,etc,account,,이전: 22년 토스뱅크
+fe996e0e,2022-10-01,프리퀀시 당근,165012,expense,toss,etc,account,,이전: 22년 토스뱅크
+e896c36d,2022-01-01,보관하기 출금,4949117,expense,toss,saving,account,,이전: 22년 토스뱅크
+4234ef15,2022-04-01,보관하기 출금,333646,expense,toss,saving,account,,이전: 22년 토스뱅크
+331dafc7,2022-07-01,보관하기 출금,12080000,expense,toss,saving,account,,이전: 22년 토스뱅크
+4615c23f,2022-10-01,보관하기 출금,5520,expense,toss,saving,account,,이전: 22년 토스뱅크
+e3bb1b1c,2022-01-01,이자수익,8114,income,toss,interest,account,,이전: 22년 토스뱅크
+a881cfda,2022-04-01,이자수익,53000,income,toss,interest,account,,이전: 22년 토스뱅크
+562fbbc3,2022-07-01,이자수익,1,income,toss,interest,account,,이전: 22년 토스뱅크
+90fd3518,2022-10-01,이자수익,1600000,income,toss,interest,account,,이전: 22년 토스뱅크
+ba2e7ed7,2022-01-01,잡이익,1,income,toss,other_income,account,,이전: 22년 토스뱅크
+21c00a85,2022-04-01,잡이익,191295,income,toss,other_income,account,,이전: 22년 토스뱅크
+557584bd,2022-07-01,잡이익,51617,income,toss,other_income,account,,이전: 22년 토스뱅크
+e5e2c079,2022-10-01,잡이익,3040010,income,toss,other_income,account,,이전: 22년 토스뱅크
+438f81c5,2022-01-01,피아노 연주비,50000,income,toss,other_income,account,,이전: 22년 토스뱅크
+9deecc16,2022-04-01,피아노 연주비,2980,income,toss,other_income,account,,이전: 22년 토스뱅크
+b2212f4f,2022-07-01,피아노 연주비,100000,income,toss,other_income,account,,이전: 22년 토스뱅크
+9156e455,2022-10-01,피아노 연주비,9,income,toss,other_income,account,,이전: 22년 토스뱅크
+d79ebb06,2022-01-01,마이플레이컴퍼니,3040010,income,toss,other_income,account,,이전: 22년 토스뱅크
+763463dd,2022-04-01,마이플레이컴퍼니,3040010,income,toss,other_income,account,,이전: 22년 토스뱅크
+9486dfe8,2022-07-01,마이플레이컴퍼니,3040010,income,toss,other_income,account,,이전: 22년 토스뱅크
+ab02bf7d,2022-10-01,마이플레이컴퍼니,3399,income,toss,other_income,account,,이전: 22년 토스뱅크
+086276e5,2022-01-01,롯데카드 환불금,150000,income,toss,other_income,account,,이전: 22년 토스뱅크
+6ac514c6,2022-01-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+9bb8d0f2,2022-04-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+555d4ffd,2022-07-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+d8bf0784,2022-10-01,주택청약,100000,expense,toss,saving,account,,이전: 22년 토스뱅크
+f3cb0ec8,2022-01-01,롯데카드대금,1369986,expense,toss,card,account,,이전: 22년 토스뱅크
+4a386abb,2022-04-01,롯데카드대금,341850,expense,toss,card,account,,이전: 22년 토스뱅크
+591c9a33,2022-07-01,롯데카드대금,24000,expense,toss,card,account,,이전: 22년 토스뱅크
+1c1584d2,2022-10-01,롯데카드대금,1366386,expense,toss,card,account,,이전: 22년 토스뱅크
+c4b5feb6,2022-01-01,흠뻑쇼,134000,expense,toss,etc,account,,이전: 22년 토스뱅크
+c3aa8399,2022-04-01,흠뻑쇼,140000,expense,toss,etc,account,,이전: 22년 토스뱅크
+a27256cf,2022-07-01,흠뻑쇼,3092,expense,toss,etc,account,,이전: 22년 토스뱅크
+0ef17a4b,2022-10-01,흠뻑쇼,6800,expense,toss,etc,account,,이전: 22년 토스뱅크
+941ea9aa,2022-01-01,비상금,1000000,expense,toss,etc,account,,이전: 22년 토스뱅크
+36e6e178,2022-04-01,비상금,2802,expense,toss,etc,account,,이전: 22년 토스뱅크
+fbf3de97,2022-07-01,비상금,150000,expense,toss,etc,account,,이전: 22년 토스뱅크
+c0d19930,2022-10-01,비상금,10000,expense,toss,etc,account,,이전: 22년 토스뱅크
+e4dca7ba,2022-01-01,엄마빠 생신 용돈,1000000,expense,toss,etc,account,,이전: 22년 토스뱅크
+7b176cb1,2022-04-01,엄마빠 생신 용돈,171400,expense,toss,etc,account,,이전: 22년 토스뱅크
+5b5bcb8e,2022-07-01,엄마빠 생신 용돈,187000,expense,toss,etc,account,,이전: 22년 토스뱅크
+ffcb78f7,2022-10-01,엄마빠 생신 용돈,1450,expense,toss,etc,account,,이전: 22년 토스뱅크
+9af9623c,2022-01-01,퇴직 기념 선물 + 지걸 생일 선물,4000000,expense,toss,gift,account,,이전: 22년 토스뱅크
+eb757948,2022-04-01,퇴직 기념 선물 + 지걸 생일 선물,1427646,expense,toss,gift,account,,이전: 22년 토스뱅크
+c5e10e65,2022-07-01,퇴직 기념 선물 + 지걸 생일 선물,76050,expense,toss,gift,account,,이전: 22년 토스뱅크
+2c5aa32a,2022-10-01,퇴직 기념 선물 + 지걸 생일 선물,20000,expense,toss,gift,account,,이전: 22년 토스뱅크
+df7a2f74,2022-01-01,적금,1200000,expense,toss,saving,account,,이전: 22년 토스뱅크
+2484a0b4,2022-04-01,적금,150000,expense,toss,saving,account,,이전: 22년 토스뱅크
+c47db868,2022-07-01,적금,1560100,expense,toss,saving,account,,이전: 22년 토스뱅크
+a054f5dd,2022-10-01,적금,1200000,expense,toss,saving,account,,이전: 22년 토스뱅크
+3013a4e9,2022-01-01,잔돈모으기,3081,expense,toss,etc,account,,이전: 22년 토스뱅크
+0c088eca,2022-04-01,잔돈모으기,68400,expense,toss,etc,account,,이전: 22년 토스뱅크
+356e4418,2022-07-01,잔돈모으기,439900,expense,toss,etc,account,,이전: 22년 토스뱅크
+d56f576c,2022-10-01,잔돈모으기,150000,expense,toss,etc,account,,이전: 22년 토스뱅크
+dcf081db,2022-01-01,야구장,15666,expense,toss,etc,account,,이전: 22년 토스뱅크
+db63e417,2022-04-01,야구장,305580,expense,toss,etc,account,,이전: 22년 토스뱅크
+3fba4ff5,2022-07-01,야구장,10131617,expense,toss,etc,account,,이전: 22년 토스뱅크
+751ca18c,2022-10-01,야구장,64600,expense,toss,etc,account,,이전: 22년 토스뱅크
+7ec22217,2022-01-01,교통카드,67550,expense,toss,etc,account,,이전: 22년 토스뱅크
+1fbd3164,2022-04-01,교통카드,31710,expense,toss,etc,account,,이전: 22년 토스뱅크
+4eeab24a,2022-07-01,교통카드,338236,expense,toss,etc,account,,이전: 22년 토스뱅크
+5be09a9e,2022-10-01,교통카드,67750,expense,toss,etc,account,,이전: 22년 토스뱅크
+295a77e9,2022-01-01,제주도 비행기,271600,expense,toss,etc,account,,이전: 22년 토스뱅크
+f51848f1,2022-04-01,제주도 비행기,333646,expense,toss,etc,account,,이전: 22년 토스뱅크
+a01d3b83,2022-07-01,제주도 비행기,31710,expense,toss,etc,account,,이전: 22년 토스뱅크
+b14b2c59,2022-10-01,제주도 비행기,45000,expense,toss,etc,account,,이전: 22년 토스뱅크
+ba5553bc,2022-01-01,제주도 숙소,177517,expense,toss,etc,account,,이전: 22년 토스뱅크
+87562537,2022-04-01,제주도 숙소,11000,expense,toss,etc,account,,이전: 22년 토스뱅크
+9cf7cd1c,2022-07-01,제주도 숙소,26500,expense,toss,etc,account,,이전: 22년 토스뱅크
+5d551a8a,2022-10-01,제주도 숙소,330326,expense,toss,etc,account,,이전: 22년 토스뱅크
+977ec77d,2022-01-01,신한카드대금,332956,expense,toss,card,account,,이전: 22년 토스뱅크
+19cdc6db,2022-04-01,신한카드대금,1427646,expense,toss,card,account,,이전: 22년 토스뱅크
+fd6c1c5c,2022-07-01,신한카드대금,4400,expense,toss,card,account,,이전: 22년 토스뱅크
+d8c95a2b,2022-10-01,신한카드대금,20000,expense,toss,card,account,,이전: 22년 토스뱅크
+f00daaea,2022-01-01,우체국보험,31710,expense,toss,insurance,account,,이전: 22년 토스뱅크
+59a7e49a,2022-04-01,우체국보험,4900,expense,toss,insurance,account,,이전: 22년 토스뱅크
+841409b1,2022-07-01,우체국보험,119690,expense,toss,insurance,account,,이전: 22년 토스뱅크
+f311dd4a,2022-10-01,우체국보험,31710,expense,toss,insurance,account,,이전: 22년 토스뱅크
+48cef8e9,2022-01-01,엄마빠 용돈,500000,expense,toss,etc,account,,이전: 22년 토스뱅크
+90af99e8,2022-04-01,엄마빠 용돈,167770,expense,toss,etc,account,,이전: 22년 토스뱅크
+54c1f57d,2022-07-01,엄마빠 용돈,1135000,expense,toss,etc,account,,이전: 22년 토스뱅크
+a2f85e16,2022-10-01,엄마빠 용돈,10000,expense,toss,etc,account,,이전: 22년 토스뱅크
+d8b66016,2022-01-01,6월 관리비,121180,expense,toss,living,account,,이전: 22년 토스뱅크
+b1b2c45a,2022-04-01,6월 관리비,1030000,expense,toss,living,account,,이전: 22년 토스뱅크
+66b664fa,2022-07-01,6월 관리비,5000,expense,toss,living,account,,이전: 22년 토스뱅크
+274ba9eb,2022-10-01,6월 관리비,60000,expense,toss,living,account,,이전: 22년 토스뱅크
+d45f7e5e,2022-01-01,문구점,800,expense,toss,etc,account,,이전: 22년 토스뱅크
+d4947b4d,2022-04-01,문구점,1363326,expense,toss,etc,account,,이전: 22년 토스뱅크
+f73ae96d,2022-07-01,문구점,23000,expense,toss,etc,account,,이전: 22년 토스뱅크
+3a2cdeec,2022-10-01,문구점,97910,expense,toss,etc,account,,이전: 22년 토스뱅크
+36b75b36,2022-01-01,롯데카드 대금,5104968,expense,toss,etc,account,,이전: 22년 토스뱅크
+664c93ee,2022-01-01,옷,90000,expense,toss,etc,account,,이전: 22년 토스뱅크
+80a2cd04,2023-01-01,전월이월,1952000,income,toss,other_income,account,,이전: 23년 토스뱅크
+4fb1a546,2023-02-01,전월이월,1789000,income,toss,other_income,account,,이전: 23년 토스뱅크
+f9c8d6fa,2023-03-01,전월이월,3588019,income,toss,other_income,account,,이전: 23년 토스뱅크
+ccefe75d,2023-04-01,전월이월,2412000,income,toss,other_income,account,,이전: 23년 토스뱅크
+c023aa6d,2023-05-01,전월이월,2834750,income,toss,other_income,account,,이전: 23년 토스뱅크
+fe3fc0be,2023-06-01,전월이월,1026601,income,toss,other_income,account,,이전: 23년 토스뱅크
+664f509e,2023-07-01,전월이월,1952090,income,toss,other_income,account,,이전: 23년 토스뱅크
+be998ffa,2023-08-01,전월이월,2864450,income,toss,other_income,account,,이전: 23년 토스뱅크
+85039863,2023-09-01,전월이월,2293000,income,toss,other_income,account,,이전: 23년 토스뱅크
+9917ffd0,2023-10-01,전월이월,151724,income,toss,other_income,account,,이전: 23년 토스뱅크
+f801d902,2023-11-01,전월이월,1924720,income,toss,other_income,account,,이전: 23년 토스뱅크
+cf2540cc,2023-12-01,전월이월,1823000,income,toss,other_income,account,,이전: 23년 토스뱅크
+68906b95,2023-01-01,적금,1050000,expense,toss,saving,account,,이전: 23년 토스뱅크
+68ecdab8,2023-02-01,적금,700000,expense,toss,saving,account,,이전: 23년 토스뱅크
+ac6033ef,2023-03-01,적금,700000,expense,toss,saving,account,,이전: 23년 토스뱅크
+b6377803,2023-04-01,적금,550000,expense,toss,saving,account,,이전: 23년 토스뱅크
+e4898c9d,2023-05-01,적금,1400000,expense,toss,saving,account,,이전: 23년 토스뱅크
+69df998c,2023-06-01,적금,1100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+9dde24d9,2023-07-01,적금,1000000,expense,toss,saving,account,,이전: 23년 토스뱅크
+13b27cf0,2023-08-01,적금,1000000,expense,toss,saving,account,,이전: 23년 토스뱅크
+fd83ccf8,2023-09-01,적금,1000000,expense,toss,saving,account,,이전: 23년 토스뱅크
+bc68dafa,2023-10-01,적금,1000000,expense,toss,saving,account,,이전: 23년 토스뱅크
+d0f38bf7,2023-11-01,적금,1100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+8b0d1b5b,2023-12-01,적금,1100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+41707e40,2023-01-01,카드대금,1486050,expense,toss,card,account,,이전: 23년 토스뱅크
+e98f157d,2023-02-01,카드대금,1374710,expense,toss,card,account,,이전: 23년 토스뱅크
+3c90c0cc,2023-03-01,카드대금,1012130,expense,toss,card,account,,이전: 23년 토스뱅크
+1339c88d,2023-04-01,카드대금,1533390,expense,toss,card,account,,이전: 23년 토스뱅크
+6066e4bd,2023-05-01,카드대금,3028195,expense,toss,card,account,,이전: 23년 토스뱅크
+eb2935a7,2023-06-01,카드대금,589714,expense,toss,card,account,,이전: 23년 토스뱅크
+feb25b3e,2023-07-01,카드대금,1607325,expense,toss,card,account,,이전: 23년 토스뱅크
+01da602e,2023-08-01,카드대금,2136136,expense,toss,card,account,,이전: 23년 토스뱅크
+ee96fbe2,2023-09-01,카드대금,2041117,expense,toss,card,account,,이전: 23년 토스뱅크
+e00663c5,2023-10-01,카드대금,2162272,expense,toss,card,account,,이전: 23년 토스뱅크
+ec923cba,2023-11-01,카드대금,1460822,expense,toss,card,account,,이전: 23년 토스뱅크
+96db1824,2023-12-01,카드대금,1518603,expense,toss,card,account,,이전: 23년 토스뱅크
+92516951,2023-01-01,급여,3189900,income,toss,salary,account,,이전: 23년 토스뱅크
+99718ca6,2023-02-01,급여,4102980,income,toss,salary,account,,이전: 23년 토스뱅크
+023478a1,2023-03-01,급여,3206400,income,toss,salary,account,,이전: 23년 토스뱅크
+7b13547a,2023-04-01,급여,3037690,income,toss,salary,account,,이전: 23년 토스뱅크
+28d245ec,2023-05-01,급여,3210930,income,toss,salary,account,,이전: 23년 토스뱅크
+d1be32da,2023-06-01,급여,3210930,income,toss,salary,account,,이전: 23년 토스뱅크
+91a6624a,2023-07-01,급여,3213900,income,toss,salary,account,,이전: 23년 토스뱅크
+075b081b,2023-08-01,급여,3454320,income,toss,salary,account,,이전: 23년 토스뱅크
+19e604c2,2023-09-01,급여,3279260,income,toss,salary,account,,이전: 23년 토스뱅크
+df69c5b5,2023-10-01,급여,3279260,income,toss,salary,account,,이전: 23년 토스뱅크
+d02a5333,2023-11-01,급여,3279260,income,toss,salary,account,,이전: 23년 토스뱅크
+11a2a4cc,2023-12-01,급여,3279260,income,toss,salary,account,,이전: 23년 토스뱅크
+9b66c0b7,2023-01-01,이자,2180,income,toss,interest,account,,이전: 23년 토스뱅크
+8a43dff4,2023-02-01,이자,48656,income,toss,interest,account,,이전: 23년 토스뱅크
+5cef174e,2023-03-01,이자,65420,income,toss,interest,account,,이전: 23년 토스뱅크
+a5cb4baf,2023-04-01,이자,1797,income,toss,interest,account,,이전: 23년 토스뱅크
+ccba4651,2023-05-01,이자,8526,income,toss,interest,account,,이전: 23년 토스뱅크
+b6e4850f,2023-06-01,이자,665,income,toss,interest,account,,이전: 23년 토스뱅크
+647087f7,2023-07-01,이자,377,income,toss,interest,account,,이전: 23년 토스뱅크
+bf90c60f,2023-08-01,이자,184,income,toss,interest,account,,이전: 23년 토스뱅크
+da5beba0,2023-09-01,이자,350145,income,toss,interest,account,,이전: 23년 토스뱅크
+84c2079a,2023-10-01,이자,75335,income,toss,interest,account,,이전: 23년 토스뱅크
+d135af78,2023-11-01,이자,40,income,toss,interest,account,,이전: 23년 토스뱅크
+7ab75f6d,2023-01-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+cbaeac3b,2023-02-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+8781f5ec,2023-03-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+eae98bad,2023-04-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+3a5d2c0b,2023-05-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+ee94e4ec,2023-06-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+ada48107,2023-07-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+5741ecf4,2023-08-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+309022c3,2023-09-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+772f9c20,2023-10-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+68a86715,2023-11-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+d26bfc04,2023-12-01,피클플러스,12750,income,toss,saving_return,account,,이전: 23년 토스뱅크
+337578dc,2023-01-01,보험금,145330,income,toss,other_income,account,,이전: 23년 토스뱅크
+422e8244,2023-01-01,긴급출금,300336,income,toss,other_income,account,,이전: 23년 토스뱅크
+09cba802,2023-07-01,긴급출금,300000,income,toss,other_income,account,,이전: 23년 토스뱅크
+d3207740,2023-01-01,대출금,200000,income,toss,other_income,account,,이전: 23년 토스뱅크
+51443c41,2023-01-01,대여금 회수,25000,income,toss,other_income,account,,이전: 23년 토스뱅크
+5c6ddd73,2023-02-01,대여금 회수,200000,income,toss,other_income,account,,이전: 23년 토스뱅크
+dc7af8a3,2023-03-01,대여금 회수,852000,income,toss,other_income,account,,이전: 23년 토스뱅크
+07a8ac05,2023-06-01,대여금 회수,156000,income,toss,other_income,account,,이전: 23년 토스뱅크
+d4429b33,2023-07-01,대여금 회수,637266,income,toss,other_income,account,,이전: 23년 토스뱅크
+0e6a30a3,2023-01-01,적금 만기,6156776,income,toss,saving_return,account,,이전: 23년 토스뱅크
+387c1001,2023-02-01,적금 만기,115550070,income,toss,saving_return,account,,이전: 23년 토스뱅크
+bfc28463,2023-08-01,적금 만기,1474114,income,toss,saving_return,account,,이전: 23년 토스뱅크
+92f45b6c,2023-11-01,적금 만기,1112173,income,toss,saving_return,account,,이전: 23년 토스뱅크
+5278a634,2023-02-01,보관하기 출금,11000000,income,toss,saving_return,account,,이전: 23년 토스뱅크
+9907c1b7,2023-03-01,보관하기 출금,49000000,income,toss,saving_return,account,,이전: 23년 토스뱅크
+855ad165,2023-04-01,보관하기 출금,1000000,income,toss,saving_return,account,,이전: 23년 토스뱅크
+8dc76486,2023-05-01,보관하기 출금,300000,income,toss,saving_return,account,,이전: 23년 토스뱅크
+cd485009,2023-06-01,보관하기 출금,13000,income,toss,saving_return,account,,이전: 23년 토스뱅크
+17685124,2023-09-01,보관하기 출금,1400000,income,toss,saving_return,account,,이전: 23년 토스뱅크
+e7d19b6d,2023-10-01,보관하기 출금,2233472,income,toss,saving_return,account,,이전: 23년 토스뱅크
+5bbb4b63,2023-11-01,보관하기 출금,60273,income,toss,saving_return,account,,이전: 23년 토스뱅크
+1560c44a,2023-02-01,기타수입,140000,income,toss,other_income,account,,이전: 23년 토스뱅크
+a94538d0,2023-04-01,기타수입,244350,income,toss,other_income,account,,이전: 23년 토스뱅크
+4c078a63,2023-05-01,기타수입,115000,income,toss,other_income,account,,이전: 23년 토스뱅크
+75836298,2023-06-01,기타수입,330090,income,toss,other_income,account,,이전: 23년 토스뱅크
+1675b93a,2023-07-01,기타수입,44790,income,toss,other_income,account,,이전: 23년 토스뱅크
+0311ff54,2023-08-01,기타수입,197405,income,toss,other_income,account,,이전: 23년 토스뱅크
+836f4ea9,2023-09-01,기타수입,205320,income,toss,other_income,account,,이전: 23년 토스뱅크
+0546cff6,2023-10-01,기타수입,142840,income,toss,other_income,account,,이전: 23년 토스뱅크
+cf219622,2023-11-01,기타수입,12060,income,toss,other_income,account,,이전: 23년 토스뱅크
+c1d76e4b,2023-12-01,기타수입,144300,income,toss,other_income,account,,이전: 23년 토스뱅크
+0b9fc6a5,2023-01-01,_x0008_총합,10032272,income,toss,other_income,account,,이전: 23년 토스뱅크
+ef9ee5f2,2023-02-01,_x0008_총합,131054456,income,toss,other_income,account,,이전: 23년 토스뱅크
+1f81a353,2023-03-01,_x0008_총합,53136570,income,toss,other_income,account,,이전: 23년 토스뱅크
+c907a4d8,2023-04-01,_x0008_총합,4296587,income,toss,other_income,account,,이전: 23년 토스뱅크
+7c9afcda,2023-05-01,_x0008_총합,3647206,income,toss,other_income,account,,이전: 23년 토스뱅크
+23f46471,2023-06-01,_x0008_총합,3723435,income,toss,other_income,account,,이전: 23년 토스뱅크
+eacd4969,2023-07-01,_x0008_총합,4209083,income,toss,other_income,account,,이전: 23년 토스뱅크
+ce38579e,2023-08-01,_x0008_총합,5138773,income,toss,other_income,account,,이전: 23년 토스뱅크
+018e7e7c,2023-09-01,_x0008_총합,5247475,income,toss,other_income,account,,이전: 23년 토스뱅크
+7039b6af,2023-10-01,_x0008_총합,5743657,income,toss,other_income,account,,이전: 23년 토스뱅크
+70076e7f,2023-11-01,_x0008_총합,4476556,income,toss,other_income,account,,이전: 23년 토스뱅크
+520d610f,2023-12-01,_x0008_총합,3436310,income,toss,other_income,account,,이전: 23년 토스뱅크
+07ef6d10,2023-01-01,관리비,113170,expense,toss,living,account,,이전: 23년 토스뱅크
+09f55766,2023-02-01,관리비,118870,expense,toss,living,account,,이전: 23년 토스뱅크
+1978989c,2023-03-01,관리비,24500,expense,toss,living,account,,이전: 23년 토스뱅크
+4b071ddd,2023-04-01,관리비,149540,expense,toss,living,account,,이전: 23년 토스뱅크
+652f9358,2023-05-01,관리비,312820,expense,toss,living,account,,이전: 23년 토스뱅크
+cb81cda7,2023-06-01,관리비,274340,expense,toss,living,account,,이전: 23년 토스뱅크
+ca00cd83,2023-07-01,관리비,178930,expense,toss,living,account,,이전: 23년 토스뱅크
+7c654f17,2023-08-01,관리비,277580,expense,toss,living,account,,이전: 23년 토스뱅크
+4672b857,2023-09-01,관리비,146880,expense,toss,living,account,,이전: 23년 토스뱅크
+9948f897,2023-10-01,관리비,355910,expense,toss,living,account,,이전: 23년 토스뱅크
+40e50cea,2023-11-01,관리비,347620,expense,toss,living,account,,이전: 23년 토스뱅크
+988f2304,2023-12-01,관리비,258500,expense,toss,living,account,,이전: 23년 토스뱅크
+5e1d5a85,2023-01-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+e41d1f9f,2023-02-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+d6169b0f,2023-03-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+8dfb6bc7,2023-04-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+19ef5aa6,2023-05-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+b1b69a5c,2023-06-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+89ca6856,2023-07-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+414237f1,2023-08-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+4839802c,2023-09-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+1f7549ac,2023-10-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+1525f404,2023-11-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+e4673a72,2023-12-01,주택청약,100000,expense,toss,saving,account,,이전: 23년 토스뱅크
+06901619,2023-01-01,교통비,94050,expense,toss,transport,account,,이전: 23년 토스뱅크
+c51acb62,2023-02-01,교통비,67750,expense,toss,transport,account,,이전: 23년 토스뱅크
+aada5f44,2023-03-01,교통비,70450,expense,toss,transport,account,,이전: 23년 토스뱅크
+c81f0445,2023-04-01,교통비,70400,expense,toss,transport,account,,이전: 23년 토스뱅크
+a7734ec0,2023-05-01,교통비,43550,expense,toss,transport,account,,이전: 23년 토스뱅크
+cf50f567,2023-06-01,교통비,52850,expense,toss,transport,account,,이전: 23년 토스뱅크
+fc0edda3,2023-07-01,교통비,55200,expense,toss,transport,account,,이전: 23년 토스뱅크
+2625bb6e,2023-08-01,교통비,59900,expense,toss,transport,account,,이전: 23년 토스뱅크
+bae882b2,2023-09-01,교통비,40850,expense,toss,transport,account,,이전: 23년 토스뱅크
+3e517394,2023-10-01,교통비,53000,expense,toss,transport,account,,이전: 23년 토스뱅크
+116dc498,2023-11-01,교통비,63000,expense,toss,transport,account,,이전: 23년 토스뱅크
+30d48bdb,2023-12-01,교통비,55700,expense,toss,transport,account,,이전: 23년 토스뱅크
+c7d14895,2023-01-01,카드대금(신한->현대),375474,expense,toss,card,account,,이전: 23년 토스뱅크
+1d71f351,2023-02-01,카드대금(신한->현대),342014,expense,toss,card,account,,이전: 23년 토스뱅크
+5aafa104,2023-03-01,카드대금(신한->현대),321944,expense,toss,card,account,,이전: 23년 토스뱅크
+9b5b5e1c,2023-04-01,카드대금(신한->현대),301264,expense,toss,card,account,,이전: 23년 토스뱅크
+153638c7,2023-05-01,카드대금(신한->현대),497614,expense,toss,card,account,,이전: 23년 토스뱅크
+39a27fdf,2023-06-01,카드대금(신한->현대),564114,expense,toss,card,account,,이전: 23년 토스뱅크
+c7080442,2023-07-01,카드대금(신한->현대),451693,expense,toss,card,account,,이전: 23년 토스뱅크
+6cef650d,2023-08-01,카드대금(신한->현대),1121064,expense,toss,card,account,,이전: 23년 토스뱅크
+40e36afe,2023-09-01,카드대금(신한->현대),978171,expense,toss,card,account,,이전: 23년 토스뱅크
+04df9852,2023-10-01,카드대금(신한->현대),932696,expense,toss,card,account,,이전: 23년 토스뱅크
+b5c999cb,2023-11-01,카드대금(신한->현대),571486,expense,toss,card,account,,이전: 23년 토스뱅크
+766b6ffb,2023-12-01,카드대금(신한->현대),590139,expense,toss,card,account,,이전: 23년 토스뱅크
+5a9f720e,2023-01-01,카드대금(롯데),1110576,expense,toss,card,account,,이전: 23년 토스뱅크
+5398c0b2,2023-02-01,카드대금(롯데),1032696,expense,toss,card,account,,이전: 23년 토스뱅크
+12896d14,2023-03-01,카드대금(롯데),690186,expense,toss,card,account,,이전: 23년 토스뱅크
+29356bee,2023-04-01,카드대금(롯데),1232126,expense,toss,card,account,,이전: 23년 토스뱅크
+180719c8,2023-05-01,카드대금(롯데),2530581,expense,toss,card,account,,이전: 23년 토스뱅크
+e1b85939,2023-06-01,카드대금(롯데),25600,expense,toss,card,account,,이전: 23년 토스뱅크
+57cfc0b6,2023-07-01,카드대금(롯데),1155632,expense,toss,card,account,,이전: 23년 토스뱅크
+04c704e4,2023-08-01,카드대금(롯데),1015072,expense,toss,card,account,,이전: 23년 토스뱅크
+3d67175f,2023-09-01,카드대금(롯데),1062946,expense,toss,card,account,,이전: 23년 토스뱅크
+e68b8e33,2023-10-01,카드대금(롯데),1229576,expense,toss,card,account,,이전: 23년 토스뱅크
+9b74a37f,2023-11-01,카드대금(롯데),889336,expense,toss,card,account,,이전: 23년 토스뱅크
+6f424cc0,2023-12-01,카드대금(롯데),928464,expense,toss,card,account,,이전: 23년 토스뱅크
+d51d0b67,2023-01-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+261c1cf7,2023-02-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+ea16ec23,2023-03-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+f4018a10,2023-04-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+4c87f159,2023-05-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+375ab034,2023-06-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+0daa9e0d,2023-07-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+d176795f,2023-08-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+2598469b,2023-09-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+48c08518,2023-10-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+b009aba6,2023-11-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+f2d22433,2023-12-01,우체국보험,31710,expense,toss,insurance,account,,이전: 23년 토스뱅크
+84f59c85,2023-01-01,대출이자,150000,income,toss,interest,account,,이전: 23년 토스뱅크
+5d2c2d97,2023-02-01,대출이자,150000,income,toss,interest,account,,이전: 23년 토스뱅크
+7cf275d0,2023-03-01,대출이자,150000,income,toss,interest,account,,이전: 23년 토스뱅크
+7b59aa59,2023-04-01,대출이자,230000,income,toss,interest,account,,이전: 23년 토스뱅크
+5d677bef,2023-05-01,대출이자,230000,income,toss,interest,account,,이전: 23년 토스뱅크
+022efb99,2023-06-01,대출이자,114655,income,toss,interest,account,,이전: 23년 토스뱅크
+b692baeb,2023-07-01,대출이자,119045,income,toss,interest,account,,이전: 23년 토스뱅크
+0ffce480,2023-08-01,대출이자,230000,income,toss,interest,account,,이전: 23년 토스뱅크
+6cb9996b,2023-09-01,대출이자,230000,income,toss,interest,account,,이전: 23년 토스뱅크
+0fbabf3d,2023-10-01,대출이자,129450,income,toss,interest,account,,이전: 23년 토스뱅크
+760899ae,2023-11-01,대출이자,133765,income,toss,interest,account,,이전: 23년 토스뱅크
+aa2bf114,2023-12-01,대출이자,129450,income,toss,interest,account,,이전: 23년 토스뱅크
+7b7d4289,2023-01-01,적금,1050000,income,toss,other_income,account,,이전: 23년 토스뱅크
+e4a4e30a,2023-02-01,적금,700000,income,toss,other_income,account,,이전: 23년 토스뱅크
+ad8be5f3,2023-03-01,적금,700000,income,toss,other_income,account,,이전: 23년 토스뱅크
+7a4e6542,2023-04-01,적금,550000,income,toss,other_income,account,,이전: 23년 토스뱅크
+9929ca06,2023-05-01,적금,1400000,income,toss,other_income,account,,이전: 23년 토스뱅크
+898a3793,2023-06-01,적금,1100000,income,toss,other_income,account,,이전: 23년 토스뱅크
+968837d3,2023-07-01,적금,1000000,income,toss,other_income,account,,이전: 23년 토스뱅크
+e78d021a,2023-08-01,적금,1000000,income,toss,other_income,account,,이전: 23년 토스뱅크
+ac30dbe2,2023-09-01,적금,1000000,income,toss,other_income,account,,이전: 23년 토스뱅크
+dac74b78,2023-10-01,적금,1000000,income,toss,other_income,account,,이전: 23년 토스뱅크
+e52d67d7,2023-11-01,적금,1100000,income,toss,other_income,account,,이전: 23년 토스뱅크
+2b9d5f7b,2023-12-01,적금,1100000,income,toss,other_income,account,,이전: 23년 토스뱅크
+1393b430,2023-01-01,잔돈모으기,3000,income,toss,other_income,account,,이전: 23년 토스뱅크
+c243e507,2023-02-01,잔돈모으기,2327,income,toss,other_income,account,,이전: 23년 토스뱅크
+810aef0d,2023-03-01,잔돈모으기,2799,income,toss,other_income,account,,이전: 23년 토스뱅크
+7f8bd3e5,2023-04-01,잔돈모으기,3297,income,toss,other_income,account,,이전: 23년 토스뱅크
+984a2092,2023-05-01,잔돈모으기,4550,income,toss,other_income,account,,이전: 23년 토스뱅크
+699bc755,2023-06-01,잔돈모으기,3626,income,toss,other_income,account,,이전: 23년 토스뱅크
+de96a488,2023-07-01,잔돈모으기,2930,income,toss,other_income,account,,이전: 23년 토스뱅크
+f48d46b3,2023-08-01,잔돈모으기,2803,income,toss,other_income,account,,이전: 23년 토스뱅크
+909f5904,2023-09-01,잔돈모으기,4602,income,toss,other_income,account,,이전: 23년 토스뱅크
+23e9276c,2023-10-01,잔돈모으기,2319,income,toss,other_income,account,,이전: 23년 토스뱅크
+a21549d5,2023-11-01,잔돈모으기,1506,income,toss,other_income,account,,이전: 23년 토스뱅크
+0795f7d8,2023-12-01,잔돈모으기,2592,income,toss,other_income,account,,이전: 23년 토스뱅크
+75079c22,2023-01-01,보관하기,6156776,income,toss,other_income,account,,이전: 23년 토스뱅크
+e8af7267,2023-02-01,보관하기,115550070,income,toss,other_income,account,,이전: 23년 토스뱅크
+1def6d90,2023-03-01,보관하기,50300000,income,toss,other_income,account,,이전: 23년 토스뱅크
+38ac52f2,2023-08-01,보관하기,1474114,income,toss,other_income,account,,이전: 23년 토스뱅크
+d87f1063,2023-09-01,보관하기,2233472,income,toss,other_income,account,,이전: 23년 토스뱅크
+ffa4ce57,2023-11-01,보관하기,1112173,income,toss,other_income,account,,이전: 23년 토스뱅크
+a386794a,2023-01-01,식비,1700,expense,toss,food,account,,이전: 23년 토스뱅크
+c2ad9ca9,2023-02-01,식비,20000,expense,toss,food,account,,이전: 23년 토스뱅크
+7ba8bb00,2023-03-01,식비,6000,expense,toss,food,account,,이전: 23년 토스뱅크
+dbcc484c,2023-04-01,식비,105500,expense,toss,food,account,,이전: 23년 토스뱅크
+1530677a,2023-05-01,식비,153530,expense,toss,food,account,,이전: 23년 토스뱅크
+5623d8e5,2023-06-01,식비,41851,expense,toss,food,account,,이전: 23년 토스뱅크
+04dee3ea,2023-07-01,식비,101583,expense,toss,food,account,,이전: 23년 토스뱅크
+946b51ee,2023-08-01,식비,85240,expense,toss,food,account,,이전: 23년 토스뱅크
+c4d569ea,2023-09-01,식비,117500,expense,toss,food,account,,이전: 23년 토스뱅크
+87f99578,2023-11-01,식비,19500,expense,toss,food,account,,이전: 23년 토스뱅크
+0a25b5c4,2023-12-01,식비,94700,expense,toss,food,account,,이전: 23년 토스뱅크
+84796d45,2023-01-01,문화/여가,22000,expense,toss,selfdev,account,,이전: 23년 토스뱅크
+fd3d4737,2023-06-01,문화/여가,468200,expense,toss,selfdev,account,,이전: 23년 토스뱅크
+f2dfe703,2023-08-01,문화/여가,29500,expense,toss,selfdev,account,,이전: 23년 토스뱅크
+67d49097,2023-10-01,문화/여가,30000,expense,toss,selfdev,account,,이전: 23년 토스뱅크
+a0055d40,2023-11-01,문화/여가,10000,expense,toss,selfdev,account,,이전: 23년 토스뱅크
+0fe291aa,2023-12-01,문화/여가,80000,expense,toss,selfdev,account,,이전: 23년 토스뱅크
+5a2f7f92,2023-06-01,여행,21000,expense,toss,travel,account,,이전: 23년 토스뱅크
+aa37d7c5,2023-08-01,여행,41200,expense,toss,travel,account,,이전: 23년 토스뱅크
+8aa6c145,2023-09-01,여행,42620,expense,toss,travel,account,,이전: 23년 토스뱅크
+0b20f900,2023-10-01,여행,6000,expense,toss,travel,account,,이전: 23년 토스뱅크
+bccb01c0,2023-11-01,여행,100000,expense,toss,travel,account,,이전: 23년 토스뱅크
+2dc47625,2023-12-01,여행,18055,expense,toss,travel,account,,이전: 23년 토스뱅크
+aaafb6a4,2023-01-01,미용/쇼핑,190000,expense,toss,shopping,account,,이전: 23년 토스뱅크
+f860f188,2023-02-01,미용/쇼핑,140000,expense,toss,shopping,account,,이전: 23년 토스뱅크
+e9a3c67e,2023-03-01,미용/쇼핑,170000,expense,toss,shopping,account,,이전: 23년 토스뱅크
+7aaf95ca,2023-05-01,미용/쇼핑,1000,expense,toss,shopping,account,,이전: 23년 토스뱅크
+db11ee02,2023-08-01,미용/쇼핑,142040,expense,toss,shopping,account,,이전: 23년 토스뱅크
+b36c1aa1,2023-09-01,미용/쇼핑,1400000,expense,toss,shopping,account,,이전: 23년 토스뱅크
+e0af3a65,2023-01-01,대여금,325000,expense,toss,etc,account,,이전: 23년 토스뱅크
+814ea5bc,2023-03-01,대여금,852000,expense,toss,etc,account,,이전: 23년 토스뱅크
+b9d05065,2023-04-01,대여금,1000000,expense,toss,etc,account,,이전: 23년 토스뱅크
+20f4720c,2023-01-01,차입금 상환,471816,expense,toss,etc,account,,이전: 23년 토스뱅크
+39f7c6ab,2023-10-01,차입금 상환,100000,expense,toss,etc,account,,이전: 23년 토스뱅크
+34f4d105,2023-11-01,차입금 상환,98180,expense,toss,etc,account,,이전: 23년 토스뱅크
+10fff344,2023-02-01,임차보증금,11000000,expense,toss,etc,account,,이전: 23년 토스뱅크
+65a4c535,2023-03-01,기타지출,893000,expense,toss,etc,account,,이전: 23년 토스뱅크
+dcfe4ab5,2023-04-01,기타지출,100000,expense,toss,etc,account,,이전: 23년 토스뱅크
+16d8546b,2023-05-01,기타지출,150000,expense,toss,etc,account,,이전: 23년 토스뱅크
+d3db0c21,2023-07-01,기타지출,100000,expense,toss,etc,account,,이전: 23년 토스뱅크
+ed219061,2023-08-01,기타지출,100000,expense,toss,etc,account,,이전: 23년 토스뱅크
+fae91c78,2023-01-01,총합,10195272,expense,toss,etc,account,,이전: 23년 토스뱅크
+64ec32ce,2023-02-01,총합,129255437,expense,toss,etc,account,,이전: 23년 토스뱅크
+e22d81f2,2023-03-01,총합,54312589,expense,toss,etc,account,,이전: 23년 토스뱅크
+8d4282fc,2023-04-01,총합,3873837,expense,toss,etc,account,,이전: 23년 토스뱅크
+ce4ab593,2023-05-01,총합,5455355,expense,toss,etc,account,,이전: 23년 토스뱅크
+e1e96bf2,2023-06-01,총합,2797946,expense,toss,etc,account,,이전: 23년 토스뱅크
+60a5a46e,2023-07-01,총합,3296723,expense,toss,etc,account,,이전: 23년 토스뱅크
+aa9fcc11,2023-08-01,총합,5710223,expense,toss,etc,account,,이전: 23년 토스뱅크
+1a6eef9d,2023-09-01,총합,7388751,expense,toss,etc,account,,이전: 23년 토스뱅크
+76d21d2a,2023-10-01,총합,3970661,expense,toss,etc,account,,이전: 23년 토스뱅크
+212369e0,2023-11-01,총합,4578276,expense,toss,etc,account,,이전: 23년 토스뱅크
+6154177d,2023-12-01,총합,3389310,expense,toss,etc,account,,이전: 23년 토스뱅크
+2045ed9a,2024-01-01,전월이월,1870000,income,toss,other_income,account,,이전: 24년 토스뱅크
+fe041111,2024-02-01,전월이월,2942620,income,toss,other_income,account,,이전: 24년 토스뱅크
+bd01d891,2024-03-01,전월이월,1889000,income,toss,other_income,account,,이전: 24년 토스뱅크
+3af14b5f,2024-04-01,전월이월,190095,income,toss,other_income,account,,이전: 24년 토스뱅크
+bd8333f8,2024-05-01,전월이월,2475775,income,toss,other_income,account,,이전: 24년 토스뱅크
+cc1a9f3d,2024-06-01,전월이월,2255101,income,toss,other_income,account,,이전: 24년 토스뱅크
+0b467755,2024-07-01,전월이월,577332,income,toss,other_income,account,,이전: 24년 토스뱅크
+af054d1a,2024-08-01,전월이월,1700396,income,toss,other_income,account,,이전: 24년 토스뱅크
+cec4e149,2024-09-01,전월이월,2671218,income,toss,other_income,account,,이전: 24년 토스뱅크
+5b4b31fb,2024-10-01,전월이월,2496333,income,toss,other_income,account,,이전: 24년 토스뱅크
+f7185aa0,2024-11-01,전월이월,3084000,income,toss,other_income,account,,이전: 24년 토스뱅크
+f62708cc,2024-12-01,전월이월,337205,income,toss,other_income,account,,이전: 24년 토스뱅크
+6db7ae1e,2024-01-01,적금,600000,expense,toss,saving,account,,이전: 24년 토스뱅크
+14b9fe09,2024-02-01,적금,1600000,expense,toss,saving,account,,이전: 24년 토스뱅크
+a740565d,2024-03-01,적금,1300000,expense,toss,saving,account,,이전: 24년 토스뱅크
+0b0fed16,2024-04-01,적금,1300000,expense,toss,saving,account,,이전: 24년 토스뱅크
+b234f382,2024-05-01,적금,1300000,expense,toss,saving,account,,이전: 24년 토스뱅크
+e47cf990,2024-06-01,적금,1000000,expense,toss,saving,account,,이전: 24년 토스뱅크
+2d17a7ba,2024-07-01,적금,1000000,expense,toss,saving,account,,이전: 24년 토스뱅크
+5c24c110,2024-08-01,적금,1000000,expense,toss,saving,account,,이전: 24년 토스뱅크
+38aabdc6,2024-09-01,적금,1000000,expense,toss,saving,account,,이전: 24년 토스뱅크
+f363bf2b,2024-10-01,적금,1300000,expense,toss,saving,account,,이전: 24년 토스뱅크
+0c1870ee,2024-11-01,적금,1450000,expense,toss,saving,account,,이전: 24년 토스뱅크
+4c184efd,2024-12-01,적금,1930000,expense,toss,saving,account,,이전: 24년 토스뱅크
+0d785e3b,2024-01-01,카드대금,1986056,expense,toss,card,account,,이전: 24년 토스뱅크
+0bef5c0f,2024-02-01,카드대금,2634881,expense,toss,card,account,,이전: 24년 토스뱅크
+3136d6bb,2024-03-01,카드대금,5385400,expense,toss,card,account,,이전: 24년 토스뱅크
+5a457d1b,2024-04-01,카드대금,1672962,expense,toss,card,account,,이전: 24년 토스뱅크
+a2cf90bf,2024-05-01,카드대금,3138189,expense,toss,card,account,,이전: 24년 토스뱅크
+9d4378f0,2024-06-01,카드대금,1806464,expense,toss,card,account,,이전: 24년 토스뱅크
+1c2907b3,2024-07-01,카드대금,1604806,expense,toss,card,account,,이전: 24년 토스뱅크
+366b281d,2024-08-01,카드대금,1048597,expense,toss,card,account,,이전: 24년 토스뱅크
+e17b23b7,2024-09-01,카드대금,1701329,expense,toss,card,account,,이전: 24년 토스뱅크
+6233e7aa,2024-10-01,카드대금,1057975,expense,toss,card,account,,이전: 24년 토스뱅크
+dc3b9688,2024-11-01,카드대금,1489851,expense,toss,card,account,,이전: 24년 토스뱅크
+5235ba21,2024-12-01,카드대금,1405685,expense,toss,card,account,,이전: 24년 토스뱅크
+ee306b34,2024-01-01,급여,3279100,income,toss,salary,account,,이전: 24년 토스뱅크
+bc24d3be,2024-02-01,급여,6375166,income,toss,salary,account,,이전: 24년 토스뱅크
+db9232a4,2024-03-01,급여,3502247,income,toss,salary,account,,이전: 24년 토스뱅크
+871f6066,2024-04-01,급여,3477037,income,toss,salary,account,,이전: 24년 토스뱅크
+3048a33c,2024-05-01,급여,3477157,income,toss,salary,account,,이전: 24년 토스뱅크
+20368a74,2024-06-01,급여,3477157,income,toss,salary,account,,이전: 24년 토스뱅크
+361ea935,2024-07-01,급여,3467977,income,toss,salary,account,,이전: 24년 토스뱅크
+fa2b425a,2024-08-01,급여,3822153,income,toss,salary,account,,이전: 24년 토스뱅크
+a3fc1de0,2024-09-01,급여,3629480,income,toss,salary,account,,이전: 24년 토스뱅크
+377b0a7a,2024-10-01,급여,3685800,income,toss,salary,account,,이전: 24년 토스뱅크
+f6437460,2024-11-01,급여,3645060,income,toss,salary,account,,이전: 24년 토스뱅크
+52d6091f,2024-12-01,급여,3645062,income,toss,salary,account,,이전: 24년 토스뱅크
+c0664c64,2024-01-01,이자,500,income,toss,interest,account,,이전: 24년 토스뱅크
+f814ee3e,2024-02-01,이자,973,income,toss,interest,account,,이전: 24년 토스뱅크
+75ff228f,2024-03-01,이자,2082,income,toss,interest,account,,이전: 24년 토스뱅크
+ce0e38e3,2024-04-01,이자,1373,income,toss,interest,account,,이전: 24년 토스뱅크
+fd3e69e7,2024-05-01,이자,18709,income,toss,interest,account,,이전: 24년 토스뱅크
+89a57052,2024-06-01,이자,947,income,toss,interest,account,,이전: 24년 토스뱅크
+74b09e22,2024-07-01,이자,764,income,toss,interest,account,,이전: 24년 토스뱅크
+81419e83,2024-08-01,이자,1409,income,toss,interest,account,,이전: 24년 토스뱅크
+d4e660ed,2024-09-01,이자,2742,income,toss,interest,account,,이전: 24년 토스뱅크
+5ac767ff,2024-10-01,이자,2806,income,toss,interest,account,,이전: 24년 토스뱅크
+588da7fb,2024-11-01,이자,516,income,toss,interest,account,,이전: 24년 토스뱅크
+339af287,2024-12-01,이자,676,income,toss,interest,account,,이전: 24년 토스뱅크
+a26d6c70,2024-01-01,피클플러스,12750,income,toss,saving_return,account,,이전: 24년 토스뱅크
+ed2a27cc,2024-02-01,피클플러스,16707,income,toss,saving_return,account,,이전: 24년 토스뱅크
+7dc714db,2024-02-01,보험금,23700,income,toss,other_income,account,,이전: 24년 토스뱅크
+53124c7f,2024-01-01,적금 만기,1112173,income,toss,saving_return,account,,이전: 24년 토스뱅크
+a15c4832,2024-02-01,적금 만기,524725,income,toss,saving_return,account,,이전: 24년 토스뱅크
+74d4e5d4,2024-05-01,적금 만기,7022417,income,toss,saving_return,account,,이전: 24년 토스뱅크
+302867c5,2024-07-01,적금 만기,2109025,income,toss,saving_return,account,,이전: 24년 토스뱅크
+5d92c08b,2024-09-01,적금 만기,10489728,income,toss,saving_return,account,,이전: 24년 토스뱅크
+8738d687,2024-03-01,보관하기 출금,3186481,income,toss,saving_return,account,,이전: 24년 토스뱅크
+d3ea284a,2024-04-01,보관하기 출금,1772638,income,toss,saving_return,account,,이전: 24년 토스뱅크
+884a0f62,2024-06-01,보관하기 출금,1814723,income,toss,saving_return,account,,이전: 24년 토스뱅크
+3972442c,2024-07-01,보관하기 출금,3291953,income,toss,saving_return,account,,이전: 24년 토스뱅크
+efcf14e8,2024-09-01,보관하기 출금,5956,income,toss,saving_return,account,,이전: 24년 토스뱅크
+7a6dd7ad,2024-11-01,보관하기 출금,2100000,income,toss,saving_return,account,,이전: 24년 토스뱅크
+ca2ee72a,2024-12-01,보관하기 출금,2400000,income,toss,saving_return,account,,이전: 24년 토스뱅크
+eb2d4b8f,2024-01-01,기타수입,183941,income,toss,other_income,account,,이전: 24년 토스뱅크
+8472b59a,2024-02-01,기타수입,1665840,income,toss,other_income,account,,이전: 24년 토스뱅크
+3dda764c,2024-03-01,기타수입,1718450,income,toss,other_income,account,,이전: 24년 토스뱅크
+018421d6,2024-04-01,기타수입,886332,income,toss,other_income,account,,이전: 24년 토스뱅크
+9e0230b2,2024-05-01,기타수입,311690,income,toss,other_income,account,,이전: 24년 토스뱅크
+3c9454cb,2024-06-01,기타수입,115545,income,toss,other_income,account,,이전: 24년 토스뱅크
+2b2f28c4,2024-07-01,기타수입,642324,income,toss,other_income,account,,이전: 24년 토스뱅크
+a64f3a50,2024-08-01,기타수입,333209,income,toss,other_income,account,,이전: 24년 토스뱅크
+8051e478,2024-09-01,기타수입,287855,income,toss,other_income,account,,이전: 24년 토스뱅크
+7e72cee6,2024-10-01,기타수입,145820,income,toss,other_income,account,,이전: 24년 토스뱅크
+55f45c3c,2024-11-01,기타수입,375650,income,toss,other_income,account,,이전: 24년 토스뱅크
+c1753cad,2024-12-01,기타수입,674707,income,toss,other_income,account,,이전: 24년 토스뱅크
+b489bf2b,2024-01-01,총합,4588464,income,toss,other_income,account,,이전: 24년 토스뱅크
+7f5861fa,2024-02-01,총합,8607111,income,toss,other_income,account,,이전: 24년 토스뱅크
+0d66e148,2024-03-01,총합,8409260,income,toss,other_income,account,,이전: 24년 토스뱅크
+071379ba,2024-04-01,총합,6137380,income,toss,other_income,account,,이전: 24년 토스뱅크
+bb8fbe02,2024-05-01,총합,10829973,income,toss,other_income,account,,이전: 24년 토스뱅크
+41007c2a,2024-06-01,총합,5408372,income,toss,other_income,account,,이전: 24년 토스뱅크
+62091fcf,2024-07-01,총합,9512043,income,toss,other_income,account,,이전: 24년 토스뱅크
+1034b058,2024-08-01,총합,4156771,income,toss,other_income,account,,이전: 24년 토스뱅크
+0cd75e64,2024-09-01,총합,14415761,income,toss,other_income,account,,이전: 24년 토스뱅크
+517a7a91,2024-10-01,총합,3834426,income,toss,other_income,account,,이전: 24년 토스뱅크
+3656fc1d,2024-11-01,총합,6121226,income,toss,other_income,account,,이전: 24년 토스뱅크
+33f0775b,2024-12-01,총합,6720445,income,toss,other_income,account,,이전: 24년 토스뱅크
+6b85dbda,2024-01-01,관리비,484390,expense,toss,living,account,,이전: 24년 토스뱅크
+0b9ea20e,2024-02-01,관리비,337190,expense,toss,living,account,,이전: 24년 토스뱅크
+473b37d0,2024-03-01,관리비,485020,expense,toss,living,account,,이전: 24년 토스뱅크
+99c1b74e,2024-04-01,관리비,270710,expense,toss,living,account,,이전: 24년 토스뱅크
+f79c1705,2024-05-01,관리비,249360,expense,toss,living,account,,이전: 24년 토스뱅크
+0d2d9243,2024-06-01,관리비,149960,expense,toss,living,account,,이전: 24년 토스뱅크
+73331859,2024-07-01,관리비,28430,expense,toss,living,account,,이전: 24년 토스뱅크
+4de23351,2024-08-01,관리비,132260,expense,toss,living,account,,이전: 24년 토스뱅크
+ade17450,2024-09-01,관리비,105740,expense,toss,living,account,,이전: 24년 토스뱅크
+1b0a1142,2024-10-01,관리비,121540,expense,toss,living,account,,이전: 24년 토스뱅크
+8fe58d05,2024-11-01,관리비,93670,expense,toss,living,account,,이전: 24년 토스뱅크
+64ecc99d,2024-12-01,관리비,92400,expense,toss,living,account,,이전: 24년 토스뱅크
+dfcfff78,2024-01-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+a7e7b771,2024-02-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+765da4f7,2024-03-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+14e41ac0,2024-04-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+bfa3b409,2024-05-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+ea6d7893,2024-06-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+386cbe2e,2024-07-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+63d29887,2024-08-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+ad6e8d31,2024-09-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+fad6dfa1,2024-10-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+9a93ba3c,2024-11-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+fd8d6a55,2024-12-01,주택청약,100000,expense,toss,saving,account,,이전: 24년 토스뱅크
+be5bc0ba,2024-01-01,교통비,57800,expense,toss,transport,account,,이전: 24년 토스뱅크
+4ecee6a7,2024-02-01,교통비,55950,expense,toss,transport,account,,이전: 24년 토스뱅크
+0866a36d,2024-03-01,교통비,55600,expense,toss,transport,account,,이전: 24년 토스뱅크
+4a9883b4,2024-04-01,교통비,63300,expense,toss,transport,account,,이전: 24년 토스뱅크
+68af65c9,2024-05-01,교통비,68430,expense,toss,transport,account,,이전: 24년 토스뱅크
+9726022a,2024-06-01,교통비,60300,expense,toss,transport,account,,이전: 24년 토스뱅크
+2339b836,2024-07-01,교통비,42482,expense,toss,transport,account,,이전: 24년 토스뱅크
+bf84d476,2024-08-01,교통비,38320,expense,toss,transport,account,,이전: 24년 토스뱅크
+9f550c88,2024-09-01,교통비,21400,expense,toss,transport,account,,이전: 24년 토스뱅크
+f5a4905d,2024-10-01,교통비,61500,expense,toss,transport,account,,이전: 24년 토스뱅크
+2e009459,2024-11-01,교통비,40000,expense,toss,transport,account,,이전: 24년 토스뱅크
+53948012,2024-12-01,교통비,61300,expense,toss,transport,account,,이전: 24년 토스뱅크
+eaf8088a,2024-01-01,카드대금(현대),615550,expense,toss,card,account,,이전: 24년 토스뱅크
+25ccdba3,2024-02-01,카드대금(현대),1488027,expense,toss,card,account,,이전: 24년 토스뱅크
+fe53479c,2024-03-01,카드대금(현대),1379,expense,toss,card,account,,이전: 24년 토스뱅크
+53b87185,2024-04-01,카드대금(현대),666173,expense,toss,card,account,,이전: 24년 토스뱅크
+5b501ba2,2024-05-01,카드대금(현대),858370,expense,toss,card,account,,이전: 24년 토스뱅크
+bb2e281f,2024-06-01,카드대금(현대),982958,expense,toss,card,account,,이전: 24년 토스뱅크
+90b02697,2024-07-01,카드대금(현대),1596862,expense,toss,card,account,,이전: 24년 토스뱅크
+b08a0123,2024-08-01,카드대금(현대),16185,expense,toss,card,account,,이전: 24년 토스뱅크
+d9c97174,2024-09-01,카드대금(현대),33003,expense,toss,card,account,,이전: 24년 토스뱅크
+0124751c,2024-10-01,카드대금(현대),160598,expense,toss,card,account,,이전: 24년 토스뱅크
+a13a0db1,2024-11-01,카드대금(현대),428391,expense,toss,card,account,,이전: 24년 토스뱅크
+c28c62ea,2024-12-01,카드대금(현대),345555,expense,toss,card,account,,이전: 24년 토스뱅크
+e15303eb,2024-01-01,카드대금(롯데),1370506,expense,toss,card,account,,이전: 24년 토스뱅크
+2595bdb0,2024-02-01,카드대금(롯데),1146854,expense,toss,card,account,,이전: 24년 토스뱅크
+8b0930be,2024-03-01,카드대금(롯데),5384021,expense,toss,card,account,,이전: 24년 토스뱅크
+2a49bbed,2024-04-01,카드대금(롯데),1006789,expense,toss,card,account,,이전: 24년 토스뱅크
+a17c452c,2024-05-01,카드대금(롯데),2279819,expense,toss,card,account,,이전: 24년 토스뱅크
+e0d62bbc,2024-06-01,카드대금(롯데),823506,expense,toss,card,account,,이전: 24년 토스뱅크
+70e28ce1,2024-07-01,카드대금(롯데),7944,expense,toss,card,account,,이전: 24년 토스뱅크
+0b8b94f6,2024-08-01,카드대금(롯데),1032412,expense,toss,card,account,,이전: 24년 토스뱅크
+c618b6a4,2024-09-01,카드대금(롯데),1668326,expense,toss,card,account,,이전: 24년 토스뱅크
+a9bcf907,2024-10-01,카드대금(롯데),897377,expense,toss,card,account,,이전: 24년 토스뱅크
+805e34ca,2024-11-01,카드대금(롯데),1061460,expense,toss,card,account,,이전: 24년 토스뱅크
+ae022e76,2024-12-01,카드대금(롯데),1060130,expense,toss,card,account,,이전: 24년 토스뱅크
+435b2f61,2024-01-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+c1c51d3a,2024-02-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+5bb38211,2024-03-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+4d348c98,2024-04-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+ea056872,2024-05-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+5a7d08fe,2024-06-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+654fcb72,2024-07-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+6bfe4354,2024-08-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+87d5a792,2024-09-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+4ec34290,2024-10-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+eb71139c,2024-11-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+b2a4906c,2024-12-01,우체국보험,31710,expense,toss,insurance,account,,이전: 24년 토스뱅크
+54a6bb6e,2024-01-01,대출이자,133495,income,toss,interest,account,,이전: 24년 토스뱅크
+cfc45823,2024-02-01,대출이자,133400,income,toss,interest,account,,이전: 24년 토스뱅크
+8dcf1347,2024-03-01,대출이자,249590,income,toss,interest,account,,이전: 24년 토스뱅크
+1cfea2c5,2024-04-01,대출이자,133400,income,toss,interest,account,,이전: 24년 토스뱅크
+d7914978,2024-05-01,대출이자,129095,income,toss,interest,account,,이전: 24년 토스뱅크
+9d3767df,2024-06-01,대출이자,133400,income,toss,interest,account,,이전: 24년 토스뱅크
+17f619f3,2024-07-01,대출이자,129095,income,toss,interest,account,,이전: 24년 토스뱅크
+a2394685,2024-08-01,대출이자,276630,income,toss,interest,account,,이전: 24년 토스뱅크
+94844095,2024-09-01,대출이자,230000,income,toss,interest,account,,이전: 24년 토스뱅크
+be549357,2024-10-01,대출이자,226220,income,toss,interest,account,,이전: 24년 토스뱅크
+50e880aa,2024-11-01,대출이자,223772,income,toss,interest,account,,이전: 24년 토스뱅크
+debf8872,2024-12-01,대출이자,147540,income,toss,interest,account,,이전: 24년 토스뱅크
+5cf2616a,2024-01-01,적금,600000,income,toss,other_income,account,,이전: 24년 토스뱅크
+d20389e3,2024-02-01,적금,1600000,income,toss,other_income,account,,이전: 24년 토스뱅크
+e5541ce9,2024-03-01,적금,1300000,income,toss,other_income,account,,이전: 24년 토스뱅크
+b0efb0b7,2024-04-01,적금,1300000,income,toss,other_income,account,,이전: 24년 토스뱅크
+ccd32c07,2024-05-01,적금,1300000,income,toss,other_income,account,,이전: 24년 토스뱅크
+e05d4f9c,2024-06-01,적금,1000000,income,toss,other_income,account,,이전: 24년 토스뱅크
+0c0fb534,2024-07-01,적금,1000000,income,toss,other_income,account,,이전: 24년 토스뱅크
+5485fa1a,2024-08-01,적금,1000000,income,toss,other_income,account,,이전: 24년 토스뱅크
+697c8016,2024-09-01,적금,11489728,income,toss,other_income,account,,이전: 24년 토스뱅크
+2727dce8,2024-10-01,적금,1300000,income,toss,other_income,account,,이전: 24년 토스뱅크
+afbd19f6,2024-11-01,적금,1450000,income,toss,other_income,account,,이전: 24년 토스뱅크
+b0edbc9f,2024-12-01,적금,1930000,income,toss,other_income,account,,이전: 24년 토스뱅크
+d29a0a39,2024-01-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+b14bf178,2024-02-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+349aa8cf,2024-03-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+d992b1d3,2024-04-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+cb00a32e,2024-05-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+586eb5e7,2024-06-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+cfbb75c3,2024-07-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+1bc30a12,2024-08-01,여행통장,50000,income,toss,other_income,account,,이전: 24년 토스뱅크
+91b5ff04,2024-09-01,여행통장,80000,income,toss,other_income,account,,이전: 24년 토스뱅크
+9ddb4616,2024-10-01,여행통장,80000,income,toss,other_income,account,,이전: 24년 토스뱅크
+3b586be1,2024-11-01,여행통장,80000,income,toss,other_income,account,,이전: 24년 토스뱅크
+4333895f,2024-12-01,여행통장,80000,income,toss,other_income,account,,이전: 24년 토스뱅크
+4664924c,2024-01-01,잔돈모으기,3193,income,toss,other_income,account,,이전: 24년 토스뱅크
+efed2473,2024-02-01,잔돈모으기,3325,income,toss,other_income,account,,이전: 24년 토스뱅크
+c1d1fb98,2024-03-01,잔돈모으기,1951,income,toss,other_income,account,,이전: 24년 토스뱅크
+d6907260,2024-04-01,잔돈모으기,3238,income,toss,other_income,account,,이전: 24년 토스뱅크
+68d31498,2024-05-01,잔돈모으기,3041,income,toss,other_income,account,,이전: 24년 토스뱅크
+1c3bcb78,2024-06-01,잔돈모으기,2350,income,toss,other_income,account,,이전: 24년 토스뱅크
+328506d2,2024-07-01,잔돈모으기,2303,income,toss,other_income,account,,이전: 24년 토스뱅크
+a8e75583,2024-08-01,잔돈모으기,2074,income,toss,other_income,account,,이전: 24년 토스뱅크
+7739901a,2024-09-01,잔돈모으기,1435,income,toss,other_income,account,,이전: 24년 토스뱅크
+f1a7e3bd,2024-10-01,잔돈모으기,3464,income,toss,other_income,account,,이전: 24년 토스뱅크
+6fe1188c,2024-11-01,잔돈모으기,2501395,income,toss,other_income,account,,이전: 24년 토스뱅크
+daf5e3d6,2024-12-01,잔돈모으기,2426,income,toss,other_income,account,,이전: 24년 토스뱅크
+776237e9,2024-02-01,보관하기,3681725,income,toss,other_income,account,,이전: 24년 토스뱅크
+753aeea9,2024-03-01,보관하기,1767810,income,toss,other_income,account,,이전: 24년 토스뱅크
+722488d7,2024-05-01,보관하기,2555201,income,toss,other_income,account,,이전: 24년 토스뱅크
+41c165f5,2024-06-01,보관하기,3596464,income,toss,other_income,account,,이전: 24년 토스뱅크
+881e7501,2024-07-01,보관하기,1500000,income,toss,other_income,account,,이전: 24년 토스뱅크
+0846ec6d,2024-11-01,보관하기,2000000,income,toss,other_income,account,,이전: 24년 토스뱅크
+0ec03d74,2024-12-01,보관하기,2500000,income,toss,other_income,account,,이전: 24년 토스뱅크
+94852839,2024-01-01,식비,68200,expense,toss,food,account,,이전: 24년 토스뱅크
+a1033f9a,2024-02-01,식비,45800,expense,toss,food,account,,이전: 24년 토스뱅크
+f523328e,2024-03-01,식비,110499,expense,toss,food,account,,이전: 24년 토스뱅크
+b8f35ad7,2024-04-01,식비,45150,expense,toss,food,account,,이전: 24년 토스뱅크
+7c677cc0,2024-05-01,식비,55800,expense,toss,food,account,,이전: 24년 토스뱅크
+6045ea57,2024-06-01,식비,25250,expense,toss,food,account,,이전: 24년 토스뱅크
+fc6d5399,2024-07-01,식비,87000,expense,toss,food,account,,이전: 24년 토스뱅크
+4aa382f7,2024-08-01,식비,58300,expense,toss,food,account,,이전: 24년 토스뱅크
+9d1a3f87,2024-09-01,식비,185170,expense,toss,food,account,,이전: 24년 토스뱅크
+3b37a329,2024-10-01,식비,32300,expense,toss,food,account,,이전: 24년 토스뱅크
+b0d69767,2024-11-01,식비,135022,expense,toss,food,account,,이전: 24년 토스뱅크
+9995100a,2024-12-01,식비,137200,expense,toss,food,account,,이전: 24년 토스뱅크
+3354c308,2024-02-01,문화/여가,25150,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+5081bf8f,2024-03-01,문화/여가,32200,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+f4cde5d6,2024-04-01,문화/여가,76500,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+fd050f2b,2024-05-01,문화/여가,30500,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+ba16443e,2024-06-01,문화/여가,20000,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+6ec0fac2,2024-07-01,문화/여가,106000,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+7210fea6,2024-08-01,문화/여가,47000,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+de96f508,2024-09-01,문화/여가,79292,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+08249a33,2024-10-01,문화/여가,123250,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+29bb3c29,2024-11-01,문화/여가,722600,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+6fb98c66,2024-12-01,문화/여가,68700,expense,toss,selfdev,account,,이전: 24년 토스뱅크
+2cac58a0,2024-02-01,여행,6600,expense,toss,travel,account,,이전: 24년 토스뱅크
+46eeb56e,2024-04-01,여행,4730,expense,toss,travel,account,,이전: 24년 토스뱅크
+44916040,2024-05-01,여행,507343,expense,toss,travel,account,,이전: 24년 토스뱅크
+f8a1b8cb,2024-07-01,여행,2013491,expense,toss,travel,account,,이전: 24년 토스뱅크
+c6793acd,2024-08-01,여행,381058,expense,toss,travel,account,,이전: 24년 토스뱅크
+57de126d,2024-09-01,여행,564842,expense,toss,travel,account,,이전: 24년 토스뱅크
+4da16fe6,2024-10-01,여행,85000,expense,toss,travel,account,,이전: 24년 토스뱅크
+96e5c989,2024-12-01,여행,146500,expense,toss,travel,account,,이전: 24년 토스뱅크
+fd0a820d,2024-01-01,미용/쇼핑,1000,expense,toss,shopping,account,,이전: 24년 토스뱅크
+a45c7bc7,2024-02-01,미용/쇼핑,55000,expense,toss,shopping,account,,이전: 24년 토스뱅크
+d6b25e9d,2024-03-01,미용/쇼핑,144000,expense,toss,shopping,account,,이전: 24년 토스뱅크
+f3f79d0f,2024-06-01,미용/쇼핑,60243,expense,toss,shopping,account,,이전: 24년 토스뱅크
+a9d0db6c,2024-07-01,미용/쇼핑,1193662,expense,toss,shopping,account,,이전: 24년 토스뱅크
+881d770b,2024-08-01,미용/쇼핑,20000,expense,toss,shopping,account,,이전: 24년 토스뱅크
+e81492c0,2024-10-01,미용/쇼핑,23800,expense,toss,shopping,account,,이전: 24년 토스뱅크
+110bbc4d,2024-02-01,차입금 상환,600000,expense,toss,etc,account,,이전: 24년 토스뱅크
+fceaa7f7,2024-03-01,차입금 상환,394385,expense,toss,etc,account,,이전: 24년 토스뱅크
+dc4a5f3a,2024-07-01,차입금 상환,300000,expense,toss,etc,account,,이전: 24년 토스뱅크
+19c1e88d,2024-02-01,기타지출,300000,expense,toss,etc,account,,이전: 24년 토스뱅크
+a4c26772,2024-04-01,기타지출,100000,expense,toss,etc,account,,이전: 24년 토스뱅크
+f4e478e3,2024-05-01,기타지출,2831978,expense,toss,etc,account,,이전: 24년 토스뱅크
+ee6fcb3f,2024-06-01,기타지출,50000,expense,toss,etc,account,,이전: 24년 토스뱅크
+00e67341,2024-07-01,기타지출,200000,expense,toss,etc,account,,이전: 24년 토스뱅크
+beef6cd0,2024-12-01,기타지출,20000,expense,toss,etc,account,,이전: 24년 토스뱅크
+5575bcbd,2024-01-01,총합,3515844,expense,toss,etc,account,,이전: 24년 토스뱅크
+3a5fab12,2024-02-01,총합,9660731,expense,toss,etc,account,,이전: 24년 토스뱅크
+7f40dd9d,2024-03-01,총합,10108165,expense,toss,etc,account,,이전: 24년 토스뱅크
+2a8d5d50,2024-04-01,총합,3851700,expense,toss,etc,account,,이전: 24년 토스뱅크
+fd35b861,2024-05-01,총합,11050647,expense,toss,etc,account,,이전: 24년 토스뱅크
+59af738a,2024-06-01,총합,7086141,expense,toss,etc,account,,이전: 24년 토스뱅크
+44b0b270,2024-07-01,총합,8388979,expense,toss,etc,account,,이전: 24년 토스뱅크
+623bb23c,2024-08-01,총합,3185949,expense,toss,etc,account,,이전: 24년 토스뱅크
+1652259b,2024-09-01,총합,14590646,expense,toss,etc,account,,이전: 24년 토스뱅크
+e36e2046,2024-10-01,총합,3246759,expense,toss,etc,account,,이전: 24년 토스뱅크
+e79d4a8b,2024-11-01,총합,8868020,expense,toss,etc,account,,이전: 24년 토스뱅크
+49065cfb,2024-12-01,총합,6723461,expense,toss,etc,account,,이전: 24년 토스뱅크
+bd63b115,2025-01-01,전월이월,334189,income,toss,other_income,account,,이전: 25년 토스뱅크
+3bfd00a7,2025-02-01,전월이월,211416,income,toss,other_income,account,,이전: 25년 토스뱅크
+127070bb,2025-03-01,전월이월,200178,income,toss,other_income,account,,이전: 25년 토스뱅크
+d04cd32c,2025-04-01,전월이월,334703,income,toss,other_income,account,,이전: 25년 토스뱅크
+d6b4e1b4,2025-05-01,전월이월,6171,income,toss,other_income,account,,이전: 25년 토스뱅크
+4e3adeb6,2025-06-01,전월이월,390022,income,toss,other_income,account,,이전: 25년 토스뱅크
+da09e0ec,2025-07-01,전월이월,492001,income,toss,other_income,account,,이전: 25년 토스뱅크
+071bdb42,2025-08-01,전월이월,978169,income,toss,other_income,account,,이전: 25년 토스뱅크
+44724fd1,2025-09-01,전월이월,496217,income,toss,other_income,account,,이전: 25년 토스뱅크
+792d2c61,2025-10-01,전월이월,362788,income,toss,other_income,account,,이전: 25년 토스뱅크
+fc881e99,2025-11-01,전월이월,258949,income,toss,other_income,account,,이전: 25년 토스뱅크
+07d31866,2025-12-01,전월이월,834614,income,toss,other_income,account,,이전: 25년 토스뱅크
+c1110704,2025-01-01,적금,1300000,expense,toss,saving,account,,이전: 25년 토스뱅크
+2fb8c6ea,2025-02-01,적금,1150000,expense,toss,saving,account,,이전: 25년 토스뱅크
+76234fb6,2025-03-01,적금,1810000,expense,toss,saving,account,,이전: 25년 토스뱅크
+7a0d346c,2025-04-01,적금,700000,expense,toss,saving,account,,이전: 25년 토스뱅크
+6a74dc25,2025-05-01,적금,1850000,expense,toss,saving,account,,이전: 25년 토스뱅크
+028f0dc7,2025-06-01,적금,1000000,expense,toss,saving,account,,이전: 25년 토스뱅크
+80ec2638,2025-07-01,적금,1000000,expense,toss,saving,account,,이전: 25년 토스뱅크
+2ca6fbfb,2025-08-01,적금,2000000,expense,toss,saving,account,,이전: 25년 토스뱅크
+952ae898,2025-09-01,적금,1700000,expense,toss,saving,account,,이전: 25년 토스뱅크
+7af96111,2025-10-01,적금,1100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+b332a1ed,2025-11-01,적금,1700000,expense,toss,saving,account,,이전: 25년 토스뱅크
+2db26a3e,2025-12-01,적금,1700000,expense,toss,saving,account,,이전: 25년 토스뱅크
+d63fb4fa,2025-01-01,카드대금,1717760,expense,toss,card,account,,이전: 25년 토스뱅크
+daf28a56,2025-02-01,카드대금,1160221,expense,toss,card,account,,이전: 25년 토스뱅크
+ab0d60ae,2025-03-01,카드대금,1241784,expense,toss,card,account,,이전: 25년 토스뱅크
+caed153e,2025-04-01,카드대금,1701365,expense,toss,card,account,,이전: 25년 토스뱅크
+2962ac47,2025-05-01,카드대금,683497,expense,toss,card,account,,이전: 25년 토스뱅크
+d1ff95a6,2025-06-01,카드대금,1074492,expense,toss,card,account,,이전: 25년 토스뱅크
+51497fc4,2025-07-01,카드대금,2108991,expense,toss,card,account,,이전: 25년 토스뱅크
+598c66fb,2025-08-01,카드대금,1709357,expense,toss,card,account,,이전: 25년 토스뱅크
+5a905ab3,2025-09-01,카드대금,1760957,expense,toss,card,account,,이전: 25년 토스뱅크
+77d4ce22,2025-10-01,카드대금,2272525,expense,toss,card,account,,이전: 25년 토스뱅크
+24f3e5b0,2025-11-01,카드대금,1682212,expense,toss,card,account,,이전: 25년 토스뱅크
+bf138ebe,2025-12-01,카드대금,1194491,expense,toss,card,account,,이전: 25년 토스뱅크
+d9830aea,2025-01-01,급여,3629480,income,toss,salary,account,,이전: 25년 토스뱅크
+f8b2a33a,2025-02-01,급여,4770020,income,toss,salary,account,,이전: 25년 토스뱅크
+60b4248a,2025-03-01,급여,3728820,income,toss,salary,account,,이전: 25년 토스뱅크
+b2c4ba8a,2025-04-01,급여,3721150,income,toss,salary,account,,이전: 25년 토스뱅크
+2d8f78fc,2025-05-01,급여,3721210,income,toss,salary,account,,이전: 25년 토스뱅크
+142feef7,2025-06-01,급여,3768411,income,toss,salary,account,,이전: 25년 토스뱅크
+b6cdabc4,2025-07-01,급여,3692280,income,toss,salary,account,,이전: 25년 토스뱅크
+a3015434,2025-08-01,급여,3957728,income,toss,salary,account,,이전: 25년 토스뱅크
+916ae79f,2025-09-01,급여,3828194,income,toss,salary,account,,이전: 25년 토스뱅크
+85920c64,2025-10-01,급여,3856684,income,toss,salary,account,,이전: 25년 토스뱅크
+de6a4f1d,2025-11-01,급여,3828194,income,toss,salary,account,,이전: 25년 토스뱅크
+9f26d993,2025-12-01,급여,3828194,income,toss,salary,account,,이전: 25년 토스뱅크
+60a159cd,2025-01-01,이자,354,income,toss,interest,account,,이전: 25년 토스뱅크
+0d84908e,2025-02-01,이자,276,income,toss,interest,account,,이전: 25년 토스뱅크
+2ccfb86a,2025-03-01,이자,689,income,toss,interest,account,,이전: 25년 토스뱅크
+d4b4232b,2025-04-01,이자,322,income,toss,interest,account,,이전: 25년 토스뱅크
+9a44ba64,2025-05-01,이자,246,income,toss,interest,account,,이전: 25년 토스뱅크
+4fefd2e3,2025-06-01,이자,494,income,toss,interest,account,,이전: 25년 토스뱅크
+d79e3d9f,2025-07-01,이자,245,income,toss,interest,account,,이전: 25년 토스뱅크
+77f21117,2025-08-01,이자,324,income,toss,interest,account,,이전: 25년 토스뱅크
+4ef9ae74,2025-09-01,이자,214,income,toss,interest,account,,이전: 25년 토스뱅크
+1f63c112,2025-10-01,이자,1788,income,toss,interest,account,,이전: 25년 토스뱅크
+fc914e32,2025-11-01,이자,314,income,toss,interest,account,,이전: 25년 토스뱅크
+ff11c31e,2025-12-01,이자,86,income,toss,interest,account,,이전: 25년 토스뱅크
+59785b63,2025-04-01,적금 만기,1819630,income,toss,saving_return,account,,이전: 25년 토스뱅크
+58106477,2025-05-01,적금 만기,1976578,income,toss,saving_return,account,,이전: 25년 토스뱅크
+23745acb,2025-11-01,적금 만기,610115,income,toss,saving_return,account,,이전: 25년 토스뱅크
+7ee4e49b,2025-01-01,보관하기 출금,2336839,income,toss,saving_return,account,,이전: 25년 토스뱅크
+efc4bc13,2025-02-01,보관하기 출금,2128800,income,toss,saving_return,account,,이전: 25년 토스뱅크
+96e0d9ac,2025-03-01,보관하기 출금,4442123,income,toss,saving_return,account,,이전: 25년 토스뱅크
+46e75909,2025-04-01,보관하기 출금,2287752,income,toss,saving_return,account,,이전: 25년 토스뱅크
+d0112659,2025-05-01,보관하기 출금,2752297,income,toss,saving_return,account,,이전: 25년 토스뱅크
+077914ee,2025-06-01,보관하기 출금,2104212,income,toss,saving_return,account,,이전: 25년 토스뱅크
+1dd3ae4e,2025-07-01,보관하기 출금,2870209,income,toss,saving_return,account,,이전: 25년 토스뱅크
+4efc5207,2025-08-01,보관하기 출금,1669547,income,toss,saving_return,account,,이전: 25년 토스뱅크
+59e15062,2025-09-01,보관하기 출금,3958678,income,toss,saving_return,account,,이전: 25년 토스뱅크
+d836d59b,2025-10-01,보관하기 출금,3232787,income,toss,saving_return,account,,이전: 25년 토스뱅크
+89240fa2,2025-11-01,보관하기 출금,3328760,income,toss,saving_return,account,,이전: 25년 토스뱅크
+c3a49d40,2025-12-01,보관하기 출금,1677501,income,toss,saving_return,account,,이전: 25년 토스뱅크
+0d5c852b,2025-01-01,기타수입,35955,income,toss,other_income,account,,이전: 25년 토스뱅크
+3d5cf92a,2025-02-01,기타수입,5005,income,toss,other_income,account,,이전: 25년 토스뱅크
+c27f9bb4,2025-03-01,기타수입,250005036,income,toss,other_income,account,,이전: 25년 토스뱅크
+e955b25b,2025-04-01,기타수입,395565,income,toss,other_income,account,,이전: 25년 토스뱅크
+3e033d67,2025-05-01,기타수입,1051700,income,toss,other_income,account,,이전: 25년 토스뱅크
+bbd04886,2025-06-01,기타수입,300000,income,toss,other_income,account,,이전: 25년 토스뱅크
+39f58712,2025-07-01,기타수입,156630,income,toss,other_income,account,,이전: 25년 토스뱅크
+97c31aa6,2025-08-01,기타수입,106330,income,toss,other_income,account,,이전: 25년 토스뱅크
+953ad5cc,2025-09-01,기타수입,100000,income,toss,other_income,account,,이전: 25년 토스뱅크
+2f33f406,2025-10-01,기타수입,445934,income,toss,other_income,account,,이전: 25년 토스뱅크
+4dd822fa,2025-11-01,기타수입,109449,income,toss,other_income,account,,이전: 25년 토스뱅크
+dd89e5ed,2025-01-01,총합,6002628,income,toss,other_income,account,,이전: 25년 토스뱅크
+fe885763,2025-02-01,총합,6904101,income,toss,other_income,account,,이전: 25년 토스뱅크
+7ffbc009,2025-03-01,총합,258176668,income,toss,other_income,account,,이전: 25년 토스뱅크
+d1ee4227,2025-04-01,총합,8224419,income,toss,other_income,account,,이전: 25년 토스뱅크
+9cc5f825,2025-05-01,총합,9502031,income,toss,other_income,account,,이전: 25년 토스뱅크
+dd820c8b,2025-06-01,총합,6173117,income,toss,other_income,account,,이전: 25년 토스뱅크
+4ff3e368,2025-07-01,총합,6719364,income,toss,other_income,account,,이전: 25년 토스뱅크
+e8d384d6,2025-08-01,총합,5733929,income,toss,other_income,account,,이전: 25년 토스뱅크
+4ba4a272,2025-09-01,총합,7887086,income,toss,other_income,account,,이전: 25년 토스뱅크
+3e997884,2025-10-01,총합,7537193,income,toss,other_income,account,,이전: 25년 토스뱅크
+7e620ffc,2025-11-01,총합,7876832,income,toss,other_income,account,,이전: 25년 토스뱅크
+4f150aa6,2025-12-01,총합,5505781,income,toss,other_income,account,,이전: 25년 토스뱅크
+3447f2da,2025-01-01,관리비,83805,expense,toss,living,account,,이전: 25년 토스뱅크
+0ef5f502,2025-02-01,관리비,83345,expense,toss,living,account,,이전: 25년 토스뱅크
+a9b1e0c7,2025-03-01,관리비,966374,expense,toss,living,account,,이전: 25년 토스뱅크
+eefe683b,2025-04-01,관리비,348840,expense,toss,living,account,,이전: 25년 토스뱅크
+01aee7ad,2025-05-01,관리비,291200,expense,toss,living,account,,이전: 25년 토스뱅크
+200c621f,2025-06-01,관리비,114250,expense,toss,living,account,,이전: 25년 토스뱅크
+5ea51b4e,2025-07-01,관리비,144595,expense,toss,living,account,,이전: 25년 토스뱅크
+d7a5f399,2025-08-01,관리비,120525,expense,toss,living,account,,이전: 25년 토스뱅크
+12cde5cb,2025-09-01,관리비,139875,expense,toss,living,account,,이전: 25년 토스뱅크
+b99d77e3,2025-10-01,관리비,132815,expense,toss,living,account,,이전: 25년 토스뱅크
+b8a42c21,2025-11-01,관리비,143375,expense,toss,living,account,,이전: 25년 토스뱅크
+01c66926,2025-12-01,관리비,113245,expense,toss,living,account,,이전: 25년 토스뱅크
+d6c5a123,2025-01-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+38adf810,2025-02-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+54c03c73,2025-03-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+fed30f66,2025-04-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+d15ff3ad,2025-05-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+645c763d,2025-06-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+6825e079,2025-07-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+cf941319,2025-08-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+e8e4865f,2025-09-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+97c8c07a,2025-10-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+c2af1dc7,2025-11-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+68e24bc2,2025-12-01,주택청약,100000,expense,toss,saving,account,,이전: 25년 토스뱅크
+3fcc7ffc,2025-01-01,교통비,65000,expense,toss,transport,account,,이전: 25년 토스뱅크
+eecc3960,2025-02-01,교통비,38800,expense,toss,transport,account,,이전: 25년 토스뱅크
+6bb559f3,2025-03-01,교통비,63770,expense,toss,transport,account,,이전: 25년 토스뱅크
+fb0416b9,2025-04-01,교통비,50150,expense,toss,transport,account,,이전: 25년 토스뱅크
+dc45eecb,2025-05-01,교통비,38910,expense,toss,transport,account,,이전: 25년 토스뱅크
+ca7bb39b,2025-06-01,교통비,21790,expense,toss,transport,account,,이전: 25년 토스뱅크
+6c79deac,2025-07-01,교통비,42310,expense,toss,transport,account,,이전: 25년 토스뱅크
+e93107ad,2025-08-01,교통비,40400,expense,toss,transport,account,,이전: 25년 토스뱅크
+d74df958,2025-09-01,교통비,43430,expense,toss,transport,account,,이전: 25년 토스뱅크
+d2c21960,2025-10-01,교통비,47620,expense,toss,transport,account,,이전: 25년 토스뱅크
+8377a7c0,2025-11-01,교통비,32610,expense,toss,transport,account,,이전: 25년 토스뱅크
+dfa81e46,2025-12-01,교통비,46010,expense,toss,transport,account,,이전: 25년 토스뱅크
+c8a84531,2025-01-01,카드대금(현대),203300,expense,toss,card,account,,이전: 25년 토스뱅크
+e7fd6791,2025-02-01,카드대금(현대),14895,expense,toss,card,account,,이전: 25년 토스뱅크
+2f29a6e7,2025-03-01,카드대금(현대),9720,expense,toss,card,account,,이전: 25년 토스뱅크
+6d60752e,2025-04-01,카드대금(현대),216223,expense,toss,card,account,,이전: 25년 토스뱅크
+eba344f5,2025-05-01,카드대금(현대),7584,expense,toss,card,account,,이전: 25년 토스뱅크
+62983fb2,2025-07-01,카드대금(현대),37282,expense,toss,card,account,,이전: 25년 토스뱅크
+83f365c7,2025-09-01,카드대금(현대),19860,expense,toss,card,account,,이전: 25년 토스뱅크
+a3026f5a,2025-10-01,카드대금(현대),10000,expense,toss,card,account,,이전: 25년 토스뱅크
+900a158c,2025-01-01,카드대금(롯데),1514460,expense,toss,card,account,,이전: 25년 토스뱅크
+aa0ed8d0,2025-02-01,카드대금(롯데),1145326,expense,toss,card,account,,이전: 25년 토스뱅크
+092de978,2025-03-01,카드대금(롯데),1232064,expense,toss,card,account,,이전: 25년 토스뱅크
+b70f9279,2025-04-01,카드대금(롯데),1485142,expense,toss,card,account,,이전: 25년 토스뱅크
+6436f721,2025-05-01,카드대금(롯데),675913,expense,toss,card,account,,이전: 25년 토스뱅크
+271c0411,2025-06-01,카드대금(롯데),1054492,expense,toss,card,account,,이전: 25년 토스뱅크
+41d0d2be,2025-07-01,카드대금(롯데),1500,expense,toss,card,account,,이전: 25년 토스뱅크
+eb99910c,2025-11-01,카드대금(롯데),20000,expense,toss,card,account,,이전: 25년 토스뱅크
+d5b4fe58,2025-06-01,카드대금(삼성),20000,expense,toss,card,account,,이전: 25년 토스뱅크
+eca092fc,2025-07-01,카드대금(삼성),2070209,expense,toss,card,account,,이전: 25년 토스뱅크
+8fc15e88,2025-08-01,카드대금(삼성),1667447,expense,toss,card,account,,이전: 25년 토스뱅크
+27e43c24,2025-09-01,카드대금(삼성),1739117,expense,toss,card,account,,이전: 25년 토스뱅크
+37dbbf30,2025-10-01,카드대금(삼성),2170295,expense,toss,card,account,,이전: 25년 토스뱅크
+e91bc1bc,2025-11-01,카드대금(삼성),1637112,expense,toss,card,account,,이전: 25년 토스뱅크
+f631137e,2025-12-01,카드대금(삼성),1177501,expense,toss,card,account,,이전: 25년 토스뱅크
+a01adc49,2025-08-01,카드대금(신한),41910,expense,toss,card,account,,이전: 25년 토스뱅크
+78177068,2025-09-01,카드대금(신한),1980,expense,toss,card,account,,이전: 25년 토스뱅크
+4ea910f9,2025-10-01,카드대금(신한),92230,expense,toss,card,account,,이전: 25년 토스뱅크
+a081d325,2025-11-01,카드대금(신한),25100,expense,toss,card,account,,이전: 25년 토스뱅크
+f1603378,2025-12-01,카드대금(신한),16990,expense,toss,card,account,,이전: 25년 토스뱅크
+25eead3a,2025-01-01,우체국보험,31710,expense,toss,insurance,account,,이전: 25년 토스뱅크
+7dd9b3f9,2025-02-01,우체국보험,31710,expense,toss,insurance,account,,이전: 25년 토스뱅크
+ca76ab2b,2025-03-01,우체국보험,31710,expense,toss,insurance,account,,이전: 25년 토스뱅크
+e841e8a7,2025-04-01,우체국보험,31710,expense,toss,insurance,account,,이전: 25년 토스뱅크
+cb971e7f,2025-05-01,우체국보험,31710,expense,toss,insurance,account,,이전: 25년 토스뱅크
+1e12d025,2025-06-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+195fb26b,2025-07-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+8c0b4f25,2025-08-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+e7a091c0,2025-09-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+d23f0925,2025-10-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+6accd914,2025-11-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+1a7a332c,2025-12-01,우체국보험,49870,expense,toss,insurance,account,,이전: 25년 토스뱅크
+4d1ed944,2025-01-01,대출이자,152765,income,toss,interest,account,,이전: 25년 토스뱅크
+f025d86b,2025-02-01,대출이자,152875,income,toss,interest,account,,이전: 25년 토스뱅크
+b143f9b5,2025-03-01,대출이자,957600,income,toss,interest,account,,이전: 25년 토스뱅크
+e81ab7c5,2025-04-01,대출이자,171780,income,toss,interest,account,,이전: 25년 토스뱅크
+e60e6051,2025-05-01,대출이자,166435,income,toss,interest,account,,이전: 25년 토스뱅크
+da677d99,2025-06-01,대출이자,171985,income,toss,interest,account,,이전: 25년 토스뱅크
+09839915,2025-07-01,대출이자,166435,income,toss,interest,account,,이전: 25년 토스뱅크
+2fdfd5f7,2025-08-01,대출이자,171985,income,toss,interest,account,,이전: 25년 토스뱅크
+1a67b108,2025-09-01,대출이자,171985,income,toss,interest,account,,이전: 25년 토스뱅크
+175558b9,2025-10-01,대출이자,166435,income,toss,interest,account,,이전: 25년 토스뱅크
+fc8c33d0,2025-11-01,대출이자,171985,income,toss,interest,account,,이전: 25년 토스뱅크
+8a89e7f3,2025-12-01,대출이자,166435,income,toss,interest,account,,이전: 25년 토스뱅크
+e9e39f61,2025-01-01,적금,1300000,income,toss,other_income,account,,이전: 25년 토스뱅크
+376b1534,2025-02-01,적금,1150000,income,toss,other_income,account,,이전: 25년 토스뱅크
+2ffe17f3,2025-03-01,적금,1810000,income,toss,other_income,account,,이전: 25년 토스뱅크
+6a0191e6,2025-04-01,적금,700000,income,toss,other_income,account,,이전: 25년 토스뱅크
+0eb68a44,2025-05-01,적금,1850000,income,toss,other_income,account,,이전: 25년 토스뱅크
+28d42826,2025-06-01,적금,1000000,income,toss,other_income,account,,이전: 25년 토스뱅크
+b46f390f,2025-07-01,적금,1000000,income,toss,other_income,account,,이전: 25년 토스뱅크
+f4118cef,2025-08-01,적금,2000000,income,toss,other_income,account,,이전: 25년 토스뱅크
+9d1a8312,2025-09-01,적금,1700000,income,toss,other_income,account,,이전: 25년 토스뱅크
+72f507bf,2025-10-01,적금,1100000,income,toss,other_income,account,,이전: 25년 토스뱅크
+2fb5364a,2025-11-01,적금,1700000,income,toss,other_income,account,,이전: 25년 토스뱅크
+2eeb8965,2025-12-01,적금,1700000,income,toss,other_income,account,,이전: 25년 토스뱅크
+e4a80e93,2025-01-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+9a05fdbe,2025-02-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+a9cc24c0,2025-03-01,여행통장,100000,income,toss,other_income,account,,이전: 25년 토스뱅크
+9b94a815,2025-04-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+7bf1897b,2025-05-01,여행통장,100000,income,toss,other_income,account,,이전: 25년 토스뱅크
+703fbde8,2025-06-01,여행통장,100000,income,toss,other_income,account,,이전: 25년 토스뱅크
+ae498ae7,2025-07-01,여행통장,180000,income,toss,other_income,account,,이전: 25년 토스뱅크
+d727743a,2025-08-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+ca8d0d62,2025-09-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+8a6ce7a3,2025-10-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+7062010b,2025-11-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+139d9956,2025-12-01,여행통장,130000,income,toss,other_income,account,,이전: 25년 토스뱅크
+66f8dd40,2025-01-01,잔돈모으기,3610,income,toss,other_income,account,,이전: 25년 토스뱅크
+08a5be98,2025-02-01,잔돈모으기,1858,income,toss,other_income,account,,이전: 25년 토스뱅크
+08559455,2025-03-01,잔돈모으기,2084,income,toss,other_income,account,,이전: 25년 토스뱅크
+8dc8a961,2025-04-01,잔돈모으기,2363,income,toss,other_income,account,,이전: 25년 토스뱅크
+caa368f2,2025-05-01,잔돈모으기,1799,income,toss,other_income,account,,이전: 25년 토스뱅크
+9e181fd1,2025-06-01,잔돈모으기,2495,income,toss,other_income,account,,이전: 25년 토스뱅크
+27b6b912,2025-07-01,잔돈모으기,2575,income,toss,other_income,account,,이전: 25년 토스뱅크
+9cb9a647,2025-08-01,잔돈모으기,1994,income,toss,other_income,account,,이전: 25년 토스뱅크
+253015d0,2025-09-01,잔돈모으기,1535,income,toss,other_income,account,,이전: 25년 토스뱅크
+bb48093a,2025-10-01,잔돈모으기,2990,income,toss,other_income,account,,이전: 25년 토스뱅크
+be174294,2025-11-01,잔돈모으기,1605,income,toss,other_income,account,,이전: 25년 토스뱅크
+909787e5,2025-12-01,잔돈모으기,1507,income,toss,other_income,account,,이전: 25년 토스뱅크
+c8f8c07d,2025-01-01,보관하기,2010000,income,toss,other_income,account,,이전: 25년 토스뱅크
+f2c786e9,2025-02-01,보관하기,4070003,income,toss,other_income,account,,이전: 25년 토스뱅크
+92f0dfcf,2025-03-01,보관하기,32497582,income,toss,other_income,account,,이전: 25년 토스뱅크
+d30db588,2025-04-01,보관하기,4999444,income,toss,other_income,account,,이전: 25년 토스뱅크
+007877b1,2025-05-01,보관하기,5076578,income,toss,other_income,account,,이전: 25년 토스뱅크
+8dabd804,2025-06-01,보관하기,3000000,income,toss,other_income,account,,이전: 25년 토스뱅크
+6c2a6d15,2025-07-01,보관하기,2099520,income,toss,other_income,account,,이전: 25년 토스뱅크
+ac01ffcb,2025-08-01,보관하기,1622000,income,toss,other_income,account,,이전: 25년 토스뱅크
+c9dccc09,2025-09-01,보관하기,3558000,income,toss,other_income,account,,이전: 25년 토스뱅크
+549a893c,2025-10-01,보관하기,2973194,income,toss,other_income,account,,이전: 25년 토스뱅크
+b7a3080a,2025-11-01,보관하기,2610115,income,toss,other_income,account,,이전: 25년 토스뱅크
+6f0c10a1,2025-12-01,보관하기,2000000,income,toss,other_income,account,,이전: 25년 토스뱅크
+7b69acd6,2025-01-01,식비,146751,expense,toss,food,account,,이전: 25년 토스뱅크
+3b5af835,2025-02-01,식비,96760,expense,toss,food,account,,이전: 25년 토스뱅크
+571bc94c,2025-03-01,식비,150097,expense,toss,food,account,,이전: 25년 토스뱅크
+84e149b3,2025-04-01,식비,154799,expense,toss,food,account,,이전: 25년 토스뱅크
+b4ea2ba3,2025-05-01,식비,71400,expense,toss,food,account,,이전: 25년 토스뱅크
+eeb176b3,2025-06-01,식비,77665,expense,toss,food,account,,이전: 25년 토스뱅크
+cde3a22c,2025-07-01,식비,134600,expense,toss,food,account,,이전: 25년 토스뱅크
+0ad33314,2025-08-01,식비,85400,expense,toss,food,account,,이전: 25년 토스뱅크
+a34a7f41,2025-09-01,식비,104000,expense,toss,food,account,,이전: 25년 토스뱅크
+71b84e6f,2025-10-01,식비,23893,expense,toss,food,account,,이전: 25년 토스뱅크
+18694bd1,2025-11-01,식비,119450,expense,toss,food,account,,이전: 25년 토스뱅크
+bf667fc9,2025-12-01,식비,307700,expense,toss,food,account,,이전: 25년 토스뱅크
+bf6aefbc,2025-01-01,문화/여가,12000,expense,toss,selfdev,account,,이전: 25년 토스뱅크
+76c57617,2025-02-01,문화/여가,22000,expense,toss,selfdev,account,,이전: 25년 토스뱅크
+8105c0a8,2025-04-01,문화/여가,40000,expense,toss,selfdev,account,,이전: 25년 토스뱅크
+358dcb97,2025-07-01,문화/여가,29000,expense,toss,selfdev,account,,이전: 25년 토스뱅크
+09d8b974,2025-08-01,문화/여가,134000,expense,toss,selfdev,account,,이전: 25년 토스뱅크
+8b6b3030,2025-12-01,문화/여가,5000,expense,toss,selfdev,account,,이전: 25년 토스뱅크
+cc454bf7,2025-01-01,여행,162000,expense,toss,travel,account,,이전: 25년 토스뱅크
+a9344459,2025-02-01,여행,145233,expense,toss,travel,account,,이전: 25년 토스뱅크
+16a72096,2025-03-01,여행,286300,expense,toss,travel,account,,이전: 25년 토스뱅크
+cb34d3fe,2025-05-01,여행,306651,expense,toss,travel,account,,이전: 25년 토스뱅크
+33bfcbfd,2025-06-01,여행,164061,expense,toss,travel,account,,이전: 25년 토스뱅크
+318a09e1,2025-07-01,여행,14300,expense,toss,travel,account,,이전: 25년 토스뱅크
+3d7ad13c,2025-08-01,여행,36700,expense,toss,travel,account,,이전: 25년 토스뱅크
+676a086f,2025-09-01,여행,210863,expense,toss,travel,account,,이전: 25년 토스뱅크
+c1a16cd5,2025-10-01,여행,391690,expense,toss,travel,account,,이전: 25년 토스뱅크
+6e8c370e,2025-11-01,여행,437456,expense,toss,travel,account,,이전: 25년 토스뱅크
+3a03d5a1,2025-12-01,여행,119000,expense,toss,travel,account,,이전: 25년 토스뱅크
+bf42101c,2025-01-01,미용/쇼핑,210000,expense,toss,shopping,account,,이전: 25년 토스뱅크
+ae1a126d,2025-04-01,미용/쇼핑,72500,expense,toss,shopping,account,,이전: 25년 토스뱅크
+37091df0,2025-05-01,미용/쇼핑,200000,expense,toss,shopping,account,,이전: 25년 토스뱅크
+47fdfe62,2025-06-01,미용/쇼핑,124530,expense,toss,shopping,account,,이전: 25년 토스뱅크
+b1529c38,2025-07-01,미용/쇼핑,151000,expense,toss,shopping,account,,이전: 25년 토스뱅크
+987b49ad,2025-08-01,미용/쇼핑,43150,expense,toss,shopping,account,,이전: 25년 토스뱅크
+9ca081cf,2025-09-01,미용/쇼핑,50000,expense,toss,shopping,account,,이전: 25년 토스뱅크
+d6cd3557,2025-11-01,미용/쇼핑,22489,expense,toss,shopping,account,,이전: 25년 토스뱅크
+bcf041bd,2025-12-01,미용/쇼핑,15600,expense,toss,shopping,account,,이전: 25년 토스뱅크
+b90b2554,2025-02-01,기타지출,23000,expense,toss,etc,account,,이전: 25년 토스뱅크
+0bb78ac7,2025-03-01,기타지출,220135036,expense,toss,etc,account,,이전: 25년 토스뱅크
+d0d40181,2025-04-01,기타지출,50000,expense,toss,etc,account,,이전: 25년 토스뱅크
+961ac8f6,2025-05-01,기타지출,200000,expense,toss,etc,account,,이전: 25년 토스뱅크
+0457f6ac,2025-06-01,기타지출,70000,expense,toss,etc,account,,이전: 25년 토스뱅크
+8c34a2e2,2025-07-01,기타지출,10000,expense,toss,etc,account,,이전: 25년 토스뱅크
+ccf591bd,2025-08-01,기타지출,29500,expense,toss,etc,account,,이전: 25년 토스뱅크
+c0541c9c,2025-10-01,기타지출,250000,expense,toss,etc,account,,이전: 25년 토스뱅크
+dda2f3d1,2025-11-01,기타지출,100000,expense,toss,etc,account,,이전: 25년 토스뱅크
+fbaa7025,2025-12-01,기타지출,6000,expense,toss,etc,account,,이전: 25년 토스뱅크
+1603fbc4,2025-01-01,총합,6125401,expense,toss,etc,account,,이전: 25년 토스뱅크
+9e1c8e42,2025-02-01,총합,6915339,expense,toss,etc,account,,이전: 25년 토스뱅크
+da53172e,2025-03-01,총합,258042143,expense,toss,etc,account,,이전: 25년 토스뱅크
+addc591a,2025-04-01,총합,8552951,expense,toss,etc,account,,이전: 25년 토스뱅크
+9588b790,2025-05-01,총합,9118180,expense,toss,etc,account,,이전: 25년 토스뱅크
+a9043c3c,2025-06-01,총합,6071138,expense,toss,etc,account,,이전: 25년 토스뱅크
+6158806c,2025-07-01,총합,6233196,expense,toss,etc,account,,이전: 25년 토스뱅크
+f805f10e,2025-08-01,총합,6215881,expense,toss,etc,account,,이전: 25년 토스뱅크
+eef9247b,2025-09-01,총합,8020515,expense,toss,etc,account,,이전: 25년 토스뱅크
+266e8375,2025-10-01,총합,7641032,expense,toss,etc,account,,이전: 25년 토스뱅크
+e5d385f9,2025-11-01,총합,7301167,expense,toss,etc,account,,이전: 25년 토스뱅크
+e1d233ab,2025-12-01,총합,5942858,expense,toss,etc,account,,이전: 25년 토스뱅크
+8870e423,2025-05-01,카카오페이(3.25%),1003080,expense,toss,etc,account,,이전: 25년 토스뱅크
+a6cbb978,2025-06-01,카카오페이(3.25%),1000358,expense,toss,etc,account,,이전: 25년 토스뱅크
+3b80fef5,2025-07-01,카카오페이(3.25%),300160,expense,toss,etc,account,,이전: 25년 토스뱅크
+4122f6d9,2025-08-01,카카오페이(3.25%),301332,expense,toss,etc,account,,이전: 25년 토스뱅크
+93e1bb2b,2025-09-01,카카오페이(3.25%),297469,expense,toss,etc,account,,이전: 25년 토스뱅크
+0f1223ce,2025-10-01,카카오페이(3.25%),299285,expense,toss,etc,account,,이전: 25년 토스뱅크
+9945694c,2025-11-01,카카오페이(3.25%),11,expense,toss,etc,account,,이전: 25년 토스뱅크
+ae80ac46,2025-12-01,카카오페이(3.25%),300685,expense,toss,etc,account,,이전: 25년 토스뱅크
+ac4b5263,2025-05-01,토스,1227,expense,toss,etc,account,,이전: 25년 토스뱅크
+e8c33745,2025-06-01,토스,2849,expense,toss,etc,account,,이전: 25년 토스뱅크
+d355a5e2,2025-07-01,토스,4147,expense,toss,etc,account,,이전: 25년 토스뱅크
+7e2f4dff,2025-08-01,토스,7513,expense,toss,etc,account,,이전: 25년 토스뱅크
+40b37d26,2025-12-01,토스,1726,expense,toss,etc,account,,이전: 25년 토스뱅크
+652a97fe,2025-05-01,케이뱅크,1991535,expense,toss,etc,account,,이전: 25년 토스뱅크
+af2bec18,2025-06-01,국민(모니모 4% -> 3.9%),1996341,expense,toss,etc,account,,이전: 25년 토스뱅크
+d9dfffd0,2025-07-01,국민(모니모 4% -> 3.9%),1134021,expense,toss,etc,account,,이전: 25년 토스뱅크
+39641e45,2025-08-01,국민(모니모 4% -> 3.9%),976482,expense,toss,etc,account,,이전: 25년 토스뱅크
+8d698eaf,2025-09-01,국민(모니모 4% -> 3.9%),134593,expense,toss,etc,account,,이전: 25년 토스뱅크
+9b5d416d,2025-10-01,국민(모니모 4% -> 3.9%),1218280,expense,toss,etc,account,,이전: 25년 토스뱅크
+8856cb3f,2025-11-01,국민(모니모 4% -> 3.9%),852,expense,toss,etc,account,,이전: 25년 토스뱅크
+bbb3aa40,2025-12-01,국민(모니모 4% -> 3.9%),1843077,expense,toss,etc,account,,이전: 25년 토스뱅크
+7b854227,2025-06-01,우리은행(3.1%),1000729,expense,toss,etc,account,,이전: 25년 토스뱅크
+982c6640,2025-09-01,우리은행(3.1%),1993699,expense,toss,etc,account,,이전: 25년 토스뱅크
+fb702504,2025-10-01,우리은행(3.1%),1000000,expense,toss,etc,account,,이전: 25년 토스뱅크
+cb4d8ba7,2025-12-01,우리은행(3.1%),1000000,expense,toss,etc,account,,이전: 25년 토스뱅크
+56b68d24,2025-05-01,총잔액,3385864,expense,toss,etc,account,,이전: 25년 토스뱅크
+fdbc9ca9,2025-06-01,총잔액,4492278,expense,toss,etc,account,,이전: 25년 토스뱅크
+fcba7473,2025-07-01,총잔액,2416497,expense,toss,etc,account,,이전: 25년 토스뱅크
+03338a22,2025-08-01,총잔액,1781544,expense,toss,etc,account,,이전: 25년 토스뱅크
+277eed7e,2025-09-01,총잔액,2788549,expense,toss,etc,account,,이전: 25년 토스뱅크
+981435d8,2025-10-01,총잔액,2776514,expense,toss,etc,account,,이전: 25년 토스뱅크
+8d9c7dcd,2025-11-01,총잔액,835477,expense,toss,etc,account,,이전: 25년 토스뱅크
+6276aec5,2025-12-01,총잔액,3543025,expense,toss,etc,account,,이전: 25년 토스뱅크
+1437039c,2025-09-01,쓰면안되는 돈(예금만기),1865175,expense,toss,etc,account,,이전: 25년 토스뱅크
+e19a138c,2025-10-01,쓰면안되는 돈(예금만기),469511,expense,toss,etc,account,,이전: 25년 토스뱅크
+867829df,2025-11-01,쓰면안되는 돈(예금만기),469511,expense,toss,etc,account,,이전: 25년 토스뱅크
+494921fe,2026-01-01,전월이월,397537,income,toss,other_income,account,,이전: 26년 토스뱅크
+1e380bae,2026-02-01,전월이월,320282,income,toss,other_income,account,,이전: 26년 토스뱅크
+365f98be,2026-03-01,전월이월,1667174,income,toss,other_income,account,,이전: 26년 토스뱅크
+783438b3,2026-04-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+45d82bb7,2026-05-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+f13976b5,2026-06-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+e6c292f3,2026-07-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+c7a362f7,2026-08-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+0c47ff9c,2026-09-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+303b452a,2026-10-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+18c7438a,2026-11-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+61001ce2,2026-12-01,전월이월,63349,income,toss,other_income,account,,이전: 26년 토스뱅크
+460e03e8,2026-01-01,적금,1700000,expense,toss,saving,account,,이전: 26년 토스뱅크
+31ff57a7,2026-02-01,적금,1469511,expense,toss,saving,account,,이전: 26년 토스뱅크
+b10aeaea,2026-03-01,적금,500000,expense,toss,saving,account,,이전: 26년 토스뱅크
+da119681,2026-03-01,적금 비율,1,expense,toss,saving,account,,이전: 26년 토스뱅크
+1110e7ed,2026-01-01,카드대금,1468539,expense,toss,card,account,,이전: 26년 토스뱅크
+a0f3e3e9,2026-02-01,카드대금,1400169,expense,toss,card,account,,이전: 26년 토스뱅크
+14a9aa47,2026-01-01,급여,3815044,income,toss,salary,account,,이전: 26년 토스뱅크
+102fc6c1,2026-02-01,급여,6234020,income,toss,salary,account,,이전: 26년 토스뱅크
+5160b15e,2026-01-01,이자,197,income,toss,interest,account,,이전: 26년 토스뱅크
+20398ffa,2026-02-01,이자,122,income,toss,interest,account,,이전: 26년 토스뱅크
+14639e0b,2026-03-01,이자,43,income,toss,interest,account,,이전: 26년 토스뱅크
+b13c0110,2026-03-01,기타수입,20000,income,toss,other_income,account,,이전: 26년 토스뱅크
+ef8db905,2026-01-01,보관하기 출금,255233,income,toss,saving_return,account,,이전: 26년 토스뱅크
+0b2a5b58,2026-02-01,보관하기 출금,1581465,income,toss,saving_return,account,,이전: 26년 토스뱅크
+35e51a65,2026-03-01,보관하기 출금,500000,income,toss,saving_return,account,,이전: 26년 토스뱅크
+7a3fdaef,2026-01-01,총합,4070474,income,toss,other_income,account,,이전: 26년 토스뱅크
+c7be4862,2026-02-01,총합,4652677,income,toss,other_income,account,,이전: 26년 토스뱅크
+c4cdd9a9,2026-03-01,총합,479957,income,toss,other_income,account,,이전: 26년 토스뱅크
+a61ff123,2026-01-01,관리비,46345,expense,toss,living,account,,이전: 26년 토스뱅크
+83f41eef,2026-02-01,관리비,10555,expense,toss,living,account,,이전: 26년 토스뱅크
+ce5c486f,2026-03-01,관리비,480000,expense,toss,living,account,,이전: 26년 토스뱅크
+cb1100c4,2026-01-01,주택청약,100000,expense,toss,saving,account,,이전: 26년 토스뱅크
+ffbc923a,2026-02-01,주택청약,100000,expense,toss,saving,account,,이전: 26년 토스뱅크
+2d9db283,2026-03-01,주택청약,100000,expense,toss,saving,account,,이전: 26년 토스뱅크
+f0f4b214,2026-01-01,교통비,16050,expense,toss,transport,account,,이전: 26년 토스뱅크
+8b46fa3f,2026-01-01,카드대금(현대),72202,expense,toss,card,account,,이전: 26년 토스뱅크
+5fbd2d82,2026-02-01,카드대금(현대),58862,expense,toss,card,account,,이전: 26년 토스뱅크
+77587b97,2026-01-01,카드대금(롯데),504331,expense,toss,card,account,,이전: 26년 토스뱅크
+352fe5b4,2026-02-01,카드대금(롯데),292402,expense,toss,card,account,,이전: 26년 토스뱅크
+f87bdc48,2026-01-01,카드대금(삼성),892006,expense,toss,card,account,,이전: 26년 토스뱅크
+dad17b89,2026-02-01,카드대금(삼성),1048905,expense,toss,card,account,,이전: 26년 토스뱅크
+f652fce3,2026-01-01,우체국보험,49870,expense,toss,insurance,account,,이전: 26년 토스뱅크
+986b3974,2026-02-01,우체국보험,49870,expense,toss,insurance,account,,이전: 26년 토스뱅크
+5104152b,2026-01-01,대출이자,171985,income,toss,interest,account,,이전: 26년 토스뱅크
+72a94e4e,2026-02-01,대출이자,171985,income,toss,interest,account,,이전: 26년 토스뱅크
+ecec1c65,2026-01-01,적금,1700000,income,toss,other_income,account,,이전: 26년 토스뱅크
+d4091b1f,2026-02-01,적금,1469511,income,toss,other_income,account,,이전: 26년 토스뱅크
+59f3cb2c,2026-03-01,적금,500000,income,toss,other_income,account,,이전: 26년 토스뱅크
+b5e455e7,2026-01-01,여행통장,130000,income,toss,other_income,account,,이전: 26년 토스뱅크
+483bda9d,2026-02-01,여행통장,130000,income,toss,other_income,account,,이전: 26년 토스뱅크
+43b62c24,2026-01-01,잔돈모으기,3017,income,toss,other_income,account,,이전: 26년 토스뱅크
+8abc0ff4,2026-02-01,잔돈모으기,1805,income,toss,other_income,account,,이전: 26년 토스뱅크
+2d1f7988,2026-03-01,잔돈모으기,202,income,toss,other_income,account,,이전: 26년 토스뱅크
+cc4439ea,2026-01-01,식비,4333,expense,toss,food,account,,이전: 26년 토스뱅크
+8513ab8b,2026-02-01,식비,9000,expense,toss,food,account,,이전: 26년 토스뱅크
+54cebd8d,2026-03-01,식비,43666,expense,toss,food,account,,이전: 26년 토스뱅크
+1d88cb68,2026-01-01,여행,322590,expense,toss,travel,account,,이전: 26년 토스뱅크
+2316d27c,2026-01-01,미용/쇼핑,35000,expense,toss,shopping,account,,이전: 26년 토스뱅크
+cb0a0eb7,2026-02-01,미용/쇼핑,2000,expense,toss,shopping,account,,이전: 26년 토스뱅크
+b07dde81,2026-01-01,기타지출,100000,expense,toss,etc,account,,이전: 26년 토스뱅크
+b95fac12,2026-01-01,총합,4147729,expense,toss,etc,account,,이전: 26년 토스뱅크
+aae9bf67,2026-02-01,총합,3305785,expense,toss,etc,account,,이전: 26년 토스뱅크
+7da2a558,2026-03-01,총합,1123868,expense,toss,etc,account,,이전: 26년 토스뱅크
+d8273819,2026-01-01,카카오페이(3.25%),299418,expense,toss,etc,account,,이전: 26년 토스뱅크
+59ed5003,2026-02-01,카카오페이(3.25%),299761,expense,toss,etc,account,,이전: 26년 토스뱅크
+c9e53b17,2026-03-01,카카오페이(3.25%),300039,expense,toss,etc,account,,이전: 26년 토스뱅크
+d6597000,2026-01-01,국민(모니모 4% -> 3.9%),1999967,expense,toss,etc,account,,이전: 26년 토스뱅크
+f587896d,2026-02-01,국민(모니모 4% -> 3.9%),1992089,expense,toss,etc,account,,이전: 26년 토스뱅크
+82104b65,2026-03-01,국민(모니모 4% -> 3.9%),1993799,expense,toss,etc,account,,이전: 26년 토스뱅크
+86d532ae,2026-01-01,우리은행(3.1%),300368,expense,toss,etc,account,,이전: 26년 토스뱅크
+6e333627,2026-02-01,우리은행(3.1%),1995199,expense,toss,etc,account,,이전: 26년 토스뱅크
+4fdbfdde,2026-03-01,우리은행(3.1%),1795199,expense,toss,etc,account,,이전: 26년 토스뱅크
+ada59f2d,2026-01-01,총잔액,2920035,expense,toss,etc,account,,이전: 26년 토스뱅크
+e800906b,2026-02-01,총잔액,5954223,expense,toss,etc,account,,이전: 26년 토스뱅크
+8dce684b,2026-03-01,총잔액,4152386,expense,toss,etc,account,,이전: 26년 토스뱅크
+bab0d640,2026-04-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+300add70,2026-05-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+7c41cb30,2026-06-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+7f1ffbd5,2026-07-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+1dcc186f,2026-08-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+f1d8bd68,2026-09-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+4c430a2e,2026-10-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+e8489967,2026-11-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+0c37d549,2026-12-01,총잔액,63349,expense,toss,etc,account,,이전: 26년 토스뱅크
+ddb96941,2026-02-01,쓰면안되는 돈(예금만기),469511,expense,toss,etc,account,,이전: 26년 토스뱅크
