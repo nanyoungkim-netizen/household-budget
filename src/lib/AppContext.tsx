@@ -349,11 +349,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [update])
 
   const addTransaction = useCallback((tx: Transaction) => {
-    update(d => ({ ...d, transactions: [...d.transactions, tx], lastModified: now() }))
+    update(d => {
+      let accounts = d.accounts
+      if (tx.type === 'transfer' && tx.toAccountId) {
+        // 이체: 보내는 계좌 잔액 감소, 받는 계좌 잔액 증가
+        accounts = accounts.map(a => {
+          if (a.id === tx.accountId)   return { ...a, balance: a.balance - tx.amount }
+          if (a.id === tx.toAccountId) return { ...a, balance: a.balance + tx.amount }
+          return a
+        })
+      }
+      return { ...d, accounts, transactions: [...d.transactions, tx], lastModified: now() }
+    })
   }, [update])
 
   const deleteTransaction = useCallback((id: string) => {
-    update(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }))
+    update(d => {
+      const tx = d.transactions.find(t => t.id === id)
+      let accounts = d.accounts
+      if (tx?.type === 'transfer' && tx.toAccountId) {
+        // 이체 삭제: 잔액 복원
+        accounts = accounts.map(a => {
+          if (a.id === tx.accountId)   return { ...a, balance: a.balance + tx.amount }
+          if (a.id === tx.toAccountId) return { ...a, balance: a.balance - tx.amount }
+          return a
+        })
+      }
+      return { ...d, accounts, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }
+    })
   }, [update])
 
   const setTransactions = useCallback((transactions: Transaction[]) => {

@@ -25,7 +25,8 @@ export interface Transaction {
   description: string
   amount: number
   type: TransactionType
-  accountId: string
+  accountId: string        // 출금 계좌 (이체 시 = 보내는 계좌)
+  toAccountId?: string     // 입금 계좌 (type === 'transfer'일 때만)
   categoryId: string
   paymentMethod: PaymentMethod
   cardId?: string

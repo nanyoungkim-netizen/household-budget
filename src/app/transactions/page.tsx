@@ -9,6 +9,7 @@ function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
 type PaymentTab = 'all' | 'account' | 'card'
+type TxFormType = 'expense' | 'income' | 'transfer'
 
 export default function TransactionsPage() {
   const { data, categories, addTransaction, deleteTransaction } = useApp()
@@ -19,12 +20,13 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState('all')
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('all')
   const [showModal, setShowModal] = useState(false)
+  const [formType, setFormType] = useState<TxFormType>('expense')
   const [form, setForm] = useState({
     date: today.toISOString().slice(0,10),
     description: '',
     amount: '',
-    type: 'expense' as 'income' | 'expense',
     accountId: accounts[0]?.id || '',
+    toAccountId: accounts[1]?.id || accounts[0]?.id || '',
     categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || '',
     paymentMethod: 'account' as PaymentMethod,
     cardId: cards[0]?.id || '',
@@ -32,13 +34,14 @@ export default function TransactionsPage() {
 
   const filtered = transactions
     .filter(t => t.date.startsWith(month))
-    .filter(t => filterAccount === 'all' || t.accountId === filterAccount)
+    .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
-    .filter(t => paymentTab === 'all' || t.paymentMethod === paymentTab)
+    .filter(t => paymentTab === 'all' || (t.type !== 'transfer' && t.paymentMethod === paymentTab))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   const income = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expense = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const transfer = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
 
   const cardSummary = cards.map(card => ({
     card,
@@ -52,25 +55,53 @@ export default function TransactionsPage() {
   }, {})
 
   function handleAdd() {
-    if (!form.description || !form.amount) return
-    const newTx: Transaction = {
-      id: `t${Date.now()}`,
-      date: form.date,
-      description: form.description,
-      amount: Number(form.amount),
-      type: form.type,
-      accountId: form.accountId,
-      categoryId: form.categoryId,
-      paymentMethod: form.paymentMethod,
-      cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
+    if (!form.amount) return
+    if (formType === 'transfer') {
+      if (!form.accountId || !form.toAccountId) return
+      if (form.accountId === form.toAccountId) return alert('보내는 계좌와 받는 계좌가 같습니다.')
+      const newTx: Transaction = {
+        id: `t${Date.now()}`,
+        date: form.date,
+        description: form.description || '계좌 이체',
+        amount: Number(form.amount),
+        type: 'transfer',
+        accountId: form.accountId,
+        toAccountId: form.toAccountId,
+        categoryId: 'transfer',
+        paymentMethod: 'account',
+      }
+      addTransaction(newTx)
+    } else {
+      if (!form.description) return
+      const newTx: Transaction = {
+        id: `t${Date.now()}`,
+        date: form.date,
+        description: form.description,
+        amount: Number(form.amount),
+        type: formType,
+        accountId: form.accountId,
+        categoryId: form.categoryId,
+        paymentMethod: form.paymentMethod,
+        cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
+      }
+      addTransaction(newTx)
     }
-    addTransaction(newTx)
     setShowModal(false)
     setForm(f => ({ ...f, description: '', amount: '' }))
   }
 
-  // 소분류만 표시 (parentId가 string인 것 = 소분류, parentId === null인 것 = 대분류 제외)
-  const filteredCats = categories.filter(c => c.type === form.type && c.parentId !== null)
+  function switchFormType(t: TxFormType) {
+    setFormType(t)
+    if (t !== 'transfer') {
+      setForm(f => ({
+        ...f,
+        categoryId: categories.find(c => c.type === t && c.parentId !== null)?.id || ''
+      }))
+    }
+  }
+
+  // 소분류만 표시
+  const filteredCats = categories.filter(c => c.type === formType && c.parentId !== null)
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -92,7 +123,7 @@ export default function TransactionsPage() {
         ))}
       </div>
 
-      {/* 카드별 요약 (카드 탭) */}
+      {/* 카드별 요약 */}
       {paymentTab === 'card' && cardSummary.length > 0 && (
         <div className="grid grid-cols-2 gap-2 mb-4">
           {cardSummary.map(({ card, total }) => (
@@ -119,21 +150,26 @@ export default function TransactionsPage() {
         </select>
         <select value={filterType} onChange={e => setFilterType(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="all">수입+지출</option>
-          <option value="income">수입만</option>
-          <option value="expense">지출만</option>
+          <option value="all">전체</option>
+          <option value="income">수입</option>
+          <option value="expense">지출</option>
+          <option value="transfer">이체</option>
         </select>
       </div>
 
-      {/* 요약 */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      {/* 요약 카드 */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">수입</div>
-          <div className="text-lg font-bold text-emerald-600">+{fmtKRW(income)}</div>
+          <div className="text-base font-bold text-emerald-600">+{fmtKRW(income)}</div>
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">지출</div>
-          <div className="text-lg font-bold text-red-500">-{fmtKRW(expense)}</div>
+          <div className="text-base font-bold text-red-500">-{fmtKRW(expense)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="text-xs text-gray-500 mb-1">이체</div>
+          <div className="text-base font-bold text-blue-500">{fmtKRW(transfer)}</div>
         </div>
       </div>
 
@@ -147,27 +183,43 @@ export default function TransactionsPage() {
             {grouped[date].map(t => {
               const cat = categories.find(c => c.id === t.categoryId)
               const acc = accounts.find(a => a.id === t.accountId)
+              const toAcc = accounts.find(a => a.id === t.toAccountId)
               const usedCard = t.paymentMethod === 'card' ? cards.find(c => c.id === t.cardId) : null
+              const isTransfer = t.type === 'transfer'
+
               return (
                 <div key={t.id} className="flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center text-base">{cat?.icon}</div>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base ${isTransfer ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                      {isTransfer ? '↔️' : cat?.icon}
+                    </div>
                     <div>
                       <div className="text-sm font-medium text-gray-900">{t.description}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-gray-400">{cat?.name}</span>
-                        <span className="text-gray-200">·</span>
-                        {usedCard ? (
-                          <span className="text-xs px-1.5 py-0.5 rounded-md font-medium text-white" style={{ backgroundColor: usedCard.color }}>{usedCard.name}</span>
+                        {isTransfer ? (
+                          <span className="text-xs text-blue-500 font-medium">
+                            {acc?.name} <span className="text-gray-400">→</span> {toAcc?.name}
+                          </span>
                         ) : (
-                          <span className="text-xs text-gray-400">🏦 {acc?.name}</span>
+                          <>
+                            <span className="text-xs text-gray-400">{cat?.name}</span>
+                            <span className="text-gray-200">·</span>
+                            {usedCard ? (
+                              <span className="text-xs px-1.5 py-0.5 rounded-md font-medium text-white" style={{ backgroundColor: usedCard.color }}>{usedCard.name}</span>
+                            ) : (
+                              <span className="text-xs text-gray-400">🏦 {acc?.name}</span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className={`text-sm font-semibold ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
+                    <div className={`text-sm font-semibold ${
+                      isTransfer ? 'text-blue-500' :
+                      t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
+                    }`}>
+                      {isTransfer ? '' : t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
                     </div>
                     <button onClick={() => deleteTransaction(t.id)}
                       className="text-gray-300 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">삭제</button>
@@ -194,44 +246,112 @@ export default function TransactionsPage() {
               <button onClick={() => setShowModal(false)} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
-              <div className="flex bg-gray-100 rounded-xl p-1">
-                {(['expense','income'] as const).map(type => (
-                  <button key={type} onClick={() => setForm(f => ({ ...f, type, categoryId: categories.find(c => c.type === type && c.parentId !== null)?.id || '' }))}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.type === type ? (type === 'income' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white') : 'text-gray-500'}`}>
-                    {type === 'income' ? '수입' : '지출'}
+              {/* 유형 탭: 지출 / 수입 / 이체 */}
+              <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+                {([
+                  ['expense', '지출', 'bg-red-500'],
+                  ['income',  '수입', 'bg-emerald-500'],
+                  ['transfer','이체', 'bg-blue-500'],
+                ] as const).map(([type, label, activeColor]) => (
+                  <button key={type}
+                    onClick={() => switchFormType(type)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      formType === type ? `${activeColor} text-white` : 'text-gray-500'
+                    }`}>
+                    {label}
                   </button>
                 ))}
               </div>
-              <div className="flex bg-gray-100 rounded-xl p-1">
-                {(['account','card'] as const).map(method => (
-                  <button key={method} onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-                    {method === 'account' ? '🏦 통장' : '💳 카드'}
-                  </button>
-                ))}
-              </div>
-              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <input type="text" placeholder="내용" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <input type="number" placeholder="금액" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <select value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-              {form.paymentMethod === 'card' && (
-                <select value={form.cardId} onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+
+              {/* 이체 모드 */}
+              {formType === 'transfer' ? (
+                <>
+                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" placeholder="이체 금액" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" placeholder="메모 (선택)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+                  {/* 보내는 계좌 → 받는 계좌 */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 mb-1 block">보내는 계좌</label>
+                      <select value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="text-xl text-blue-400 mt-5">→</div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 mb-1 block">받는 계좌</label>
+                      <select value={form.toAccountId} onChange={e => setForm(f => ({ ...f, toAccountId: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 이체 후 잔액 미리보기 */}
+                  {form.amount && form.accountId !== form.toAccountId && (
+                    <div className="bg-blue-50 rounded-xl p-3 space-y-1.5">
+                      <div className="text-xs font-medium text-blue-700 mb-1">이체 후 잔액</div>
+                      {[
+                        { acc: accounts.find(a => a.id === form.accountId), delta: -Number(form.amount) },
+                        { acc: accounts.find(a => a.id === form.toAccountId), delta: +Number(form.amount) },
+                      ].map(({ acc, delta }) => acc && (
+                        <div key={acc.id} className="flex justify-between text-xs">
+                          <span className="text-blue-600">{acc.name}</span>
+                          <span className="font-medium text-blue-800">
+                            {fmtKRW(acc.balance)} → {fmtKRW(acc.balance + delta)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* 일반 수입/지출 모드 */
+                <>
+                  <div className="flex bg-gray-100 rounded-xl p-1">
+                    {(['account','card'] as const).map(method => (
+                      <button key={method} onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
+                        {method === 'account' ? '🏦 통장' : '💳 카드'}
+                      </button>
+                    ))}
+                  </div>
+                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" placeholder="내용" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" placeholder="금액" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <select value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                  {form.paymentMethod === 'card' && (
+                    <select value={form.cardId} onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
+                  <select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                  </select>
+                </>
               )}
-              <select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-              </select>
+
               <button onClick={handleAdd}
-                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">추가하기</button>
+                className={`w-full text-white font-semibold py-3 rounded-xl transition-colors ${
+                  formType === 'transfer' ? 'bg-blue-500 hover:bg-blue-600' :
+                  formType === 'income'   ? 'bg-emerald-500 hover:bg-emerald-600' :
+                                           'bg-red-500 hover:bg-red-600'
+                }`}>
+                {formType === 'transfer' ? '이체하기' : '추가하기'}
+              </button>
             </div>
           </div>
         </div>
