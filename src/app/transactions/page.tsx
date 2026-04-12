@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp } from '@/lib/AppContext'
+import { useApp, computeAccountBalance } from '@/lib/AppContext'
 import { Transaction, PaymentMethod } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -292,21 +292,25 @@ export default function TransactionsPage() {
                     </div>
                   </div>
 
-                  {/* 이체 후 잔액 미리보기 */}
+                  {/* 이체 후 잔액 미리보기 (실시간 잔액 기준) */}
                   {form.amount && form.accountId !== form.toAccountId && (
                     <div className="bg-blue-50 rounded-xl p-3 space-y-1.5">
                       <div className="text-xs font-medium text-blue-700 mb-1">이체 후 잔액</div>
                       {[
                         { acc: accounts.find(a => a.id === form.accountId), delta: -Number(form.amount) },
                         { acc: accounts.find(a => a.id === form.toAccountId), delta: +Number(form.amount) },
-                      ].map(({ acc, delta }) => acc && (
-                        <div key={acc.id} className="flex justify-between text-xs">
-                          <span className="text-blue-600">{acc.name}</span>
-                          <span className="font-medium text-blue-800">
-                            {fmtKRW(acc.balance)} → {fmtKRW(acc.balance + delta)}
-                          </span>
-                        </div>
-                      ))}
+                      ].map(({ acc, delta }) => {
+                        if (!acc) return null
+                        const cur = computeAccountBalance(acc.id, acc.balance, transactions)
+                        return (
+                          <div key={acc.id} className="flex justify-between text-xs">
+                            <span className="text-blue-600">{acc.name}</span>
+                            <span className="font-medium text-blue-800">
+                              {fmtKRW(cur)} → {fmtKRW(cur + delta)}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useApp, getMonthlyStats, getCategoryExpenses } from '@/lib/AppContext'
+import { useApp, getMonthlyStats, getCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function fmtShort(n: number) {
@@ -46,7 +46,13 @@ export default function Dashboard() {
 
   const stats = getMonthlyStats(transactions, currentMonth)
   const catExpenses = getCategoryExpenses(transactions, currentMonth)
-  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
+
+  // 실시간 잔액: 기초잔액 + 전체 거래 반영
+  const accountBalances = accounts.map(a => ({
+    ...a,
+    computed: computeAccountBalance(a.id, a.balance, transactions),
+  }))
+  const totalBalance = accountBalances.reduce((s, a) => s + a.computed, 0)
 
   const recentTx = [...transactions]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -104,17 +110,27 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 계좌별 잔액 */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {accounts.map(acc => (
-          <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: acc.color }}></div>
-              <span className="text-xs text-gray-500 font-medium">{acc.name}</span>
+      {/* 계좌별 실시간 잔액 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+        {accountBalances.map(acc => {
+          const diff = acc.computed - acc.balance  // 기초잔액 대비 변화
+          return (
+            <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500 font-medium">{acc.name}</span>
+                <span className="text-xs text-gray-300">{acc.bank}</span>
+              </div>
+              <div className="text-xl font-bold text-gray-900 tabular-nums">
+                {acc.computed.toLocaleString('ko-KR')}원
+              </div>
+              {diff !== 0 && (
+                <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                  기초 대비 {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                </div>
+              )}
             </div>
-            <div className="text-base font-bold text-gray-900">{fmtShort(acc.balance)}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

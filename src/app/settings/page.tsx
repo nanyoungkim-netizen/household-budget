@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp, DEFAULT_CATEGORIES } from '@/lib/AppContext'
+import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
 import { Account, Card, Category } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -13,7 +13,7 @@ type TabType = '통장' | '카드' | '카테고리'
 
 export default function SettingsPage() {
   const { data, user, signOut, setAccounts, setCards, setCategories, resetAll } = useApp()
-  const { accounts, cards, categories } = data
+  const { accounts, cards, categories, transactions } = data
   const [tab, setTab] = useState<TabType>('통장')
 
   // ── 통장 상태 ──────────────────────────────────────────────────────────────
@@ -166,46 +166,63 @@ export default function SettingsPage() {
       {/* ── 통장 탭 ──────────────────────────────────────────────────────── */}
       {tab === '통장' && (
         <div className="space-y-3">
-          {accounts.map(acc => (
-            <div key={acc.id} className="bg-white rounded-2xl p-5 shadow-sm" style={{ borderLeft: `4px solid ${acc.color}` }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>
-                    {acc.name.charAt(0)}
+          {accounts.map(acc => {
+            const computed = computeAccountBalance(acc.id, acc.balance, transactions)
+            const diff = computed - acc.balance
+            return (
+              <div key={acc.id} className="bg-white rounded-2xl p-5 shadow-sm" style={{ borderLeft: `4px solid ${acc.color}` }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>
+                      {acc.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">{acc.name}</div>
+                      <div className="text-xs text-gray-400">{acc.bank}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-semibold text-gray-900">{acc.name}</div>
-                    <div className="text-xs text-gray-400">{acc.bank}</div>
-                  </div>
+                  <button onClick={() => deleteAccount(acc.id)}
+                    className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
                 </div>
-                <button onClick={() => deleteAccount(acc.id)}
-                  className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
+
+                {/* 실시간 잔액 */}
+                <div className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
+                  <div className="text-xs text-gray-400 mb-0.5">현재 잔액 (거래 반영)</div>
+                  <div className="text-lg font-bold text-gray-900 tabular-nums">{computed.toLocaleString('ko-KR')}원</div>
+                  {diff !== 0 && (
+                    <div className={`text-xs mt-0.5 ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                      기초 대비 {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                    </div>
+                  )}
+                </div>
+
+                {/* 기초 잔액 편집 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">기초 잔액</span>
+                  {editingAccount === acc.id ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="number"
+                        value={editBalances[acc.id] ?? ''}
+                        onChange={e => setEditBalances(prev => ({ ...prev, [acc.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') saveBalance(acc.id); if (e.key === 'Escape') setEditingAccount(null) }}
+                        className="flex-1 border border-blue-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                      <button onClick={() => saveBalance(acc.id)} className="text-xs text-blue-600 font-semibold">저장</button>
+                      <button onClick={() => setEditingAccount(null)} className="text-xs text-gray-400">취소</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setEditingAccount(acc.id); setEditBalances(prev => ({ ...prev, [acc.id]: String(acc.balance) })) }}
+                      className="text-sm text-gray-500 hover:text-blue-600 transition-colors tabular-nums">
+                      {fmtKRW(acc.balance)} <span className="text-xs text-gray-300">(수정)</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">잔액</span>
-                {editingAccount === acc.id ? (
-                  <div className="flex items-center gap-2 flex-1">
-                    <input
-                      type="number"
-                      value={editBalances[acc.id] ?? ''}
-                      onChange={e => setEditBalances(prev => ({ ...prev, [acc.id]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === 'Enter') saveBalance(acc.id); if (e.key === 'Escape') setEditingAccount(null) }}
-                      className="flex-1 border border-blue-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      autoFocus
-                    />
-                    <button onClick={() => saveBalance(acc.id)} className="text-xs text-blue-600 font-semibold">저장</button>
-                    <button onClick={() => setEditingAccount(null)} className="text-xs text-gray-400">취소</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setEditingAccount(acc.id); setEditBalances(prev => ({ ...prev, [acc.id]: String(acc.balance) })) }}
-                    className="font-bold text-gray-900 hover:text-blue-600 transition-colors">
-                    {fmtKRW(acc.balance)}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
 
           <button onClick={() => setShowAccountModal(true)}
             className="w-full bg-white rounded-2xl shadow-sm py-4 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">

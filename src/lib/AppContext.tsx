@@ -349,34 +349,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [update])
 
   const addTransaction = useCallback((tx: Transaction) => {
-    update(d => {
-      let accounts = d.accounts
-      if (tx.type === 'transfer' && tx.toAccountId) {
-        // 이체: 보내는 계좌 잔액 감소, 받는 계좌 잔액 증가
-        accounts = accounts.map(a => {
-          if (a.id === tx.accountId)   return { ...a, balance: a.balance - tx.amount }
-          if (a.id === tx.toAccountId) return { ...a, balance: a.balance + tx.amount }
-          return a
-        })
-      }
-      return { ...d, accounts, transactions: [...d.transactions, tx], lastModified: now() }
-    })
+    update(d => ({ ...d, transactions: [...d.transactions, tx], lastModified: now() }))
   }, [update])
 
   const deleteTransaction = useCallback((id: string) => {
-    update(d => {
-      const tx = d.transactions.find(t => t.id === id)
-      let accounts = d.accounts
-      if (tx?.type === 'transfer' && tx.toAccountId) {
-        // 이체 삭제: 잔액 복원
-        accounts = accounts.map(a => {
-          if (a.id === tx.accountId)   return { ...a, balance: a.balance + tx.amount }
-          if (a.id === tx.toAccountId) return { ...a, balance: a.balance - tx.amount }
-          return a
-        })
-      }
-      return { ...d, accounts, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }
-    })
+    update(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id), lastModified: now() }))
   }, [update])
 
   const setTransactions = useCallback((transactions: Transaction[]) => {
@@ -459,6 +436,33 @@ export function getMonthlyStats(transactions: Transaction[], month: string) {
   const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   return { income, expense, balance: income - expense }
+}
+
+/**
+ * 계좌의 실시간 잔액을 계산합니다.
+ * 기초잔액 (account.balance) + 수입 - 통장결제 지출 + 이체 수신 - 이체 송신
+ *
+ * account.balance 는 사용자가 수동으로 설정한 기준일 잔액이며,
+ * 기록된 모든 거래가 자동으로 반영됩니다.
+ */
+export function computeAccountBalance(
+  accountId: string,
+  baseBalance: number,
+  transactions: Transaction[]
+): number {
+  return transactions.reduce((bal, tx) => {
+    if (tx.type === 'income' && tx.accountId === accountId) {
+      return bal + tx.amount
+    }
+    if (tx.type === 'expense' && tx.accountId === accountId && tx.paymentMethod === 'account') {
+      return bal - tx.amount
+    }
+    if (tx.type === 'transfer') {
+      if (tx.accountId === accountId)   return bal - tx.amount   // 보낸 계좌
+      if (tx.toAccountId === accountId) return bal + tx.amount   // 받은 계좌
+    }
+    return bal
+  }, baseBalance)
 }
 
 export function getCategoryExpenses(transactions: Transaction[], month: string) {
