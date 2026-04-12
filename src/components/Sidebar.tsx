@@ -12,6 +12,7 @@ const navItems = [
   { href: '/cards', icon: '💳', label: '카드·할부' },
   { href: '/savings', icon: '💰', label: '적금·예금' },
   { href: '/goals', icon: '🎯', label: '재무 목표' },
+  { href: '/history', icon: '📚', label: '이전 가계부' },
 ]
 
 export default function Sidebar() {
