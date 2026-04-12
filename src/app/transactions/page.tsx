@@ -85,6 +85,32 @@ export default function TransactionsPage() {
     return acc
   }, {})
 
+  // ── 계좌 필터링 시: 거래 후 잔액 계산 ──────────────────────────────────────
+  // 특정 계좌가 선택됐을 때 각 거래 직후의 잔액을 Map으로 계산
+  const runningBalanceMap = (() => {
+    if (filterAccount === 'all') return new Map<string, number>()
+    const acc = accounts.find(a => a.id === filterAccount)
+    if (!acc) return new Map<string, number>()
+
+    // 해당 계좌의 모든 거래를 오래된 순으로 정렬
+    const accTxs = transactions
+      .filter(t => t.accountId === filterAccount || t.toAccountId === filterAccount)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+
+    let bal = acc.balance
+    const map = new Map<string, number>()
+    for (const t of accTxs) {
+      if (t.type === 'income' && t.accountId === filterAccount) bal += t.amount
+      else if (t.type === 'expense' && t.accountId === filterAccount && t.paymentMethod === 'account') bal -= t.amount
+      else if (t.type === 'transfer') {
+        if (t.accountId === filterAccount) bal -= t.amount
+        else if (t.toAccountId === filterAccount) bal += t.amount
+      }
+      map.set(t.id, bal)
+    }
+    return map
+  })()
+
   // ── 모달 열기 ────────────────────────────────────────────────────────────────
   function openAdd() {
     setEditingId(null)
@@ -317,6 +343,7 @@ export default function TransactionsPage() {
               const toAcc = accounts.find(a => a.id === t.toAccountId)
               const usedCard = t.paymentMethod === 'card' ? cards.find(c => c.id === t.cardId) : null
               const isTransfer = t.type === 'transfer'
+              const runningBalance = runningBalanceMap.get(t.id)
 
               return (
                 <div key={t.id}
@@ -349,11 +376,20 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className={`text-sm font-semibold ${
-                      isTransfer ? 'text-blue-500' :
-                      t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
-                    }`}>
-                      {isTransfer ? '' : t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
+                    <div className="text-right">
+                      {/* 거래 금액 */}
+                      <div className={`text-sm font-semibold ${
+                        isTransfer ? 'text-blue-500' :
+                        t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
+                      }`}>
+                        {isTransfer ? '' : t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
+                      </div>
+                      {/* 거래 후 잔액 — 계좌 필터 선택 시에만 표시 */}
+                      {runningBalance !== undefined && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          잔액 {runningBalance.toLocaleString('ko-KR')}원
+                        </div>
+                      )}
                     </div>
                     {/* 수정 / 삭제 버튼 — hover 시 표시 */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

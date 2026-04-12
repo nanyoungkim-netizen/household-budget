@@ -79,6 +79,14 @@ function isKoreanName(s: string): boolean {
   return KOREAN_NAME_RE.test(base) && base.length >= 2 && base.length <= 4
 }
 
+// 이체로 자동 분류할 키워드
+const TRANSFER_KEYWORDS = ['이체','송금','계좌이동','모임통장','잔돈모으기','달러로모으기','외화저축','계좌간']
+
+function isTransferLike(desc: string, txType: string): boolean {
+  const lower = (desc + txType).toLowerCase().replace(/\s/g, '')
+  return TRANSFER_KEYWORDS.some(kw => lower.includes(kw.replace(/\s/g, '')))
+}
+
 // 토스뱅크 거래유형 → income/expense 판단
 function txTypeToDir(txType: string): 'income' | 'expense' | null {
   const t = txType.trim()
@@ -95,7 +103,7 @@ function suggestCategory(desc: string, txType: string, type: 'income' | 'expense
       return rule.catId
     }
   }
-  // 한국 이름처럼 보이면 → 지출은 송금, 수입은 other_income
+  // 한국 이름처럼 보이면 → 기타
   if (isKoreanName(desc.trim())) {
     return type === 'expense' ? 'etc' : 'other_income'
   }
@@ -148,9 +156,10 @@ interface ImportRow {
   description: string
   txType: string       // 원본 거래유형 (표시용)
   amount: number
-  type: 'income' | 'expense'
+  type: 'income' | 'expense' | 'transfer'
   categoryId: string
   accountId: string
+  toAccountId: string  // 이체 시 입금계좌
   paymentMethod: PaymentMethod
   cardId?: string
   include: boolean
@@ -277,11 +286,21 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
       if (amount === 0) return
 
-      const suggestedCatId = suggestCategory(desc, txType, type)
-      const catList = type === 'income' ? incomeLeaf : expenseLeaf
-      const catExists = catList.some(c => c.id === suggestedCatId)
-      const categoryId = catExists ? suggestedCatId : (catList[0]?.id || '')
-      const autoSuggested = catExists && suggestedCatId !== (type === 'income' ? 'other_income' : 'etc')
+      // 이체 자동 감지
+      const isTransfer = isTransferLike(desc, txType)
+      const finalType: 'income' | 'expense' | 'transfer' = isTransfer ? 'transfer' : type
+
+      let categoryId = 'transfer'
+      let autoSuggested = false
+      if (!isTransfer) {
+        const suggestedCatId = suggestCategory(desc, txType, type)
+        const catList = type === 'income' ? incomeLeaf : expenseLeaf
+        const catExists = catList.some(c => c.id === suggestedCatId)
+        categoryId = catExists ? suggestedCatId : (catList[0]?.id || '')
+        autoSuggested = catExists && suggestedCatId !== (type === 'income' ? 'other_income' : 'etc')
+      }
+
+      const secondAccountId = accounts.find(a => a.id !== defaultAccountId)?.id || defaultAccountId
 
       importRows.push({
         _key: `import_${i}_${Date.now()}`,
@@ -289,9 +308,10 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         description: desc || '(내용 없음)',
         txType,
         amount,
-        type,
+        type: finalType,
         categoryId,
         accountId: defaultAccountId,
+        toAccountId: secondAccountId,
         paymentMethod: 'account',
         cardId: defaultCardId,
         include: true,
@@ -316,16 +336,31 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   function handleImport() {
     const selected = rows.filter(r => r.include && r.amount > 0)
     selected.forEach(r => {
-      const tx: Transaction = {
-        id: `t${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        date: r.date,
-        description: r.description,
-        amount: r.amount,
-        type: r.type,
-        accountId: r.accountId,
-        categoryId: r.categoryId,
-        paymentMethod: r.paymentMethod,
-        cardId: r.paymentMethod === 'card' ? r.cardId : undefined,
+      let tx: Transaction
+      if (r.type === 'transfer') {
+        tx = {
+          id: `t${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          date: r.date,
+          description: r.description || '계좌 이체',
+          amount: r.amount,
+          type: 'transfer',
+          accountId: r.accountId,
+          toAccountId: r.toAccountId,
+          categoryId: 'transfer',
+          paymentMethod: 'account',
+        }
+      } else {
+        tx = {
+          id: `t${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          date: r.date,
+          description: r.description,
+          amount: r.amount,
+          type: r.type,
+          accountId: r.accountId,
+          categoryId: r.categoryId,
+          paymentMethod: r.paymentMethod,
+          cardId: r.paymentMethod === 'card' ? r.cardId : undefined,
+        }
       }
       addTransaction(tx)
     })
@@ -501,7 +536,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                       {colTxType >= 0 && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">거래유형</th>}
                       <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">금액</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500">유형</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">카테고리</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">카테고리 / 이체계좌</th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">계좌</th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">결제</th>
                     </tr>
@@ -509,6 +544,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   <tbody>
                     {rows.map(row => {
                       const catList = row.type === 'income' ? incomeLeaf : expenseLeaf
+                      const isTransferRow = row.type === 'transfer'
                       return (
                         <tr
                           key={row._key}
@@ -553,34 +589,51 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                           <td className="px-3 py-2 text-center">
                             <select value={row.type}
                               onChange={e => {
-                                const t = e.target.value as 'income' | 'expense'
-                                const newCats = t === 'income' ? incomeLeaf : expenseLeaf
-                                updateRow(row._key, { type: t, categoryId: newCats[0]?.id || '', autoSuggested: false })
+                                const t = e.target.value as 'income' | 'expense' | 'transfer'
+                                if (t === 'transfer') {
+                                  updateRow(row._key, { type: t, categoryId: 'transfer', autoSuggested: false })
+                                } else {
+                                  const newCats = t === 'income' ? incomeLeaf : expenseLeaf
+                                  updateRow(row._key, { type: t, categoryId: newCats[0]?.id || '', autoSuggested: false })
+                                }
                               }}
                               className={`border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                                row.type === 'income'
-                                  ? 'border-emerald-200 text-emerald-700 bg-emerald-50'
-                                  : 'border-red-200 text-red-600 bg-red-50'
+                                row.type === 'income'   ? 'border-emerald-200 text-emerald-700 bg-emerald-50' :
+                                row.type === 'transfer' ? 'border-blue-200 text-blue-600 bg-blue-50' :
+                                                         'border-red-200 text-red-600 bg-red-50'
                               }`}
                             >
                               <option value="income">수입</option>
                               <option value="expense">지출</option>
+                              <option value="transfer">이체</option>
                             </select>
                           </td>
-                          {/* 카테고리 */}
+                          {/* 카테고리 or 이체 입금계좌 */}
                           <td className="px-3 py-2">
-                            <select value={row.categoryId}
-                              onChange={e => updateRow(row._key, { categoryId: e.target.value, autoSuggested: false })}
-                              className={`border rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                                row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
-                              }`}
-                            >
-                              {catList.map(c => (
-                                <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                              ))}
-                            </select>
+                            {isTransferRow ? (
+                              <div className="flex items-center gap-1 text-xs text-blue-500 whitespace-nowrap">
+                                <span>→</span>
+                                <select value={row.toAccountId}
+                                  onChange={e => updateRow(row._key, { toAccountId: e.target.value })}
+                                  className="border border-blue-200 bg-blue-50 text-blue-700 rounded-lg px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                >
+                                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                </select>
+                              </div>
+                            ) : (
+                              <select value={row.categoryId}
+                                onChange={e => updateRow(row._key, { categoryId: e.target.value, autoSuggested: false })}
+                                className={`border rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                  row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
+                                }`}
+                              >
+                                {catList.map(c => (
+                                  <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                ))}
+                              </select>
+                            )}
                           </td>
-                          {/* 계좌 */}
+                          {/* 계좌 (이체면 출금계좌) */}
                           <td className="px-3 py-2">
                             <select value={row.accountId}
                               onChange={e => updateRow(row._key, { accountId: e.target.value })}
@@ -589,15 +642,19 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                             </select>
                           </td>
-                          {/* 결제수단 */}
+                          {/* 결제수단 (이체면 비활성) */}
                           <td className="px-3 py-2">
-                            <select value={row.paymentMethod}
-                              onChange={e => updateRow(row._key, { paymentMethod: e.target.value as PaymentMethod })}
-                              className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            >
-                              <option value="account">통장</option>
-                              <option value="card">카드</option>
-                            </select>
+                            {isTransferRow ? (
+                              <span className="text-xs text-gray-300 px-2">—</span>
+                            ) : (
+                              <select value={row.paymentMethod}
+                                onChange={e => updateRow(row._key, { paymentMethod: e.target.value as PaymentMethod })}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              >
+                                <option value="account">통장</option>
+                                <option value="card">카드</option>
+                              </select>
+                            )}
                           </td>
                         </tr>
                       )
