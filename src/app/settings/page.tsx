@@ -2,51 +2,19 @@
 
 import { useState } from 'react'
 import { useApp, DEFAULT_CATEGORIES } from '@/lib/AppContext'
-import { useAppLock } from '@/components/AppLock'
 import { Account, Card, Category } from '@/types'
-import { supabase } from '@/lib/supabase'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 
 const PRESET_COLORS = ['#0064FF','#FFB800','#00B493','#FF6B6B','#4ECDC4','#9B59B6','#E67E22','#1ABC9C','#E74C3C','#0065CC','#E60000','#1A1A1A','#1259AA','#2ECC71','#F39C12']
 const PRESET_ICONS = ['🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','📦','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️','🌿','🎯']
 
-type TabType = '통장' | '카드' | '카테고리' | '보안'
+type TabType = '통장' | '카드' | '카테고리'
 
 export default function SettingsPage() {
   const { data, user, signOut, setAccounts, setCards, setCategories, resetAll } = useApp()
   const { accounts, cards, categories } = data
-  const { password, setPassword } = useAppLock()
   const [tab, setTab] = useState<TabType>('통장')
-
-  // ── 보안 상태 ──────────────────────────────────────────────────────────────
-  const [pwMode, setPwMode] = useState<'view' | 'set' | 'change' | 'remove'>('view')
-  const [pwInput, setPwInput] = useState('')
-  const [pwConfirm, setPwConfirm] = useState('')
-  const [pwCurrent, setPwCurrent] = useState('')
-  const [pwError, setPwError] = useState('')
-
-  function handleSetPassword() {
-    if (pwInput.length < 4) { setPwError('4자 이상 입력하세요'); return }
-    if (pwInput !== pwConfirm) { setPwError('비밀번호가 일치하지 않아요'); return }
-    setPassword(pwInput)
-    setPwMode('view')
-    setPwInput(''); setPwConfirm(''); setPwError('')
-  }
-  function handleChangePassword() {
-    if (pwCurrent !== password) { setPwError('현재 비밀번호가 틀렸어요'); return }
-    if (pwInput.length < 4) { setPwError('새 비밀번호는 4자 이상이어야 해요'); return }
-    if (pwInput !== pwConfirm) { setPwError('새 비밀번호가 일치하지 않아요'); return }
-    setPassword(pwInput)
-    setPwMode('view')
-    setPwInput(''); setPwConfirm(''); setPwCurrent(''); setPwError('')
-  }
-  function handleRemovePassword() {
-    if (pwCurrent !== password) { setPwError('현재 비밀번호가 틀렸어요'); return }
-    setPassword('')
-    setPwMode('view')
-    setPwCurrent(''); setPwError('')
-  }
 
   // ── 통장 상태 ──────────────────────────────────────────────────────────────
   const [showAccountModal, setShowAccountModal] = useState(false)
@@ -168,41 +136,29 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-1">통장, 카드, 카테고리를 관리하세요</p>
       </div>
 
-      {/* 계정 정보 (Supabase 연결된 경우) */}
-      {user && (
-        <div className="bg-blue-50 rounded-2xl p-4 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">
-              {user.email?.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-gray-900">{user.email}</div>
-              <div className="text-xs text-blue-600">☁️ 클라우드 동기화 중</div>
-            </div>
+      {/* 계정 정보 */}
+      <div className="bg-blue-50 rounded-2xl p-4 mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">
+            {user?.email?.charAt(0).toUpperCase()}
           </div>
-          <button onClick={signOut}
-            className="text-xs text-gray-500 hover:text-red-500 transition-colors font-medium">
-            로그아웃
-          </button>
-        </div>
-      )}
-
-      {!user && supabase && (
-        <div className="bg-amber-50 rounded-2xl p-4 mb-5 flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-gray-900">로그인하지 않은 상태</div>
-            <div className="text-xs text-amber-600">데이터가 이 기기에만 저장됩니다</div>
+            <div className="text-sm font-semibold text-gray-900">{user?.email}</div>
+            <div className="text-xs text-blue-600">☁️ 클라우드 동기화 중</div>
           </div>
-          <a href="/login" className="text-xs text-blue-600 font-semibold hover:underline">로그인 →</a>
         </div>
-      )}
+        <button onClick={signOut}
+          className="text-xs text-gray-500 hover:text-red-500 transition-colors font-medium px-3 py-1.5 rounded-lg hover:bg-red-50">
+          로그아웃
+        </button>
+      </div>
 
       {/* 탭 */}
-      <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-5 gap-1 flex-wrap">
-        {(['통장', '카드', '카테고리', '보안'] as const).map(t => (
+      <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-5 gap-1">
+        {(['통장', '카드', '카테고리'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === t ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
-            {t === '보안' ? '🔒 보안' : t}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === t ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+            {t}
           </button>
         ))}
       </div>
@@ -289,7 +245,6 @@ export default function SettingsPage() {
       {/* ── 카테고리 탭 ──────────────────────────────────────────────────── */}
       {tab === '카테고리' && (
         <div className="space-y-4">
-          {/* 지출 카테고리 */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">지출 카테고리</div>
             <div className="space-y-2">
@@ -304,11 +259,9 @@ export default function SettingsPage() {
                         <span className="text-xs text-gray-400">({children.length})</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
+                        <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
-                        <button
-                          onClick={() => deleteCategory(parent.id)}
+                        <button onClick={() => deleteCategory(parent.id)}
                           className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                       </div>
                     </div>
@@ -332,7 +285,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* 수입 카테고리 */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">수입 카테고리</div>
             <div className="space-y-2">
@@ -347,11 +299,9 @@ export default function SettingsPage() {
                         <span className="text-xs text-gray-400">({children.length})</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
+                        <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
-                        <button
-                          onClick={() => deleteCategory(parent.id)}
+                        <button onClick={() => deleteCategory(parent.id)}
                           className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                       </div>
                     </div>
@@ -380,14 +330,13 @@ export default function SettingsPage() {
             <span className="text-xl">+</span> 대분류 추가
           </button>
 
-          {/* 카테고리 초기화 */}
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="text-sm font-semibold text-gray-700 mb-1">카테고리 초기화</div>
-            <div className="text-xs text-gray-400 mb-3">기본 카테고리로 되돌립니다. 예산 데이터는 유지됩니다.</div>
+            <div className="text-xs text-gray-400 mb-3">기본 카테고리로 되돌립니다.</div>
             {confirmReset ? (
               <div className="flex gap-2">
                 <button onClick={resetCategories} className="flex-1 bg-red-500 text-white text-sm font-medium py-2 rounded-xl hover:bg-red-600">확인</button>
-                <button onClick={() => setConfirmReset(false)} className="flex-1 bg-gray-100 text-gray-600 text-sm font-medium py-2 rounded-xl hover:bg-gray-200">취소</button>
+                <button onClick={() => setConfirmReset(false)} className="flex-1 bg-gray-100 text-gray-600 text-sm font-medium py-2 rounded-xl">취소</button>
               </div>
             ) : (
               <button onClick={() => setConfirmReset(true)}
@@ -395,151 +344,11 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* 전체 데이터 초기화 */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-red-100">
             <div className="text-sm font-semibold text-red-600 mb-1">⚠️ 전체 데이터 초기화</div>
             <div className="text-xs text-gray-400 mb-3">모든 거래내역, 예산, 설정이 삭제됩니다.</div>
             <button onClick={resetAll}
               className="text-xs text-red-400 hover:text-red-600 transition-colors">전체 초기화</button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 보안 탭 ──────────────────────────────────────────────────────── */}
-      {tab === '보안' && (
-        <div className="space-y-4">
-          {/* 현재 비밀번호 상태 */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${password ? 'bg-blue-50' : 'bg-gray-100'}`}>
-                {password ? '🔒' : '🔓'}
-              </div>
-              <div>
-                <div className="font-semibold text-gray-900">앱 잠금</div>
-                <div className="text-xs text-gray-400">
-                  {password ? '비밀번호가 설정되어 있어요' : '비밀번호가 설정되지 않았어요'}
-                </div>
-              </div>
-            </div>
-
-            {/* 비밀번호 없는 상태 → 설정하기 */}
-            {!password && pwMode === 'view' && (
-              <button
-                onClick={() => { setPwMode('set'); setPwError('') }}
-                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">
-                비밀번호 설정하기
-              </button>
-            )}
-
-            {/* 비밀번호 있는 상태 → 변경 / 해제 버튼 */}
-            {password && pwMode === 'view' && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setPwMode('change'); setPwError('') }}
-                  className="flex-1 bg-blue-50 text-blue-600 font-semibold py-2.5 rounded-xl hover:bg-blue-100 transition-colors text-sm">
-                  비밀번호 변경
-                </button>
-                <button
-                  onClick={() => { setPwMode('remove'); setPwError('') }}
-                  className="flex-1 bg-gray-100 text-gray-600 font-semibold py-2.5 rounded-xl hover:bg-gray-200 transition-colors text-sm">
-                  잠금 해제
-                </button>
-              </div>
-            )}
-
-            {/* 비밀번호 설정 폼 */}
-            {pwMode === 'set' && (
-              <div className="space-y-3">
-                <input
-                  type="password"
-                  placeholder="새 비밀번호 (4자 이상)"
-                  value={pwInput}
-                  onChange={e => { setPwInput(e.target.value); setPwError('') }}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                />
-                <input
-                  type="password"
-                  placeholder="비밀번호 확인"
-                  value={pwConfirm}
-                  onChange={e => { setPwConfirm(e.target.value); setPwError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleSetPassword()}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {pwError && <p className="text-xs text-red-500">{pwError}</p>}
-                <div className="flex gap-2">
-                  <button onClick={handleSetPassword}
-                    className="flex-1 bg-blue-600 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-700 transition-colors text-sm">설정하기</button>
-                  <button onClick={() => { setPwMode('view'); setPwInput(''); setPwConfirm(''); setPwError('') }}
-                    className="flex-1 bg-gray-100 text-gray-600 font-semibold py-2.5 rounded-xl text-sm">취소</button>
-                </div>
-              </div>
-            )}
-
-            {/* 비밀번호 변경 폼 */}
-            {pwMode === 'change' && (
-              <div className="space-y-3">
-                <input
-                  type="password"
-                  placeholder="현재 비밀번호"
-                  value={pwCurrent}
-                  onChange={e => { setPwCurrent(e.target.value); setPwError('') }}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                />
-                <input
-                  type="password"
-                  placeholder="새 비밀번호 (4자 이상)"
-                  value={pwInput}
-                  onChange={e => { setPwInput(e.target.value); setPwError('') }}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="password"
-                  placeholder="새 비밀번호 확인"
-                  value={pwConfirm}
-                  onChange={e => { setPwConfirm(e.target.value); setPwError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {pwError && <p className="text-xs text-red-500">{pwError}</p>}
-                <div className="flex gap-2">
-                  <button onClick={handleChangePassword}
-                    className="flex-1 bg-blue-600 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-700 transition-colors text-sm">변경하기</button>
-                  <button onClick={() => { setPwMode('view'); setPwInput(''); setPwConfirm(''); setPwCurrent(''); setPwError('') }}
-                    className="flex-1 bg-gray-100 text-gray-600 font-semibold py-2.5 rounded-xl text-sm">취소</button>
-                </div>
-              </div>
-            )}
-
-            {/* 비밀번호 해제 폼 */}
-            {pwMode === 'remove' && (
-              <div className="space-y-3">
-                <input
-                  type="password"
-                  placeholder="현재 비밀번호 입력"
-                  value={pwCurrent}
-                  onChange={e => { setPwCurrent(e.target.value); setPwError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleRemovePassword()}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                />
-                {pwError && <p className="text-xs text-red-500">{pwError}</p>}
-                <div className="flex gap-2">
-                  <button onClick={handleRemovePassword}
-                    className="flex-1 bg-red-500 text-white font-semibold py-2.5 rounded-xl hover:bg-red-600 transition-colors text-sm">잠금 해제</button>
-                  <button onClick={() => { setPwMode('view'); setPwCurrent(''); setPwError('') }}
-                    className="flex-1 bg-gray-100 text-gray-600 font-semibold py-2.5 rounded-xl text-sm">취소</button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-blue-50 rounded-2xl p-4 text-xs text-blue-700 space-y-1">
-            <div className="font-semibold mb-1">💡 알아두세요</div>
-            <div>• 비밀번호는 이 기기에만 저장돼요</div>
-            <div>• 브라우저를 닫으면 다음 접속 때 다시 입력해야 해요</div>
-            <div>• 비밀번호를 잊어버리면 브라우저 데이터를 초기화해야 해요</div>
           </div>
         </div>
       )}

@@ -19,7 +19,7 @@ const mobileNavItems = navItems.slice(0, 4)
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { user } = useApp()
+  const { user, signOut } = useApp()
 
   const isSettingsArea = ['/settings', '/accounts', '/cards'].includes(pathname)
 
@@ -36,6 +36,7 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
+
         <nav className="flex-1 py-4 overflow-y-auto">
           {navItems.map(item => {
             const isActive = pathname === item.href
@@ -55,12 +56,16 @@ export default function Sidebar() {
             )
           })}
         </nav>
-        <div className="p-4 border-t border-gray-100">
-          {user ? (
-            <div className="text-xs text-gray-500 truncate text-center">☁️ {user.email}</div>
-          ) : (
-            <Link href="/login" className="block text-xs text-blue-600 text-center hover:underline">🔑 로그인</Link>
-          )}
+
+        {/* 하단: 계정 정보 + 로그아웃 */}
+        <div className="p-4 border-t border-gray-100 space-y-2">
+          <div className="text-xs text-gray-400 truncate text-center">☁️ {user?.email}</div>
+          <button
+            onClick={signOut}
+            className="w-full text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 py-2 rounded-xl transition-colors"
+          >
+            로그아웃
+          </button>
         </div>
       </aside>
 

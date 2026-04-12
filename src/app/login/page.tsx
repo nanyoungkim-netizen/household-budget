@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/AppContext'
-import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
   const { user, signIn, signUp, isLoading } = useApp()
@@ -43,34 +42,7 @@ export default function LoginPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  // Supabase 미설정 시 안내
-  if (!supabase) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full text-center">
-          <div className="text-4xl mb-4">⚙️</div>
-          <h1 className="text-lg font-bold text-gray-900 mb-2">Supabase 설정 필요</h1>
-          <p className="text-sm text-gray-500 mb-6">
-            로그인 기능을 사용하려면 Supabase 환경변수를 설정해야 합니다.
-          </p>
-          <div className="bg-gray-50 rounded-xl p-4 text-left text-xs font-mono text-gray-700 mb-6 space-y-1">
-            <div>NEXT_PUBLIC_SUPABASE_URL=your-url</div>
-            <div>NEXT_PUBLIC_SUPABASE_ANON_KEY=your-key</div>
-          </div>
-          <a href="https://supabase.com" target="_blank" rel="noopener noreferrer"
-            className="text-blue-600 text-sm hover:underline block mb-4">
-            → supabase.com 에서 프로젝트 생성하기
-          </a>
-          <button onClick={() => router.replace('/')}
-            className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">
-            로그인 없이 계속하기 (기기 저장)
-          </button>
-        </div>
+        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -79,12 +51,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="bg-white rounded-2xl shadow-sm p-8 max-w-sm w-full">
         {/* 로고 */}
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold">가</div>
-          <div>
-            <div className="font-bold text-gray-900">가계부</div>
-            <div className="text-xs text-gray-400">스마트 재무 관리</div>
-          </div>
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mb-3">가</div>
+          <div className="font-bold text-gray-900 text-lg">가계부</div>
+          <div className="text-xs text-gray-400 mt-0.5">스마트 재무 관리</div>
         </div>
 
         {/* 탭 */}
@@ -104,6 +74,7 @@ export default function LoginPage() {
             value={email}
             onChange={e => setEmail(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            autoFocus
           />
           <input
             type="password"
@@ -125,13 +96,6 @@ export default function LoginPage() {
             {loading ? '처리 중...' : tab === 'login' ? '로그인' : '회원가입'}
           </button>
         </form>
-
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <button onClick={() => router.replace('/')}
-            className="w-full text-xs text-gray-400 hover:text-gray-600 transition-colors py-1">
-            로그인 없이 이 기기에서만 사용하기
-          </button>
-        </div>
       </div>
     </div>
   )
