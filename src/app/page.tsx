@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useApp, getMonthlyStats, getCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
+import { useApp, getCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
+import { Transaction } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function fmtShort(n: number) {
@@ -17,22 +18,37 @@ function fmtDate(iso: string | null) {
   return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-const today = new Date()
+const today      = new Date()
+const todayStr   = today.toISOString().slice(0, 10)                           // YYYY-MM-DD
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
 
-function prevMonth(m: string) {
+// ── 날짜 헬퍼 ─────────────────────────────────────────────────────────────────
+function addDays(d: string, n: number) {
+  const dt = new Date(d); dt.setDate(dt.getDate() + n)
+  return dt.toISOString().slice(0, 10)
+}
+function addMonths(m: string, n: number) {
   const [y, mo] = m.split('-').map(Number)
-  const d = new Date(y, mo - 2, 1)
+  const d = new Date(y, mo - 1 + n, 1)
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
 }
-function nextMonth(m: string) {
-  const [y, mo] = m.split('-').map(Number)
-  const d = new Date(y, mo, 1)
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+function dayLabel(d: string) {
+  const dt = new Date(d + 'T00:00:00')
+  const dow = ['일','월','화','수','목','금','토'][dt.getDay()]
+  return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일 (${dow})`
 }
 function monthLabel(m: string) {
   const [y, mo] = m.split('-').map(Number)
   return `${y}년 ${mo}월`
+}
+
+// ── 통계 계산 (일/월 공통) ────────────────────────────────────────────────────
+function calcStats(txs: Transaction[]) {
+  const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const refund  = txs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
+  const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const netExpense = Math.max(0, expense - refund)
+  return { income, expense: netExpense, refund, balance: income - netExpense }
 }
 
 export default function Dashboard() {
@@ -40,8 +56,13 @@ export default function Dashboard() {
   const router = useRouter()
   const { accounts, transactions, goals, budgets, lastModified, isSetupComplete } = data
 
+  type ViewMode = 'day' | 'month'
+  const [viewMode, setViewMode]       = useState<ViewMode>('day')
+  const [selectedDay, setSelectedDay] = useState(todayStr)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const isCurrentMonth = selectedMonth === currentMonth
+
+  const isToday      = selectedDay === todayStr
+  const isThisMonth  = selectedMonth === currentMonth
 
   // 초기 설정 미완료 시 온보딩으로
   if (!isSetupComplete) {
@@ -59,33 +80,40 @@ export default function Dashboard() {
     )
   }
 
-  const stats = getMonthlyStats(transactions, selectedMonth)
-  const catExpenses = getCategoryExpenses(transactions, selectedMonth)
+  // ── 기간 필터링 ───────────────────────────────────────────────────────────
+  const prefix      = viewMode === 'day' ? selectedDay : selectedMonth
+  const periodTxs   = transactions.filter(t => t.date.startsWith(prefix))
+  const stats       = calcStats(periodTxs)
+  const catExpenses = getCategoryExpenses(transactions, viewMode === 'day' ? selectedDay : selectedMonth)
 
-  // 실시간 잔액 (전체 거래 기준 — 월 필터 없음)
+  // 거래 목록 (최신순, 최대 8개)
+  const listTx = [...periodTxs]
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+    .slice(0, 8)
+
+  // 계좌 실시간 잔액
   const accountBalances = accounts.map(a => ({
     ...a,
     computed: computeAccountBalance(a.id, a.balance, transactions),
   }))
   const totalBalance = accountBalances.reduce((s, a) => s + a.computed, 0)
 
-  // 선택 월 거래
-  const monthTx = transactions
-    .filter(t => t.date.startsWith(selectedMonth))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
-    .slice(0, 5)
+  // 예산 — 월 기준
+  const budgetMonth  = viewMode === 'day' ? selectedDay.slice(0, 7) : selectedMonth
+  const totalBudget  = budgets.filter(b => b.month === budgetMonth).reduce((s, b) => s + b.amount, 0)
+  const budgetUsed   = Object.values(getCategoryExpenses(transactions, budgetMonth)).reduce((s, v) => s + v, 0)
+  const budgetPct    = totalBudget > 0 ? Math.min((budgetUsed / totalBudget) * 100, 100) : 0
+  const budgetLeft   = totalBudget - budgetUsed
 
-  // 예산 (선택 월)
-  const totalBudget = budgets.filter(b => b.month === selectedMonth).reduce((s, b) => s + b.amount, 0)
-  const budgetUsed  = Object.values(catExpenses).reduce((s, v) => s + v, 0)
-  const budgetPct   = totalBudget > 0 ? Math.min((budgetUsed / totalBudget) * 100, 100) : 0
-  const budgetLeft  = totalBudget - budgetUsed
+  // ── 라벨 ─────────────────────────────────────────────────────────────────
+  const periodLabel = viewMode === 'day' ? dayLabel(selectedDay) : monthLabel(selectedMonth)
+  const isNow       = viewMode === 'day' ? isToday : isThisMonth
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
 
-      {/* 헤더 + 월 선택 */}
-      <div className="flex items-center justify-between mb-5">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">안녕하세요 👋</h1>
           {lastModified && (
@@ -98,72 +126,103 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* 월 네비게이터 */}
-      <div className="flex items-center justify-center gap-3 mb-4">
-        <button onClick={() => setSelectedMonth(prevMonth(selectedMonth))}
-          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-500 transition-colors text-lg">
-          ‹
-        </button>
-        <div className="flex items-center gap-2">
-          <input
-            type="month"
-            value={selectedMonth}
-            max={currentMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent text-center cursor-pointer"
-          />
-          {!isCurrentMonth && (
-            <button onClick={() => setSelectedMonth(currentMonth)}
-              className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap">
-              오늘로
+      {/* 일/월 토글 + 네비게이터 */}
+      <div className="bg-white rounded-2xl shadow-sm p-3 mb-4 flex items-center gap-3">
+        {/* 토글 */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
+          {(['day','month'] as ViewMode[]).map(m => (
+            <button key={m} onClick={() => setViewMode(m)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === m ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+              }`}>
+              {m === 'day' ? '일별' : '월별'}
             </button>
-          )}
+          ))}
         </div>
-        <button
-          onClick={() => setSelectedMonth(nextMonth(selectedMonth))}
-          disabled={selectedMonth >= currentMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-500 transition-colors text-lg disabled:opacity-30 disabled:cursor-not-allowed">
-          ›
-        </button>
-      </div>
 
-      {/* 이달 요약 카드 */}
-      <div className="bg-blue-600 rounded-2xl p-5 mb-4 text-white">
-        <div className="text-sm font-medium opacity-80 mb-3">{monthLabel(selectedMonth)} 현황</div>
+        {/* 네비게이터 */}
+        <div className="flex items-center gap-1 flex-1 justify-center">
+          <button
+            onClick={() => viewMode === 'day'
+              ? setSelectedDay(addDays(selectedDay, -1))
+              : setSelectedMonth(addMonths(selectedMonth, -1))
+            }
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-lg transition-colors">
+            ‹
+          </button>
 
-        <div className="grid grid-cols-3 gap-3">
-          {/* 수입 */}
-          <div className="bg-white/10 rounded-xl p-3">
-            <div className="text-xs opacity-70 mb-1">수입</div>
-            <div className="text-lg font-bold tabular-nums">+{fmtShort(stats.income)}</div>
-          </div>
-          {/* 지출 */}
-          <div className="bg-white/10 rounded-xl p-3">
-            <div className="text-xs opacity-70 mb-1">
-              지출{stats.refund > 0 && <span className="ml-1 opacity-60 text-xs">(환급 차감)</span>}
-            </div>
-            <div className="text-lg font-bold tabular-nums">-{fmtShort(stats.expense)}</div>
-            {stats.refund > 0 && (
-              <div className="text-xs opacity-60 mt-0.5">환급 -{fmtShort(stats.refund)}</div>
+          <div className="flex items-center gap-1.5">
+            {viewMode === 'day' ? (
+              <input type="date" value={selectedDay} max={todayStr}
+                onChange={e => setSelectedDay(e.target.value)}
+                className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent text-center cursor-pointer" />
+            ) : (
+              <input type="month" value={selectedMonth} max={currentMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent text-center cursor-pointer" />
             )}
           </div>
-          {/* 순수입 */}
+
+          <button
+            onClick={() => viewMode === 'day'
+              ? setSelectedDay(addDays(selectedDay, 1))
+              : setSelectedMonth(addMonths(selectedMonth, 1))
+            }
+            disabled={isNow}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed">
+            ›
+          </button>
+        </div>
+
+        {/* 오늘/이번달로 */}
+        {!isNow && (
+          <button
+            onClick={() => viewMode === 'day' ? setSelectedDay(todayStr) : setSelectedMonth(currentMonth)}
+            className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1.5 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap flex-shrink-0">
+            {viewMode === 'day' ? '오늘' : '이번달'}
+          </button>
+        )}
+      </div>
+
+      {/* 요약 카드 */}
+      <div className="bg-blue-600 rounded-2xl p-5 mb-4 text-white">
+        <div className="text-xs font-medium opacity-70 mb-3">{periodLabel} 현황</div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/10 rounded-xl p-3">
+            <div className="text-xs opacity-70 mb-1">수입</div>
+            <div className="text-base font-bold tabular-nums leading-tight">
+              +{fmtShort(stats.income)}
+            </div>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3">
+            <div className="text-xs opacity-70 mb-1 flex items-center gap-1">
+              지출
+              {stats.refund > 0 && <span className="opacity-60 text-xs">-환급</span>}
+            </div>
+            <div className="text-base font-bold tabular-nums leading-tight">
+              -{fmtShort(stats.expense)}
+            </div>
+            {stats.refund > 0 && (
+              <div className="text-xs opacity-60 mt-0.5">↩ {fmtShort(stats.refund)}</div>
+            )}
+          </div>
           <div className={`rounded-xl p-3 ${stats.balance >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
             <div className="text-xs opacity-70 mb-1">순수입</div>
-            <div className="text-lg font-bold tabular-nums">
+            <div className="text-base font-bold tabular-nums leading-tight">
               {stats.balance >= 0 ? '+' : ''}{fmtShort(stats.balance)}
             </div>
           </div>
         </div>
 
-        {/* 총 자산 (현재 기준) */}
-        <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between">
+        {/* 총 자산 */}
+        <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between">
           <div className="text-xs opacity-70">현재 총 자산</div>
-          <div className="text-xl font-bold tabular-nums">{fmtKRW(totalBalance)}</div>
+          <div className="text-lg font-bold tabular-nums">{fmtKRW(totalBalance)}</div>
         </div>
       </div>
 
-      {/* 계좌별 실시간 잔액 */}
+      {/* 계좌별 잔액 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
         {accountBalances.map(acc => {
           const diff = acc.computed - acc.balance
@@ -184,10 +243,12 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        {/* 예산 현황 */}
+        {/* 예산 현황 (항상 월 기준) */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold text-gray-900 text-sm">{monthLabel(selectedMonth)} 예산</div>
+            <div className="font-semibold text-gray-900 text-sm">
+              {monthLabel(budgetMonth)} 예산
+            </div>
             <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
           </div>
           {totalBudget > 0 ? (
@@ -245,44 +306,44 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 이달 거래 (선택 월) */}
+      {/* 거래 목록 */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="font-semibold text-gray-900 text-sm">
-            {isCurrentMonth ? '최근 거래' : `${monthLabel(selectedMonth)} 거래`}
+            {isNow && viewMode === 'day' ? '오늘 거래' : `${periodLabel} 거래`}
           </div>
           <Link href="/transactions" className="text-xs text-blue-600">전체보기 →</Link>
         </div>
-        {monthTx.length > 0 ? (
+
+        {listTx.length > 0 ? (
           <div className="space-y-3">
-            {monthTx.map(t => {
-              const cat = categories.find(c => c.id === t.categoryId)
-              const acc = accounts.find(a => a.id === t.accountId)
-              const toAcc = accounts.find(a => a.id === t.toAccountId)
+            {listTx.map(t => {
+              const cat      = categories.find(c => c.id === t.categoryId)
+              const acc      = accounts.find(a => a.id === t.accountId)
+              const toAcc    = accounts.find(a => a.id === t.toAccountId)
               const isTransfer = t.type === 'transfer'
               const isRefund   = t.type === 'refund'
               return (
                 <div key={t.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base ${
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${
                       isTransfer ? 'bg-blue-50' : isRefund ? 'bg-purple-50' : 'bg-gray-50'
                     }`}>
                       {isTransfer ? '↔️' : isRefund ? '↩️' : cat?.icon}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1">
-                        <span className="text-sm font-medium text-gray-900">{t.description}</span>
-                        {isRefund && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md font-medium">환급</span>}
+                        <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
+                        {isRefund && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md font-medium flex-shrink-0">환급</span>}
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {t.date}
-                        {isTransfer ? ` · ${acc?.name} → ${toAcc?.name}` : ` · ${acc?.name}`}
+                      <div className="text-xs text-gray-400 truncate">
+                        {t.date}{isTransfer ? ` · ${acc?.name} → ${toAcc?.name}` : ` · ${acc?.name}`}
                       </div>
                     </div>
                   </div>
-                  <div className={`text-sm font-semibold tabular-nums ${
-                    isTransfer  ? 'text-blue-500' :
-                    isRefund    ? 'text-purple-600' :
+                  <div className={`text-sm font-semibold tabular-nums flex-shrink-0 ml-2 ${
+                    isTransfer ? 'text-blue-500' :
+                    isRefund   ? 'text-purple-600' :
                     t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
                   }`}>
                     {isTransfer ? '' : (t.type === 'income' || isRefund) ? '+' : '-'}{fmtKRW(t.amount)}
@@ -294,7 +355,9 @@ export default function Dashboard() {
         ) : (
           <div className="text-center py-8 text-gray-400">
             <div className="text-3xl mb-2">📭</div>
-            <p className="text-sm">{monthLabel(selectedMonth)} 거래 내역이 없어요</p>
+            <p className="text-sm">
+              {viewMode === 'day' && isToday ? '오늘 거래 내역이 없어요' : `${periodLabel} 거래 내역이 없어요`}
+            </p>
             <Link href="/transactions" className="text-xs text-blue-500 underline mt-1 block">거래 추가하기</Link>
           </div>
         )}
