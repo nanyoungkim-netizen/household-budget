@@ -462,8 +462,8 @@ export function computeAccountBalance(
     if (tx.type === 'income' && tx.accountId === accountId) {
       return bal + tx.amount
     }
-    if (tx.type === 'refund' && tx.accountId === accountId) {
-      return bal + tx.amount   // 환급 = 통장 입금
+    if (tx.type === 'refund' && tx.paymentMethod !== 'card' && tx.accountId === accountId) {
+      return bal + tx.amount   // 통장 환급 = 통장 입금 (카드 환급은 잔액 미반영)
     }
     if (tx.type === 'expense' && tx.accountId === accountId && tx.paymentMethod === 'account') {
       return bal - tx.amount

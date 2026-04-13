@@ -91,8 +91,8 @@ export default function TransactionsPage() {
   const cardMonthlyTotals = cards.map(card => ({
     card,
     total: transactions
-      .filter(t => t.date.startsWith(month) && t.paymentMethod === 'card' && t.cardId === card.id && t.type === 'expense')
-      .reduce((s, t) => s + t.amount, 0),
+      .filter(t => t.date.startsWith(month) && t.paymentMethod === 'card' && t.cardId === card.id && (t.type === 'expense' || t.type === 'refund'))
+      .reduce((s, t) => t.type === 'refund' ? s - t.amount : s + t.amount, 0),
   }))
 
   const grouped = filtered.reduce<Record<string, Transaction[]>>((acc, t) => {
@@ -536,7 +536,10 @@ export default function TransactionsPage() {
               {/* 환급 안내 */}
               {formType === 'refund' && (
                 <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5 text-xs text-purple-700 leading-relaxed">
-                  💜 <strong>환급/차감</strong>: 통장에는 <strong>입금</strong>되고, 선택한 지출 항목에서는 <strong>차감</strong>됩니다.
+                  {form.paymentMethod === 'card'
+                    ? <>💳 <strong>카드 환급/할인</strong>: 카드 이용금액에서 <strong>차감</strong>되고, 선택한 지출 항목에서도 <strong>차감</strong>됩니다.</>
+                    : <>💜 <strong>통장 환급</strong>: 통장에 <strong>입금</strong>되고, 선택한 지출 항목에서 <strong>차감</strong>됩니다.</>
+                  }
                 </div>
               )}
 
@@ -599,18 +602,16 @@ export default function TransactionsPage() {
               ) : (
                 /* ── 수입 / 지출 / 환급 ── */
                 <>
-                  {/* 환급은 항상 통장 입금이므로 결제수단 탭 숨김 */}
-                  {formType !== 'refund' && (
-                    <div className="flex bg-gray-100 rounded-xl p-1">
-                      {(['account','card'] as const).map(method => (
-                        <button key={method}
-                          onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
-                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-                          {method === 'account' ? '🏦 통장' : '💳 카드'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* 결제수단 탭 (이체 제외) */}
+                  <div className="flex bg-gray-100 rounded-xl p-1">
+                    {(['account','card'] as const).map(method => (
+                      <button key={method}
+                        onClick={() => setForm(f => ({ ...f, paymentMethod: method }))}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${form.paymentMethod === method ? (formType === 'refund' ? 'bg-purple-500 text-white' : 'bg-blue-600 text-white') : 'text-gray-500'}`}>
+                        {method === 'account' ? '🏦 통장' : '💳 카드'}
+                      </button>
+                    ))}
+                  </div>
                   <input type="date" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -623,16 +624,21 @@ export default function TransactionsPage() {
                   <input type="number" placeholder="금액" value={form.amount}
                     onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <select value={form.accountId}
-                    onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
+                  {/* 카드 환급이면 계좌 숨기고 카드만 / 그 외는 계좌 표시 */}
+                  {!(formType === 'refund' && form.paymentMethod === 'card') && (
+                    <select value={form.accountId}
+                      onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  )}
                   {form.paymentMethod === 'card' && (
                     <>
                       <select value={form.cardId}
                         onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
+                          formType === 'refund' ? 'border-purple-200 focus:ring-purple-400' : 'border-gray-200 focus:ring-blue-500'
+                        }`}>
                         {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                       {/* 할부 선택 — 수정 모드에서는 숨김 */}
