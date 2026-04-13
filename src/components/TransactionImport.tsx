@@ -317,6 +317,35 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   const [rows, setRows] = useState<ImportRow[]>([])
 
+  // 일괄 변경용 선택 상태
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  const [bulkType, setBulkType]         = useState<'income' | 'expense' | 'transfer'>('expense')
+  const [bulkCatId, setBulkCatId]       = useState('')
+
+  function toggleBulkSelect(key: string, checked: boolean) {
+    setBulkSelected(prev => {
+      const next = new Set(prev)
+      checked ? next.add(key) : next.delete(key)
+      return next
+    })
+  }
+  function toggleBulkAll(checked: boolean) {
+    setBulkSelected(checked ? new Set(rows.map(r => r._key)) : new Set())
+  }
+  function applyBulk() {
+    if (bulkSelected.size === 0) return
+    setRows(prev => prev.map(r => {
+      if (!bulkSelected.has(r._key)) return r
+      if (bulkType === 'transfer') {
+        return { ...r, type: bulkType, categoryId: 'transfer', autoSuggested: false }
+      }
+      const catList = bulkType === 'income' ? incomeLeaf : expenseLeaf
+      const catId = bulkCatId && catList.some(c => c.id === bulkCatId) ? bulkCatId : (catList[0]?.id || '')
+      return { ...r, type: bulkType, categoryId: catId, autoSuggested: false }
+    }))
+    setBulkSelected(new Set())
+  }
+
   const defaultAccountId = accounts[0]?.id || ''
   const defaultCardId    = cards[0]?.id || ''
 
@@ -840,16 +869,65 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                 </div>
               </div>
 
+              {/* 일괄 변경 툴바 */}
+              {bulkSelected.size > 0 && (
+                <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-indigo-700">{bulkSelected.size}개 선택됨</span>
+                  <select
+                    value={bulkType}
+                    onChange={e => { setBulkType(e.target.value as 'income' | 'expense' | 'transfer'); setBulkCatId('') }}
+                    className="border border-indigo-200 rounded-lg px-2 py-1 text-xs text-indigo-700 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    <option value="expense">지출</option>
+                    <option value="income">수입</option>
+                    <option value="transfer">이체</option>
+                  </select>
+                  {bulkType !== 'transfer' && (
+                    <select
+                      value={bulkCatId}
+                      onChange={e => setBulkCatId(e.target.value)}
+                      className="border border-indigo-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    >
+                      <option value="">-- 카테고리 선택 --</option>
+                      {(bulkType === 'income' ? incomeLeaf : expenseLeaf).map(c => (
+                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    onClick={applyBulk}
+                    className="px-3 py-1 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    일괄 적용
+                  </button>
+                  <button
+                    onClick={() => setBulkSelected(new Set())}
+                    className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    선택 해제
+                  </button>
+                </div>
+              )}
+
               {/* 검토 테이블 */}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-3 py-2.5 text-center w-10">
+                      <th className="px-2 py-2.5 text-center w-8">
+                        <input type="checkbox"
+                          checked={rows.length > 0 && bulkSelected.size === rows.length}
+                          onChange={e => toggleBulkAll(e.target.checked)}
+                          className="rounded accent-indigo-600"
+                          title="일괄 선택"
+                        />
+                      </th>
+                      <th className="px-2 py-2.5 text-center w-10">
                         <input type="checkbox"
                           checked={rows.every(r => r.include)}
                           onChange={e => toggleAll(e.target.checked)}
                           className="rounded"
+                          title="가져오기 포함"
                         />
                       </th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">날짜</th>
@@ -871,8 +949,15 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                           key={row._key}
                           className={`border-b border-gray-50 transition-colors ${row.include ? 'hover:bg-gray-50/50' : 'opacity-40 bg-gray-50'}`}
                         >
-                          {/* 체크박스 */}
-                          <td className="px-3 py-2 text-center">
+                          {/* 일괄선택 체크박스 */}
+                          <td className="px-2 py-2 text-center">
+                            <input type="checkbox"
+                              checked={bulkSelected.has(row._key)}
+                              onChange={e => toggleBulkSelect(row._key, e.target.checked)}
+                              className="rounded accent-indigo-600" />
+                          </td>
+                          {/* 포함 체크박스 */}
+                          <td className="px-2 py-2 text-center">
                             <input type="checkbox" checked={row.include}
                               onChange={e => updateRow(row._key, { include: e.target.checked })}
                               className="rounded" />
