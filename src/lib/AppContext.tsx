@@ -439,9 +439,11 @@ export function useApp() {
 // 편의 함수
 export function getMonthlyStats(transactions: Transaction[], month: string) {
   const txs = transactions.filter(t => t.date.startsWith(month))
-  const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const refund  = txs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
   const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  return { income, expense, balance: income - expense }
+  const netExpense = Math.max(0, expense - refund)   // 환급 차감 후 실지출
+  return { income, expense: netExpense, refund, balance: income - netExpense }
 }
 
 /**
@@ -476,7 +478,12 @@ export function computeAccountBalance(
 
 export function getCategoryExpenses(transactions: Transaction[], month: string) {
   const map: Record<string, number> = {}
-  transactions.filter(t => t.date.startsWith(month) && t.type === 'expense')
-    .forEach(t => { map[t.categoryId] = (map[t.categoryId] || 0) + t.amount })
+  transactions.filter(t => t.date.startsWith(month) && (t.type === 'expense' || t.type === 'refund'))
+    .forEach(t => {
+      const delta = t.type === 'refund' ? -t.amount : t.amount
+      map[t.categoryId] = (map[t.categoryId] || 0) + delta
+    })
+  // 음수 방지
+  Object.keys(map).forEach(k => { if (map[k] < 0) map[k] = 0 })
   return map
 }
