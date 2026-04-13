@@ -440,7 +440,8 @@ export function useApp() {
 export function getMonthlyStats(transactions: Transaction[], month: string) {
   const txs = transactions.filter(t => t.date.startsWith(month))
   const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const refund  = txs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
+  // 카드 환급은 예산에 반영 안 함 (통장 환급만 차감)
+  const refund  = txs.filter(t => t.type === 'refund' && t.paymentMethod !== 'card').reduce((s, t) => s + t.amount, 0)
   const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const netExpense = Math.max(0, expense - refund)   // 환급 차감 후 실지출
   return { income, expense: netExpense, refund, balance: income - netExpense }
@@ -478,7 +479,8 @@ export function computeAccountBalance(
 
 export function getCategoryExpenses(transactions: Transaction[], month: string) {
   const map: Record<string, number> = {}
-  transactions.filter(t => t.date.startsWith(month) && (t.type === 'expense' || t.type === 'refund'))
+  // 카드 환급은 카테고리 차감 안 함 (통장 환급만 차감)
+  transactions.filter(t => t.date.startsWith(month) && (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card')))
     .forEach(t => {
       const delta = t.type === 'refund' ? -t.amount : t.amount
       map[t.categoryId] = (map[t.categoryId] || 0) + delta

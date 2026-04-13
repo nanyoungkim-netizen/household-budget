@@ -47,9 +47,9 @@ export default function BudgetPage() {
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
-  // 지출 + 환급(차감) 모두 포함
+  // 지출 + 통장환급(차감)만 포함 — 카드 환급은 예산에 반영 안 함
   const monthTx = transactions.filter(t =>
-    t.date.startsWith(month) && (t.type === 'expense' || t.type === 'refund')
+    t.date.startsWith(month) && (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
 
   function getChildren(parentId: string) {

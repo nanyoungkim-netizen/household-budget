@@ -537,7 +537,7 @@ export default function TransactionsPage() {
               {formType === 'refund' && (
                 <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5 text-xs text-purple-700 leading-relaxed">
                   {form.paymentMethod === 'card'
-                    ? <>💳 <strong>카드 환급/할인</strong>: 카드 이용금액에서 <strong>차감</strong>되고, 선택한 지출 항목에서도 <strong>차감</strong>됩니다.</>
+                    ? <>💳 <strong>카드 환급/할인</strong>: 카드 이용금액에서 차감되며, <strong>거래 내역에만 기록</strong>됩니다. 예산·잔액에는 반영되지 않습니다.</>
                     : <>💜 <strong>통장 환급</strong>: 통장에 <strong>입금</strong>되고, 선택한 지출 항목에서 <strong>차감</strong>됩니다.</>
                   }
                 </div>
@@ -668,16 +668,21 @@ export default function TransactionsPage() {
                       )}
                     </>
                   )}
-                  {formType === 'refund' && (
-                    <label className="text-xs text-gray-500 -mb-1 block">차감할 지출 항목 선택</label>
+                  {/* 카드 환급은 카테고리 불필요 (내역에만 표시) */}
+                  {!(formType === 'refund' && form.paymentMethod === 'card') && (
+                    <>
+                      {formType === 'refund' && (
+                        <label className="text-xs text-gray-500 -mb-1 block">차감할 지출 항목 선택</label>
+                      )}
+                      <select value={form.categoryId}
+                        onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
+                        className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
+                          formType === 'refund' ? 'border-purple-200 focus:ring-purple-400' : 'border-gray-200 focus:ring-blue-500'
+                        }`}>
+                        {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                      </select>
+                    </>
                   )}
-                  <select value={form.categoryId}
-                    onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                    className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
-                      formType === 'refund' ? 'border-purple-200 focus:ring-purple-400' : 'border-gray-200 focus:ring-blue-500'
-                    }`}>
-                    {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                  </select>
                 </>
               )}
 
