@@ -624,8 +624,8 @@ export default function TransactionsPage() {
                   <input type="number" placeholder="금액" value={form.amount}
                     onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  {/* 카드 환급이면 계좌 숨기고 카드만 / 그 외는 계좌 표시 */}
-                  {!(formType === 'refund' && form.paymentMethod === 'card') && (
+                  {/* 카드 결제는 계좌 불필요 — 통장일 때만 표시 */}
+                  {form.paymentMethod === 'account' && (
                     <select value={form.accountId}
                       onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
