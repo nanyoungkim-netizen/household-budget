@@ -24,7 +24,7 @@ export default function SettingsPage() {
 
   // ── 카드 상태 ──────────────────────────────────────────────────────────────
   const [showCardModal, setShowCardModal] = useState(false)
-  const [cardForm, setCardForm] = useState({ name: '', bank: '', billingDate: '15', color: '#0065CC' })
+  const [cardForm, setCardForm] = useState({ name: '', billingDate: '15', color: '#0065CC' })
 
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState<'child' | 'parent' | null>(null)
@@ -62,17 +62,17 @@ export default function SettingsPage() {
 
   // ── 카드 함수 ──────────────────────────────────────────────────────────────
   function addCard() {
-    if (!cardForm.name || !cardForm.bank) return
+    if (!cardForm.name) return
     const newCard: Card = {
       id: `card_${Date.now()}`,
       name: cardForm.name,
-      bank: cardForm.bank,
+      bank: cardForm.name,   // bank 필드 유지하되 name과 동일하게
       billingDate: Number(cardForm.billingDate) || 15,
       color: cardForm.color,
     }
     setCards([...cards, newCard])
     setShowCardModal(false)
-    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC' })
+    setCardForm({ name: '', billingDate: '15', color: '#0065CC' })
   }
 
   function deleteCard(id: string) {
@@ -416,14 +416,9 @@ export default function SettingsPage() {
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" placeholder="카드 이름" value={cardForm.name}
-                  onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
-                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <input type="text" placeholder="카드사" value={cardForm.bank}
-                  onChange={e => setCardForm(f => ({ ...f, bank: e.target.value }))}
-                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
+              <input type="text" placeholder="카드 이름 (예: 현대카드, 신한 Deep Dream)" value={cardForm.name}
+                onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <div>
                 <label className="text-xs text-gray-400 block mb-0.5">결제일</label>
                 <input type="number" min="1" max="31" placeholder="15" value={cardForm.billingDate}

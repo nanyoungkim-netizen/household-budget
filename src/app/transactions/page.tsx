@@ -21,6 +21,7 @@ interface FormState {
   categoryId: string
   paymentMethod: PaymentMethod
   cardId: string
+  installmentMonths: string   // '1' = 일시불, '2'~ = 할부
 }
 
 export default function TransactionsPage() {
@@ -51,6 +52,7 @@ export default function TransactionsPage() {
     categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || '',
     paymentMethod: 'account',
     cardId: cards[0]?.id || '',
+    installmentMonths: '1',
   }), [accounts, cards, categories])
 
   const [form, setForm] = useState<FormState>(defaultForm)
@@ -146,6 +148,7 @@ export default function TransactionsPage() {
       categoryId: t.categoryId,
       paymentMethod: t.paymentMethod,
       cardId: t.cardId || cards[0]?.id || '',
+      installmentMonths: '1',
     })
     setShowModal(true)
   }
@@ -177,11 +180,41 @@ export default function TransactionsPage() {
       }
     } else {
       if (!form.description) return
+      const totalAmount = Number(form.amount)
+      const months = Math.max(1, Number(form.installmentMonths) || 1)
+      const isInstallment = form.paymentMethod === 'card' && months > 1
+
+      if (isInstallment && !editingId) {
+        // 할부: 월별 분할 거래 생성
+        const baseDate = new Date(form.date)
+        const monthlyAmount = Math.floor(totalAmount / months)
+        const remainder = totalAmount - monthlyAmount * months  // 나머지는 1회차에 추가
+
+        for (let i = 0; i < months; i++) {
+          const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate())
+          const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+          const amt = i === 0 ? monthlyAmount + remainder : monthlyAmount
+          addTransaction({
+            id: `t${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
+            date: dateStr,
+            description: `${form.description} (${i+1}/${months})`,
+            amount: amt,
+            type: formType as 'expense',
+            accountId: form.accountId,
+            categoryId: form.categoryId,
+            paymentMethod: 'card',
+            cardId: form.cardId,
+          })
+        }
+        closeModal()
+        return
+      }
+
       tx = {
         id: editingId || `t${Date.now()}`,
         date: form.date,
         description: form.description,
-        amount: Number(form.amount),
+        amount: totalAmount,
         type: formType,
         accountId: form.accountId,
         categoryId: form.categoryId,
@@ -596,11 +629,38 @@ export default function TransactionsPage() {
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                   {form.paymentMethod === 'card' && (
-                    <select value={form.cardId}
-                      onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <>
+                      <select value={form.cardId}
+                        onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      {/* 할부 선택 — 수정 모드에서는 숨김 */}
+                      {!isEditing && formType === 'expense' && (
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">할부 개월</label>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {['1','2','3','4','5','6','10','12','24'].map(m => (
+                              <button key={m} type="button"
+                                onClick={() => setForm(f => ({ ...f, installmentMonths: m }))}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                                  form.installmentMonths === m
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'
+                                }`}>
+                                {m === '1' ? '일시불' : `${m}개월`}
+                              </button>
+                            ))}
+                          </div>
+                          {Number(form.installmentMonths) > 1 && form.amount && (
+                            <div className="mt-2 bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700">
+                              월 {Math.floor(Number(form.amount) / Number(form.installmentMonths)).toLocaleString('ko-KR')}원
+                              × {form.installmentMonths}개월 → 각 달에 거래 자동 추가
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                   {formType === 'refund' && (
                     <label className="text-xs text-gray-500 -mb-1 block">차감할 지출 항목 선택</label>
