@@ -321,8 +321,19 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   const defaultCardId    = cards[0]?.id || ''
 
   // 파일에 해당하는 계좌/카드 선택
-  const [importAccountId, setImportAccountId] = useState(defaultAccountId)
+  // importSourceId: 계좌면 accountId, 카드면 cardId
+  const [importSourceId,   setImportSourceId]   = useState(defaultAccountId)
+  const [importSourceType, setImportSourceType] = useState<'account' | 'card'>('account')
+
+  // 기존 코드와의 호환성: 계좌일 때 importAccountId = importSourceId
+  const importAccountId = importSourceType === 'account' ? importSourceId : defaultAccountId
+  const importCardId    = importSourceType === 'card'    ? importSourceId : defaultCardId
   const secondAccountId = accounts.find(a => a.id !== importAccountId)?.id || importAccountId
+
+  function selectImportSource(id: string, type: 'account' | 'card') {
+    setImportSourceId(id)
+    setImportSourceType(type)
+  }
 
   // ── 파일 파싱 ──────────────────────────────────────────────────────────────
   async function handleFile(file: File) {
@@ -375,14 +386,20 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         return
       }
 
-      // 카테고리 검증 및 보정
+      // 카테고리 검증 및 보정 + 카드 소스 반영
       const incomeLeaf  = categories.filter(c => c.type === 'income'  && c.parentId !== null)
       const expenseLeaf = categories.filter(c => c.type === 'expense' && c.parentId !== null)
       const fixed = parsed.map(r => {
         if (r.type === 'transfer') return r
         const catList = r.type === 'income' ? incomeLeaf : expenseLeaf
         const exists  = catList.some(c => c.id === r.categoryId)
-        return { ...r, categoryId: exists ? r.categoryId : (catList[0]?.id || '') }
+        return {
+          ...r,
+          categoryId: exists ? r.categoryId : (catList[0]?.id || ''),
+          paymentMethod: (importSourceType === 'card' ? 'card' : 'account') as PaymentMethod,
+          cardId: importSourceType === 'card' ? importCardId : undefined,
+          accountId: importAccountId,
+        }
       })
 
       setRows(fixed)
@@ -485,8 +502,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         categoryId,
         accountId: importAccountId,
         toAccountId: secondAccountId,
-        paymentMethod: 'account',
-        cardId: defaultCardId,
+        paymentMethod: importSourceType === 'card' ? 'card' : 'account',
+        cardId: importSourceType === 'card' ? importCardId : defaultCardId,
         include: true,
         autoSuggested,
       })
@@ -614,18 +631,29 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   {/* 계좌 선택 */}
                   <div>
                     <label className="text-xs font-semibold text-gray-600 block mb-1.5">
-                      🏦 이 파일은 어느 계좌 내역인가요?
+                      🏦 이 파일은 어느 계좌/카드 내역인가요?
                     </label>
                     <div className="flex flex-wrap gap-2">
                       {accounts.map(acc => (
                         <button key={acc.id}
-                          onClick={() => setImportAccountId(acc.id)}
+                          onClick={() => selectImportSource(acc.id, 'account')}
                           className={`px-3 py-2 rounded-xl text-sm border transition-all ${
-                            importAccountId === acc.id
+                            importSourceType === 'account' && importSourceId === acc.id
                               ? 'bg-blue-600 text-white border-blue-600'
                               : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
                           }`}>
-                          {acc.name}
+                          🏦 {acc.name}
+                        </button>
+                      ))}
+                      {cards.map(card => (
+                        <button key={card.id}
+                          onClick={() => selectImportSource(card.id, 'card')}
+                          className={`px-3 py-2 rounded-xl text-sm border transition-all ${
+                            importSourceType === 'card' && importSourceId === card.id
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
+                          }`}>
+                          💳 {card.name}
                         </button>
                       ))}
                     </div>
@@ -687,7 +715,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
               <p className="text-xs text-gray-400">자동으로 컬럼을 감지했습니다. 맞지 않으면 직접 선택하세요.</p>
             </div>
 
-            {/* 계좌 선택 */}
+            {/* 계좌/카드 선택 */}
             <div className="mb-5 p-4 bg-gray-50 rounded-2xl">
               <label className="text-xs font-semibold text-gray-600 block mb-2">
                 🏦 이 파일은 어느 계좌/카드 내역인가요?
@@ -695,13 +723,24 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
               <div className="flex flex-wrap gap-2">
                 {accounts.map(acc => (
                   <button key={acc.id}
-                    onClick={() => setImportAccountId(acc.id)}
+                    onClick={() => selectImportSource(acc.id, 'account')}
                     className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${
-                      importAccountId === acc.id
+                      importSourceType === 'account' && importSourceId === acc.id
                         ? 'bg-blue-600 text-white border-blue-600'
                         : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
                     }`}>
-                    {acc.name}
+                    🏦 {acc.name}
+                  </button>
+                ))}
+                {cards.map(card => (
+                  <button key={card.id}
+                    onClick={() => selectImportSource(card.id, 'card')}
+                    className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${
+                      importSourceType === 'card' && importSourceId === card.id
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
+                    }`}>
+                    💳 {card.name}
                   </button>
                 ))}
               </div>
