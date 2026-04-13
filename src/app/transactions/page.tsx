@@ -32,6 +32,9 @@ export default function TransactionsPage() {
   const [filterCard, setFilterCard] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
 
   // 모달 상태 — editingId가 있으면 수정 모드
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -64,6 +67,12 @@ export default function TransactionsPage() {
       return t.type !== 'transfer' && t.paymentMethod === 'card'
     })
     .filter(t => filterCard === 'all' || (t.paymentMethod === 'card' && t.cardId === filterCard))
+    .filter(t => !filterDateFrom || t.date >= filterDateFrom)
+    .filter(t => !filterDateTo   || t.date <= filterDateTo)
+    .filter(t => !searchQuery.trim() ||
+      t.description.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+      String(t.amount).includes(searchQuery.trim())
+    )
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
   const income   = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
@@ -311,6 +320,11 @@ export default function TransactionsPage() {
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <span className="text-gray-400 text-sm self-center">~</span>
+        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         {/* 전체 탭일 때만 계좌 드롭다운 표시 */}
         {paymentTab === 'all' && (
           <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)}
@@ -327,6 +341,19 @@ export default function TransactionsPage() {
           <option value="transfer">이체</option>
           <option value="refund">환급</option>
         </select>
+        <div className="relative w-full">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="적요, 금액 검색..."
+            className="w-full pl-8 pr-3 border border-gray-200 rounded-lg py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">×</button>
+          )}
+        </div>
       </div>
 
       {/* 요약 카드 */}
@@ -344,6 +371,13 @@ export default function TransactionsPage() {
           <div className="text-base font-bold text-blue-500">{fmtKRW(transfer)}</div>
         </div>
       </div>
+
+      {/* 검색 결과 건수 */}
+      {searchQuery.trim() && (
+        <div className="text-sm text-gray-500 mb-2">
+          검색 결과 {filtered.length}건
+        </div>
+      )}
 
       {/* 거래 목록 */}
       <div className="space-y-3">
