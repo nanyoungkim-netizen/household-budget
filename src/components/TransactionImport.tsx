@@ -936,8 +936,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                       <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">금액</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500">유형</th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">카테고리 / 이체계좌</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">계좌</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">결제</th>
+                      {importSourceType === 'card' ? (
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">카드</th>
+                      ) : (
+                        <>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">계좌</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">결제</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1039,29 +1045,39 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                               </select>
                             )}
                           </td>
-                          {/* 계좌 (이체면 출금계좌) */}
-                          <td className="px-3 py-2">
-                            <select value={row.accountId}
-                              onChange={e => updateRow(row._key, { accountId: e.target.value })}
-                              className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            >
-                              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                            </select>
-                          </td>
-                          {/* 결제수단 (이체면 비활성) */}
-                          <td className="px-3 py-2">
-                            {isTransferRow ? (
-                              <span className="text-xs text-gray-300 px-2">—</span>
-                            ) : (
-                              <select value={row.paymentMethod}
-                                onChange={e => updateRow(row._key, { paymentMethod: e.target.value as PaymentMethod })}
-                                className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                              >
-                                <option value="account">통장</option>
-                                <option value="card">카드</option>
-                              </select>
-                            )}
-                          </td>
+                          {/* 계좌 / 카드 표시 */}
+                          {importSourceType === 'card' ? (
+                            <td className="px-3 py-2">
+                              <span className="text-xs text-purple-600 font-medium whitespace-nowrap">
+                                💳 {cards.find(c => c.id === importCardId)?.name || '카드'}
+                              </span>
+                            </td>
+                          ) : (
+                            <>
+                              <td className="px-3 py-2">
+                                <select value={row.accountId}
+                                  onChange={e => updateRow(row._key, { accountId: e.target.value })}
+                                  className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                >
+                                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                </select>
+                              </td>
+                              {/* 결제수단 (이체면 비활성) */}
+                              <td className="px-3 py-2">
+                                {isTransferRow ? (
+                                  <span className="text-xs text-gray-300 px-2">—</span>
+                                ) : (
+                                  <select value={row.paymentMethod}
+                                    onChange={e => updateRow(row._key, { paymentMethod: e.target.value as PaymentMethod })}
+                                    className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                  >
+                                    <option value="account">통장</option>
+                                    <option value="card">카드</option>
+                                  </select>
+                                )}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       )
                     })}
