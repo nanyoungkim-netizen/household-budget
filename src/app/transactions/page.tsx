@@ -77,9 +77,11 @@ export default function TransactionsPage() {
     )
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
-  const income   = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const expense  = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  const transfer = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
+  const income    = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const expenseRaw = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const refundAmt  = filtered.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
+  const expense   = Math.max(0, expenseRaw - refundAmt)
+  const transfer  = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
 
   // 계좌별 실시간 잔액 (전체 거래 기준, 월 필터 없음)
   const accountBalances = accounts.map(acc => ({
@@ -396,8 +398,11 @@ export default function TransactionsPage() {
           <div className="text-base font-bold text-emerald-600">+{fmtKRW(income)}</div>
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">지출</div>
+          <div className="text-xs text-gray-500 mb-1">지출{refundAmt > 0 ? ' (환급 차감)' : ''}</div>
           <div className="text-base font-bold text-red-500">-{fmtKRW(expense)}</div>
+          {refundAmt > 0 && (
+            <div className="text-xs text-purple-500 mt-0.5">환급 -{fmtKRW(refundAmt)}</div>
+          )}
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">이체</div>

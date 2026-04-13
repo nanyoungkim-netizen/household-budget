@@ -27,11 +27,39 @@ export default function SettingsPage() {
   const [cardForm, setCardForm] = useState({ name: '', billingDate: '15', color: '#0065CC' })
 
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
-  const [catModal, setCatModal] = useState<'child' | 'parent' | null>(null)
+  const [catModal, setCatModal] = useState<'child' | 'parent' | 'edit' | null>(null)
   const [catParentId, setCatParentId] = useState('')
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC' })
   const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income' })
   const [confirmReset, setConfirmReset] = useState(false)
+
+  // 수정 모달용
+  const [editingCat, setEditingCat] = useState<Category | null>(null)
+  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '📦', color: '#CFD8DC', parentId: null as string | null, type: 'expense' as 'expense' | 'income' })
+
+  function openEditCat(cat: Category) {
+    setEditingCat(cat)
+    setEditCatForm({ name: cat.name, icon: cat.icon, color: cat.color, parentId: cat.parentId ?? null, type: (cat.type === 'income' ? 'income' : 'expense') })
+    setCatModal('edit')
+  }
+
+  function saveEditCat() {
+    if (!editingCat || !editCatForm.name) return
+    const isParent = editingCat.parentId === null
+    setCategories(categories.map(c => {
+      if (c.id !== editingCat.id) return c
+      if (isParent) {
+        // 대분류: 이름/아이콘/색상/type 수정
+        return { ...c, name: editCatForm.name, icon: editCatForm.icon, color: editCatForm.color, type: editCatForm.type }
+      } else {
+        // 소분류: 이름/아이콘/색상 + 상위분류 이동
+        const newParentCat = categories.find(p => p.id === editCatForm.parentId)
+        return { ...c, name: editCatForm.name, icon: editCatForm.icon, color: editCatForm.color, parentId: editCatForm.parentId, type: newParentCat?.type || c.type }
+      }
+    }))
+    setCatModal(null)
+    setEditingCat(null)
+  }
 
   // ── 통장 함수 ──────────────────────────────────────────────────────────────
   function saveBalance(id: string) {
@@ -278,6 +306,8 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-2">
                         <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
+                        <button onClick={() => openEditCat(parent)}
+                          className="text-xs text-gray-400 hover:text-blue-500">수정</button>
                         <button onClick={() => deleteCategory(parent.id)}
                           className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                       </div>
@@ -290,8 +320,12 @@ export default function SettingsPage() {
                               <span className="text-sm">{child.icon}</span>
                               <span className="text-sm text-gray-700">{child.name}</span>
                             </div>
-                            <button onClick={() => deleteCategory(child.id)}
-                              className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => openEditCat(child)}
+                                className="text-xs text-gray-400 hover:text-blue-500">수정</button>
+                              <button onClick={() => deleteCategory(child.id)}
+                                className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -318,6 +352,8 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-2">
                         <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
+                        <button onClick={() => openEditCat(parent)}
+                          className="text-xs text-gray-400 hover:text-blue-500">수정</button>
                         <button onClick={() => deleteCategory(parent.id)}
                           className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                       </div>
@@ -330,8 +366,12 @@ export default function SettingsPage() {
                               <span className="text-sm">{child.icon}</span>
                               <span className="text-sm text-gray-700">{child.name}</span>
                             </div>
-                            <button onClick={() => deleteCategory(child.id)}
-                              className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => openEditCat(child)}
+                                className="text-xs text-gray-400 hover:text-blue-500">수정</button>
+                              <button onClick={() => deleteCategory(child.id)}
+                                className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -525,6 +565,82 @@ export default function SettingsPage() {
               </div>
               <button onClick={addParent}
                 className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">추가하기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 카테고리 수정 모달 ───────────────────────────────────────────── */}
+      {catModal === 'edit' && editingCat && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">
+                {editingCat.parentId === null ? '대분류' : '소분류'} 수정
+              </h2>
+              <button onClick={() => setCatModal(null)} className="text-gray-400 text-xl leading-none">×</button>
+            </div>
+            <div className="space-y-3">
+              {/* 대분류: 지출/수입 전환 */}
+              {editingCat.parentId === null && (
+                <div className="flex bg-gray-100 rounded-xl p-1">
+                  {(['expense', 'income'] as const).map(t => (
+                    <button key={t} onClick={() => setEditCatForm(f => ({ ...f, type: t }))}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${editCatForm.type === t ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
+                      {t === 'expense' ? '지출' : '수입'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 소분류: 상위분류 이동 */}
+              {editingCat.parentId !== null && (
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">상위 분류</label>
+                  <select
+                    value={editCatForm.parentId || ''}
+                    onChange={e => setEditCatForm(f => ({ ...f, parentId: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {categories
+                      .filter(c => c.parentId === null)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.icon} {p.name} ({p.type === 'expense' ? '지출' : '수입'})</option>
+                      ))
+                    }
+                  </select>
+                </div>
+              )}
+
+              <input type="text" placeholder="이름" value={editCatForm.name}
+                onChange={e => setEditCatForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
+
+              <div>
+                <div className="text-xs text-gray-400 mb-1.5">아이콘</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_ICONS.map(icon => (
+                    <button key={icon} onClick={() => setEditCatForm(f => ({ ...f, icon }))}
+                      className={`w-8 h-8 rounded-lg text-base flex items-center justify-center ${editCatForm.icon === icon ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-gray-100'}`}>
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-gray-400 mb-1.5">색상</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_COLORS.map(c => (
+                    <button key={c} onClick={() => setEditCatForm(f => ({ ...f, color: c }))}
+                      className={`w-7 h-7 rounded-lg ${editCatForm.color === c ? 'scale-125 ring-2 ring-offset-1 ring-blue-400' : ''}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={saveEditCat}
+                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">저장하기</button>
             </div>
           </div>
         </div>
