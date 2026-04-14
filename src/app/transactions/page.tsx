@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useApp, computeAccountBalance } from '@/lib/AppContext'
 import { Transaction, PaymentMethod } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
@@ -36,6 +36,33 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
+  const [filterCategories, setFilterCategories] = useState<string[]>([])
+  const [fromBudgetLabel, setFromBudgetLabel] = useState('')
+
+  // URL 파라미터로 초기 상태 복원 (FR-002, FR-003)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const catParam = params.get('category')
+    if (catParam) setFilterCategories(catParam.split(',').filter(Boolean))
+    const monthParam = params.get('month')
+    if (monthParam) setMonth(monthParam)
+    const labelParam = params.get('catLabel')
+    if (labelParam) setFromBudgetLabel(decodeURIComponent(labelParam))
+  }, [])
+
+  // 카테고리 필터 변경 시 URL 동기화
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (filterCategories.length > 0) {
+      params.set('category', filterCategories.join(','))
+    } else {
+      params.delete('category')
+      params.delete('catLabel')
+      setFromBudgetLabel('')
+    }
+    const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '')
+    history.replaceState(null, '', newUrl)
+  }, [filterCategories])
 
   // 모달 상태 — editingId가 있으면 수정 모드
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -75,6 +102,7 @@ export default function TransactionsPage() {
       t.description.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
       String(t.amount).includes(searchQuery.trim())
     )
+    .filter(t => filterCategories.length === 0 || filterCategories.includes(t.categoryId))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
   const income    = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
@@ -255,8 +283,24 @@ export default function TransactionsPage() {
     : categories.filter(c => c.type === formType && c.parentId !== null)
   const isEditing = !!editingId
 
+  // FR-004: 카테고리 드롭다운 검색
+  const [catSearch, setCatSearch] = useState('')
+  const searchedCats = catSearch.trim()
+    ? filteredCats.filter(c => c.name.toLowerCase().includes(catSearch.trim().toLowerCase()))
+    : filteredCats
+
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
+      {/* 예산 화면에서 이동 배너 (FR-003) */}
+      {fromBudgetLabel && (
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-2.5 mb-4 flex items-center justify-between">
+          <span className="text-sm text-blue-700">← 예산 화면에서 이동: <strong>{fromBudgetLabel}</strong></span>
+          <button
+            onClick={() => { setFilterCategories([]); window.history.back() }}
+            className="text-xs text-blue-500 hover:text-blue-700 font-medium">돌아가기</button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">거래 내역</h1>
         <div className="flex gap-2">
@@ -350,6 +394,39 @@ export default function TransactionsPage() {
           ))}
         </div>
       )}
+
+      {/* 카테고리 필터 태그 (FR-002) */}
+      {(() => {
+        const leafCats = categories.filter(c => c.parentId != null)
+        if (leafCats.length === 0) return null
+        return (
+          <div className="mb-3">
+            <div className="overflow-x-auto">
+              <div className="flex gap-1.5 pb-1" style={{ minWidth: 'max-content' }}>
+                <button
+                  onClick={() => setFilterCategories([])}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
+                    filterCategories.length === 0 ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                  }`}>
+                  전체
+                </button>
+                {leafCats.map(cat => (
+                  <button key={cat.id}
+                    onClick={() => setFilterCategories(prev =>
+                      prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
+                    )}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs border transition-all flex-shrink-0 ${
+                      filterCategories.includes(cat.id) ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                    }`}
+                    style={filterCategories.includes(cat.id) ? { backgroundColor: cat.color || '#4B5563' } : {}}>
+                    {cat.icon} {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 필터 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
@@ -446,6 +523,11 @@ export default function TransactionsPage() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
                         {isRefund && <span className="text-xs bg-purple-100 text-purple-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">환급</span>}
+                        {t.isInstallment && t.installmentCurrent && t.installmentMonths && (
+                          <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap">
+                            할부 {t.installmentCurrent}/{t.installmentMonths}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {isTransfer ? (
@@ -679,13 +761,31 @@ export default function TransactionsPage() {
                       {formType === 'refund' && (
                         <label className="text-xs text-gray-500 -mb-1 block">차감할 지출 항목 선택</label>
                       )}
-                      <select value={form.categoryId}
-                        onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                        className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
-                          formType === 'refund' ? 'border-purple-200 focus:ring-purple-400' : 'border-gray-200 focus:ring-blue-500'
-                        }`}>
-                        {filteredCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                      </select>
+                      {/* FR-004: 검색 가능한 카테고리 선택 */}
+                      <div className={`border rounded-xl overflow-hidden ${formType === 'refund' ? 'border-purple-200' : 'border-gray-200'}`}>
+                        <div className="flex items-center px-3 py-2 border-b border-gray-100 bg-gray-50">
+                          <span className="text-gray-400 text-xs mr-2">🔍</span>
+                          <input
+                            type="text"
+                            value={catSearch}
+                            onChange={e => setCatSearch(e.target.value)}
+                            placeholder="카테고리 검색..."
+                            className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                          />
+                          {catSearch && <button onClick={() => setCatSearch('')} className="text-gray-300 hover:text-gray-500 text-xs">×</button>}
+                        </div>
+                        <select value={form.categoryId}
+                          onChange={e => { setForm(f => ({ ...f, categoryId: e.target.value })); setCatSearch('') }}
+                          size={Math.min(searchedCats.length || 1, 5)}
+                          className={`w-full px-3 py-1 text-sm focus:outline-none bg-white ${
+                            formType === 'refund' ? 'focus:ring-purple-400' : 'focus:ring-blue-500'
+                          }`}>
+                          {searchedCats.length === 0
+                            ? <option disabled>일치하는 카테고리가 없습니다.</option>
+                            : searchedCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)
+                          }
+                        </select>
+                      </div>
                     </>
                   )}
                 </>

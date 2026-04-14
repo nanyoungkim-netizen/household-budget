@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/AppContext'
 import { Budget, Category } from '@/types'
 
@@ -27,6 +28,7 @@ export default function BudgetPage() {
   const { data, categories, setBudgets, setCategories } = useApp()
   const { budgets, transactions } = data
   const [month, setMonth] = useState(currentMonth)
+  const router = useRouter()
 
   // 예산 편집
   const [editing, setEditing] = useState<string | null>(null)
@@ -367,8 +369,11 @@ export default function BudgetPage() {
                               </button>
                             )}
                           </div>
-                          {/* 실제 */}
-                          <div className={`text-right text-sm ${actual > 0 ? 'font-medium text-gray-900' : 'text-gray-300'}`}>
+                          {/* 실제 — 클릭 시 거래내역으로 이동 (FR-003) */}
+                          <div
+                            onClick={() => actual > 0 && router.push(`/transactions?category=${cat.id}&month=${month}&catLabel=${encodeURIComponent(cat.name)}`)}
+                            className={`text-right text-sm ${actual > 0 ? 'font-medium text-gray-900 cursor-pointer hover:text-blue-600 hover:underline' : 'text-gray-300'}`}
+                            title={actual > 0 ? `${cat.name} 거래내역 보기` : undefined}>
                             {actual > 0 ? fmtKRW(actual) : '-'}
                           </div>
                           {/* 차액 */}

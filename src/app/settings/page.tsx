@@ -22,6 +22,10 @@ export default function SettingsPage() {
   const [editingAccount, setEditingAccount] = useState<string | null>(null)
   const [accountForm, setAccountForm] = useState({ name: '', bank: '', color: '#0064FF', balance: '' })
 
+  // FR-006: 잔액 검증
+  const [verifyInputs, setVerifyInputs] = useState<Record<string, string>>({})
+  const [verifyOpen, setVerifyOpen] = useState<Record<string, boolean>>({})
+
   // ── 카드 상태 ──────────────────────────────────────────────────────────────
   const [showCardModal, setShowCardModal] = useState(false)
   const [cardForm, setCardForm] = useState({ name: '', billingDate: '15', color: '#0065CC' })
@@ -221,6 +225,52 @@ export default function SettingsPage() {
                     <div className={`text-xs mt-0.5 ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
                       기초 대비 {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
                     </div>
+                  )}
+                </div>
+
+                {/* FR-006: 잔액 검증 */}
+                <div className="mb-3">
+                  {verifyOpen[acc.id] ? (
+                    <div className="bg-blue-50 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-blue-700">실제 잔액 검증</span>
+                        <button onClick={() => setVerifyOpen(v => ({ ...v, [acc.id]: false }))} className="text-gray-400 text-xs hover:text-gray-600">닫기</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-white rounded-lg p-2">
+                          <div className="text-gray-400 mb-0.5">시스템 계산 잔액</div>
+                          <div className="font-bold text-gray-900">{computed.toLocaleString('ko-KR')}원</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-2">
+                          <div className="text-gray-400 mb-0.5">앱/실제 잔액 입력</div>
+                          <input
+                            type="number"
+                            value={verifyInputs[acc.id] ?? ''}
+                            onChange={e => setVerifyInputs(v => ({ ...v, [acc.id]: e.target.value }))}
+                            placeholder="직접 입력"
+                            className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 font-bold"
+                          />
+                        </div>
+                      </div>
+                      {verifyInputs[acc.id] && (
+                        (() => {
+                          const actual = Number(verifyInputs[acc.id])
+                          const diff2 = actual - computed
+                          const ok = diff2 === 0
+                          return (
+                            <div className={`rounded-lg px-3 py-2 text-xs font-medium ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                              {ok ? '✅ 검증 완료 — 잔액 일치' : `⚠️ 불일치 — 오차 ${diff2 >= 0 ? '+' : ''}${diff2.toLocaleString('ko-KR')}원 확인 필요`}
+                            </div>
+                          )
+                        })()
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setVerifyOpen(v => ({ ...v, [acc.id]: true }))}
+                      className="text-xs text-blue-500 hover:text-blue-700 font-medium">
+                      🔍 잔액 검증하기
+                    </button>
                   )}
                 </div>
 

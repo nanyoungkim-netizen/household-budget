@@ -349,6 +349,10 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   const defaultAccountId = accounts[0]?.id || ''
   const defaultCardId    = cards[0]?.id || ''
 
+  // FR-001: 자동 제외된 행 수
+  const [excludedCount, setExcludedCount] = useState(0)
+  const EXCLUDE_TX_TYPES = ['취소', '승인취소', '취소승인', '승인대기', '취소건']
+
   // 파일에 해당하는 계좌/카드 선택
   // importSourceId: 계좌면 accountId, 카드면 cardId
   const [importSourceId,   setImportSourceId]   = useState(defaultAccountId)
@@ -462,6 +466,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     const expenseLeaf = categories.filter(c => c.type === 'expense' && c.parentId !== null)
 
     const importRows: ImportRow[] = []
+    let skipped = 0
 
     rawRows.forEach((row, i) => {
       const dateVal   = colDate       >= 0 ? row[colDate]       : ''
@@ -474,6 +479,12 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
       const desc   = String(descVal   || '').trim()
       const txType = String(txTypeVal || '').trim()
       const date   = parseDate(dateVal)
+
+      // FR-001: 취소 건 자동 제외
+      if (txType && EXCLUDE_TX_TYPES.some(k => txType.includes(k))) {
+        skipped++
+        return
+      }
 
       let amount: number
       let type: 'income' | 'expense'
@@ -538,6 +549,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
       })
     })
 
+    setExcludedCount(skipped)
     setRows(importRows)
     setStep('review')
   }
@@ -853,6 +865,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   )}
                   총 <span className="font-bold">{rows.length}</span>건 중{' '}
                   <span className="font-bold">{selectedCount}</span>건 선택
+                  {excludedCount > 0 && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">취소 {excludedCount}건 자동 제외됨</span>
+                  )}
                   {suggestedCount > 0 && (
                     <span className="text-xs text-blue-500">✨ {suggestedCount}건 카테고리 자동추천됨</span>
                   )}
