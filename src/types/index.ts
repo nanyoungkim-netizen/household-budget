@@ -73,6 +73,18 @@ export interface Saving {
   maturityDate: string
   currentAmount: number
   expectedAmount: number
+  interestType?: 'simple' | 'compound'   // FR-008: 단리/복리
+  manualInterest?: boolean               // FR-008: 직접 입력 여부
+}
+
+// FR-009: 카드 청구·납부 관리
+export interface CardBilling {
+  id: string
+  cardId: string
+  billingMonth: string  // YYYY-MM (사용 발생 월)
+  paymentMonth: string  // YYYY-MM (실제 납부 월)
+  totalAmount: number   // 청구 총액
+  paidAmount: number    // 납부완료 금액
 }
 
 export interface Goal {

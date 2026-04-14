@@ -6,6 +6,9 @@ import { useApp } from '@/lib/AppContext'
 import { Budget, Category } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
+// FR-007
+function parseAmt(s: string): number { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
+function fmtInput(s: string): string { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 function fmtShort(n: number) {
   if (n >= 10000) return (n / 10000).toFixed(0) + '만'
   return n.toLocaleString()
@@ -94,7 +97,7 @@ export default function BudgetPage() {
 
   // ── 예산 저장 ────────────────────────────────────────────────────────────
   function saveBudget(catId: string) {
-    const amount = Number(editValue)
+    const amount = parseAmt(editValue)
     if (isNaN(amount) || amount < 0) { setEditing(null); return }
     const next = budgets.filter(b => !(b.categoryId === catId && b.month === month))
     if (amount > 0) next.push({ id: `b${Date.now()}`, categoryId: catId, month, amount } as Budget)
@@ -421,17 +424,18 @@ export default function BudgetPage() {
                           <div className="text-right">
                             {editing === cat.id ? (
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
                                 value={editValue}
-                                onChange={e => setEditValue(e.target.value)}
+                                onChange={e => setEditValue(fmtInput(e.target.value))}
                                 onKeyDown={e => { if (e.key === 'Enter') saveBudget(cat.id); if (e.key === 'Escape') setEditing(null) }}
                                 onBlur={() => saveBudget(cat.id)}
-                                className="w-20 text-right text-xs border border-blue-300 rounded-lg px-2 py-1 focus:outline-none"
+                                className="w-24 text-right text-xs border border-blue-300 rounded-lg px-2 py-1 focus:outline-none"
                                 autoFocus
                               />
                             ) : (
                               <button
-                                onClick={() => { setEditing(cat.id); setEditValue(String(budgetAmt)); setEditingName(null) }}
+                                onClick={() => { setEditing(cat.id); setEditValue(fmtInput(String(budgetAmt))); setEditingName(null) }}
                                 className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
                                 {budgetAmt > 0 ? fmtKRW(budgetAmt) : <span className="text-gray-300 text-xs">설정</span>}
                               </button>

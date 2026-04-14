@@ -6,6 +6,12 @@ import { Transaction, PaymentMethod } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
+// FR-007: 금액 입력 포맷 헬퍼
+function parseAmt(s: string): number { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
+function fmtInput(s: string): string { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
+
+// FR-010: 적금 카테고리 ID 집합
+const SAVING_CAT_IDS = new Set(['pg_saving', 'saving'])
 
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
@@ -37,6 +43,7 @@ export default function TransactionsPage() {
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
+  const [catChipSearch, setCatChipSearch] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
 
   // URL 파라미터로 초기 상태 복원 (FR-002, FR-003)
@@ -110,6 +117,9 @@ export default function TransactionsPage() {
   const refundAmt  = filtered.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
   const expense   = Math.max(0, expenseRaw - refundAmt)
   const transfer  = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
+  // FR-010: 적금 분리 계산
+  const savingExpense = filtered.filter(t => t.type === 'expense' && SAVING_CAT_IDS.has(t.categoryId)).reduce((s, t) => s + t.amount, 0)
+  const realExpense   = Math.max(0, expense - savingExpense)
 
   // 계좌별 실시간 잔액 (전체 거래 기준, 월 필터 없음)
   const accountBalances = accounts.map(acc => ({
@@ -146,7 +156,7 @@ export default function TransactionsPage() {
     let bal = acc.balance
     const map = new Map<string, number>()
     for (const t of accTxs) {
-      if ((t.type === 'income' || t.type === 'refund') && t.accountId === filterAccount) bal += t.amount
+      if ((t.type === 'income' || (t.type === 'refund' && t.paymentMethod !== 'card')) && t.accountId === filterAccount) bal += t.amount
       else if (t.type === 'expense' && t.accountId === filterAccount && t.paymentMethod === 'account') bal -= t.amount
       else if (t.type === 'transfer') {
         if (t.accountId === filterAccount) bal -= t.amount
@@ -172,7 +182,7 @@ export default function TransactionsPage() {
     setForm({
       date: t.date,
       description: t.description,
-      amount: String(t.amount),
+      amount: fmtInput(String(t.amount)),
       accountId: t.accountId,
       toAccountId: t.toAccountId || accounts[1]?.id || accounts[0]?.id || '',
       categoryId: t.categoryId,
@@ -201,7 +211,7 @@ export default function TransactionsPage() {
         id: editingId || `t${Date.now()}`,
         date: form.date,
         description: form.description || '계좌 이체',
-        amount: Number(form.amount),
+        amount: parseAmt(form.amount),
         type: 'transfer',
         accountId: form.accountId,
         toAccountId: form.toAccountId,
@@ -210,7 +220,7 @@ export default function TransactionsPage() {
       }
     } else {
       if (!form.description) return
-      const totalAmount = Number(form.amount)
+      const totalAmount = parseAmt(form.amount)
       const months = Math.max(1, Number(form.installmentMonths) || 1)
       const isInstallment = form.paymentMethod === 'card' && months > 1
 
@@ -395,26 +405,49 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* 카테고리 필터 태그 (FR-002) */}
+      {/* 카테고리 필터 태그 (FR-002 + 검색) */}
       {(() => {
         const leafCats = categories.filter(c => c.parentId != null)
         if (leafCats.length === 0) return null
+        const visibleCats = catChipSearch.trim()
+          ? leafCats.filter(c => c.name.toLowerCase().includes(catChipSearch.trim().toLowerCase()))
+          : leafCats
         return (
-          <div className="mb-3">
+          <div className="mb-3 bg-white rounded-2xl shadow-sm p-3">
+            {/* 검색 입력 */}
+            <div className="relative mb-2">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+              <input
+                type="text"
+                value={catChipSearch}
+                onChange={e => setCatChipSearch(e.target.value)}
+                placeholder="카테고리 검색..."
+                className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {catChipSearch && (
+                <button onClick={() => setCatChipSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs">×</button>
+              )}
+            </div>
+            {/* 칩 목록 */}
             <div className="overflow-x-auto">
-              <div className="flex gap-1.5 pb-1" style={{ minWidth: 'max-content' }}>
-                <button
-                  onClick={() => setFilterCategories([])}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
-                    filterCategories.length === 0 ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-                  }`}>
-                  전체
-                </button>
-                {leafCats.map(cat => (
+              <div className="flex gap-1.5 pb-0.5" style={{ minWidth: 'max-content' }}>
+                {!catChipSearch.trim() && (
+                  <button
+                    onClick={() => setFilterCategories([])}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
+                      filterCategories.length === 0 ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                    }`}>
+                    전체
+                  </button>
+                )}
+                {visibleCats.length === 0 && (
+                  <span className="text-xs text-gray-400 py-1.5 px-2">일치하는 카테고리 없음</span>
+                )}
+                {visibleCats.map(cat => (
                   <button key={cat.id}
-                    onClick={() => setFilterCategories(prev =>
+                    onClick={() => { setFilterCategories(prev =>
                       prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
-                    )}
+                    ); setCatChipSearch('') }}
                     className={`px-2.5 py-1.5 rounded-xl text-xs border transition-all flex-shrink-0 ${
                       filterCategories.includes(cat.id) ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
                     }`}
@@ -424,6 +457,23 @@ export default function TransactionsPage() {
                 ))}
               </div>
             </div>
+            {/* 선택된 카테고리 표시 */}
+            {filterCategories.length > 0 && !catChipSearch && (
+              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-gray-400">선택:</span>
+                {filterCategories.map(id => {
+                  const cat = categories.find(c => c.id === id)
+                  return cat ? (
+                    <span key={id} className="text-xs text-white px-2 py-0.5 rounded-lg font-medium flex items-center gap-1"
+                      style={{ backgroundColor: cat.color || '#4B5563' }}>
+                      {cat.icon} {cat.name}
+                      <button onClick={() => setFilterCategories(prev => prev.filter(c => c !== id))} className="opacity-70 hover:opacity-100 leading-none">×</button>
+                    </span>
+                  ) : null
+                })}
+                <button onClick={() => setFilterCategories([])} className="text-xs text-gray-400 hover:text-gray-600 underline ml-1">전체 해제</button>
+              </div>
+            )}
           </div>
         )
       })()}
@@ -487,6 +537,27 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* FR-010: 지출 내 적금 분리 요약 */}
+      {savingExpense > 0 && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+          <div className="text-xs font-semibold text-gray-500 mb-3">지출 상세 분석</div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-red-50 rounded-xl p-3">
+              <div className="text-xs text-red-400 mb-0.5">실제 지출</div>
+              <div className="text-sm font-bold text-red-500">-{fmtKRW(realExpense)}</div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3">
+              <div className="text-xs text-blue-400 mb-0.5">적금 (저축)</div>
+              <div className="text-sm font-bold text-blue-600">-{fmtKRW(savingExpense)}</div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="text-xs text-gray-400 mb-0.5">합계</div>
+              <div className="text-sm font-bold text-gray-700">-{fmtKRW(expense)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 검색 결과 건수 */}
       {searchQuery.trim() && (
         <div className="text-sm text-gray-500 mb-2">
@@ -510,9 +581,10 @@ export default function TransactionsPage() {
               const isRefund   = t.type === 'refund'
               const runningBalance = runningBalanceMap.get(t.id)
 
+              const isSavingTx = t.type === 'expense' && SAVING_CAT_IDS.has(t.categoryId)
               return (
                 <div key={t.id}
-                  className="flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                  className={`flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer ${isSavingTx ? 'bg-blue-50/40' : ''}`}
                   onClick={() => openEdit(t)}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -523,6 +595,7 @@ export default function TransactionsPage() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
                         {isRefund && <span className="text-xs bg-purple-100 text-purple-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">환급</span>}
+                        {isSavingTx && <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">저축</span>}
                         {t.isInstallment && t.installmentCurrent && t.installmentMonths && (
                           <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap">
                             할부 {t.installmentCurrent}/{t.installmentMonths}
@@ -636,8 +709,8 @@ export default function TransactionsPage() {
                   <input type="date" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input type="number" placeholder="이체 금액" value={form.amount}
-                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  <input type="text" inputMode="numeric" placeholder="이체 금액" value={form.amount}
+                    onChange={e => setForm(f => ({ ...f, amount: fmtInput(e.target.value) }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <input type="text" placeholder="메모 (선택)" value={form.description}
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -665,8 +738,8 @@ export default function TransactionsPage() {
                     <div className="bg-blue-50 rounded-xl p-3 space-y-1.5">
                       <div className="text-xs font-medium text-blue-700 mb-1">이체 후 잔액</div>
                       {[
-                        { acc: accounts.find(a => a.id === form.accountId), delta: -Number(form.amount) },
-                        { acc: accounts.find(a => a.id === form.toAccountId), delta: +Number(form.amount) },
+                        { acc: accounts.find(a => a.id === form.accountId), delta: -parseAmt(form.amount) },
+                        { acc: accounts.find(a => a.id === form.toAccountId), delta: +parseAmt(form.amount) },
                       ].map(({ acc, delta }) => {
                         if (!acc) return null
                         // 수정 모드면 기존 이체는 제외하고 계산
@@ -708,8 +781,8 @@ export default function TransactionsPage() {
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     autoFocus={!isEditing}
                   />
-                  <input type="number" placeholder="금액" value={form.amount}
-                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  <input type="text" inputMode="numeric" placeholder="금액" value={form.amount}
+                    onChange={e => setForm(f => ({ ...f, amount: fmtInput(e.target.value) }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   {/* 카드 결제는 계좌 불필요 — 통장일 때만 표시 */}
                   {form.paymentMethod === 'account' && (
@@ -747,7 +820,7 @@ export default function TransactionsPage() {
                           </div>
                           {Number(form.installmentMonths) > 1 && form.amount && (
                             <div className="mt-2 bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700">
-                              월 {Math.floor(Number(form.amount) / Number(form.installmentMonths)).toLocaleString('ko-KR')}원
+                              월 {Math.floor(parseAmt(form.amount) / Number(form.installmentMonths)).toLocaleString('ko-KR')}원
                               × {form.installmentMonths}개월 → 각 달에 거래 자동 추가
                             </div>
                           )}

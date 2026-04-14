@@ -5,6 +5,9 @@ import { useApp } from '@/lib/AppContext'
 import { Goal } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
+// FR-007
+function parseAmt(s: string): number { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
+function fmtInput(s: string): string { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 function fmtShort(n: number) {
   if (n >= 100000000) return (n/100000000).toFixed(1)+'억'
   if (n >= 10000) return (n/10000).toFixed(0)+'만'
@@ -27,7 +30,7 @@ export default function GoalsPage() {
   }
   function handleAdd() {
     if (!form.name || !form.targetAmount) return
-    setGoals([...goals, { id:`g${Date.now()}`, name:form.name, targetAmount:Number(form.targetAmount), currentAmount:Number(form.currentAmount)||0, deadline:form.deadline, color:form.color } as Goal])
+    setGoals([...goals, { id:`g${Date.now()}`, name:form.name, targetAmount:parseAmt(form.targetAmount), currentAmount:parseAmt(form.currentAmount)||0, deadline:form.deadline, color:form.color } as Goal])
     setShowModal(false)
     setForm({ name:'', targetAmount:'', currentAmount:'', deadline:'', color:'#0064FF' })
   }
@@ -107,8 +110,8 @@ export default function GoalsPage() {
             <div className="space-y-3">
               <input type="text" placeholder="목표 이름" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <div className="grid grid-cols-2 gap-2">
-                <input type="number" placeholder="목표 금액" value={form.targetAmount} onChange={e => setForm(f => ({ ...f, targetAmount: e.target.value }))} className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <input type="number" placeholder="현재 금액" value={form.currentAmount} onChange={e => setForm(f => ({ ...f, currentAmount: e.target.value }))} className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" inputMode="numeric" placeholder="목표 금액" value={form.targetAmount} onChange={e => setForm(f => ({ ...f, targetAmount: fmtInput(e.target.value) }))} className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" inputMode="numeric" placeholder="현재 금액" value={form.currentAmount} onChange={e => setForm(f => ({ ...f, currentAmount: fmtInput(e.target.value) }))} className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div><label className="text-xs text-gray-400 block mb-0.5">목표 기한</label><input type="date" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
               <div className="flex gap-2 flex-wrap">{PRESET_COLORS.map(c => (<button key={c} onClick={() => setForm(f => ({ ...f, color: c }))} className={`w-8 h-8 rounded-xl transition-transform ${form.color === c ? 'scale-125 ring-2 ring-offset-1 ring-blue-400' : ''}`} style={{ backgroundColor: c }} />))}</div>

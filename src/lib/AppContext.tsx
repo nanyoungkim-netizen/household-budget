@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -68,6 +68,7 @@ interface AppData {
   installments: Installment[]
   savings: Saving[]
   goals: Goal[]
+  cardBillings: CardBilling[]   // FR-009
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -81,6 +82,7 @@ const INITIAL_DATA: AppData = {
   installments: [],
   savings: [],
   goals: [],
+  cardBillings: [],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -114,6 +116,8 @@ interface AppContextType {
   setSavings: (savings: Saving[]) => void
   // 목표
   setGoals: (goals: Goal[]) => void
+  // 카드 청구 (FR-009)
+  setCardBillings: (billings: CardBilling[]) => void
   // 카테고리
   setCategories: (categories: Category[]) => void
   // 초기 설정 완료
@@ -385,6 +389,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, goals, lastModified: now() }))
   }, [update])
 
+  const setCardBillings = useCallback((cardBillings: CardBilling[]) => {
+    update(d => ({ ...d, cardBillings, lastModified: now() }))
+  }, [update])
+
   const setCategories = useCallback((categories: Category[]) => {
     update(d => ({ ...d, categories, lastModified: now() }))
   }, [update])
@@ -421,6 +429,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInstallments,
       setSavings,
       setGoals,
+      setCardBillings,
       setCategories,
       completeSetup,
       resetAll,
