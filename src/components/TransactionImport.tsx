@@ -863,10 +863,10 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   {isPDF && (
                     <span className="bg-red-100 text-red-600 text-xs font-semibold px-2 py-0.5 rounded-full">📄 PDF 자동인식</span>
                   )}
-                  총 <span className="font-bold">{rows.length}</span>건 중{' '}
-                  <span className="font-bold">{selectedCount}</span>건 선택
+                  총 <span className="font-bold">{rows.length + excludedCount}</span>건 중{' '}
+                  <span className="font-bold">{selectedCount}</span>건의 지출 내역이 등록됩니다
                   {excludedCount > 0 && (
-                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">취소 {excludedCount}건 자동 제외됨</span>
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">취소·승인 {excludedCount}건 자동 제외됨</span>
                   )}
                   {suggestedCount > 0 && (
                     <span className="text-xs text-blue-500">✨ {suggestedCount}건 카테고리 자동추천됨</span>
