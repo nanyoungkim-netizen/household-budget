@@ -49,10 +49,35 @@ export default function BudgetPage() {
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
-  // 지출 + 통장환급(차감)만 포함 — 카드 환급은 예산에 반영 안 함
+  // 지출 + 통장환급(차감)만 포함 — 카드 환급 제외, 카드대금(card) 제외 (카드 사용과 이중 계산 방지)
   const monthTx = transactions.filter(t =>
-    t.date.startsWith(month) && (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
+    t.date.startsWith(month) &&
+    t.categoryId !== 'card' &&
+    (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
+
+  // ── 지출 방식 분석 ─────────────────────────────────────────────────────────
+  const allMonthExpense = transactions.filter(t => t.date.startsWith(month) && t.type === 'expense')
+  const accountExpense = allMonthExpense
+    .filter(t => t.paymentMethod === 'account' && t.categoryId !== 'card')
+    .reduce((s, t) => s + t.amount, 0)
+  const cardExpense = allMonthExpense
+    .filter(t => t.paymentMethod === 'card')
+    .reduce((s, t) => s + t.amount, 0)
+  const cardPayment = allMonthExpense
+    .filter(t => t.categoryId === 'card')
+    .reduce((s, t) => s + t.amount, 0)
+
+  // ── 카드별 청구 예정 ────────────────────────────────────────────────────────
+  const { cards } = data
+  const cardBreakdown = cards
+    .map(card => ({
+      ...card,
+      amount: allMonthExpense
+        .filter(t => t.paymentMethod === 'card' && t.cardId === card.id)
+        .reduce((s, t) => s + t.amount, 0),
+    }))
+    .filter(c => c.amount > 0)
 
   function getChildren(parentId: string) {
     return categories.filter(c => c.parentId === parentId)
@@ -218,7 +243,7 @@ export default function BudgetPage() {
           <div className="text-base font-bold text-gray-900">{fmtKRW(totalBudget)}</div>
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">실제 지출</div>
+          <div className="text-xs text-gray-500 mb-1">실제 지출 <span className="text-gray-300">(카드대금 제외)</span></div>
           <div className={`text-base font-bold ${totalActual > totalBudget && totalBudget > 0 ? 'text-red-500' : 'text-gray-900'}`}>{fmtKRW(totalActual)}</div>
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -242,6 +267,49 @@ export default function BudgetPage() {
           </div>
         </div>
       )}
+
+      {/* 지출 방식 분석 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-5">
+        <div className="text-xs font-semibold text-gray-500 mb-3">이달 지출 분석</div>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="bg-blue-50 rounded-xl p-3">
+            <div className="text-xs text-blue-500 mb-0.5">통장 직접 결제</div>
+            <div className="text-sm font-bold text-blue-700">{fmtKRW(accountExpense)}</div>
+          </div>
+          <div className="bg-purple-50 rounded-xl p-3">
+            <div className="text-xs text-purple-500 mb-0.5">카드 사용</div>
+            <div className="text-sm font-bold text-purple-700">{fmtKRW(cardExpense)}</div>
+          </div>
+        </div>
+        <div className="border-t border-gray-100 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500">카드 청구 예정</span>
+            {cardPayment > 0 && (
+              <span className="text-xs text-gray-400">이달 납부완료 {fmtKRW(cardPayment)}</span>
+            )}
+          </div>
+          {cardBreakdown.length > 0 ? (
+            <div className="space-y-1.5">
+              {cardBreakdown.map(card => (
+                <div key={card.id} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: card.color }} />
+                    <span className="text-gray-700 font-medium">{card.name}</span>
+                    <span className="text-gray-300">결제일 {card.billingDate}일</span>
+                  </div>
+                  <span className="font-semibold text-gray-800">{fmtKRW(card.amount)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-100">
+                <span className="text-gray-400">합계</span>
+                <span className="font-bold text-purple-700">{fmtKRW(cardExpense)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400">이달 카드 사용 내역 없음</div>
+          )}
+        </div>
+      </div>
 
       {/* 대분류별 테이블 */}
       <div className="space-y-3">
