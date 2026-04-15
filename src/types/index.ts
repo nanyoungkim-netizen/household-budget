@@ -75,6 +75,7 @@ export interface Saving {
   expectedAmount: number
   interestType?: 'simple' | 'compound'   // FR-008: 단리/복리
   manualInterest?: boolean               // FR-008: 직접 입력 여부
+  taxType?: 'general' | 'exempt'         // FR-011: 과세 유형
 }
 
 // FR-009: 카드 청구·납부 관리

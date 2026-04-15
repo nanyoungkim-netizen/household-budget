@@ -2,10 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { flushSync } from 'react-dom'
 import { useApp, DEFAULT_ACCOUNTS, DEFAULT_CARDS } from '@/lib/AppContext'
 import { Account, Saving, Goal } from '@/types'
 
-function formatKRW(n: number) { return n.toLocaleString('ko-KR') }
+// FR-016: 쉼표 포맷 헬퍼
+function parseNum(s: string) { return Number(s.replace(/,/g, '')) || 0 }
+function fmtComma(n: number) { return n === 0 ? '' : n.toLocaleString('ko-KR') }
 
 const STEPS = ['계좌 잔액', '적금·예금', '재무 목표', '완료']
 
@@ -17,6 +20,10 @@ export default function SetupPage() {
   // Step 0 - 계좌 잔액
   const [accounts, setAccounts] = useState<Account[]>(
     DEFAULT_ACCOUNTS.map(a => ({ ...a }))
+  )
+  // FR-016: 표시용 문자열 상태 (쉼표 포함)
+  const [balanceInputs, setBalanceInputs] = useState<Record<string, string>>(
+    Object.fromEntries(DEFAULT_ACCOUNTS.map(a => [a.id, '']))
   )
 
   // Step 1 - 적금·예금
@@ -34,22 +41,24 @@ export default function SetupPage() {
 
   const PRESET_COLORS = ['#0064FF', '#00B493', '#FF6B6B', '#FFB800', '#9B59B6', '#E67E22']
 
-  function updateBalance(id: string, val: string) {
-    setAccounts(prev => prev.map(a =>
-      a.id === id ? { ...a, balance: Number(val.replace(/,/g, '')) || 0 } : a
-    ))
+  // FR-016: 잔액 입력 — 실시간 쉼표 포맷
+  function updateBalance(id: string, rawVal: string) {
+    const digits = rawVal.replace(/[^0-9]/g, '')
+    const num = Number(digits) || 0
+    setBalanceInputs(prev => ({ ...prev, [id]: digits === '' ? '' : num.toLocaleString('ko-KR') }))
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, balance: num } : a))
   }
 
   function addSaving() {
     if (!savingForm.name || !savingForm.bank) return
-    const cur = Number(savingForm.currentAmount) || 0
+    const cur = parseNum(savingForm.currentAmount)
     const rate = Number(savingForm.interestRate) || 0
     setSavings(prev => [...prev, {
       id: `s${Date.now()}`,
       name: savingForm.name,
       bank: savingForm.bank,
       type: savingForm.type,
-      monthlyAmount: Number(savingForm.monthlyAmount) || 0,
+      monthlyAmount: parseNum(savingForm.monthlyAmount),
       interestRate: rate,
       startDate: savingForm.startDate,
       maturityDate: savingForm.maturityDate,
@@ -72,15 +81,18 @@ export default function SetupPage() {
     setGoalForm({ name: '', targetAmount: '', currentAmount: '', deadline: '', color: '#0064FF' })
   }
 
+  // FR-014: flushSync으로 상태를 즉시 커밋한 뒤 라우팅
   function finish() {
-    completeSetup({
-      accounts,
-      cards: DEFAULT_CARDS,
-      savings,
-      goals,
-      transactions: [],
-      budgets: [],
-      installments: [],
+    flushSync(() => {
+      completeSetup({
+        accounts,
+        cards: DEFAULT_CARDS,
+        savings,
+        goals,
+        transactions: [],
+        budgets: [],
+        installments: [],
+      })
     })
     router.push('/')
   }
@@ -99,7 +111,7 @@ export default function SetupPage() {
 
         {/* 단계 표시 */}
         <div className="flex items-center gap-1 mb-8">
-          {STEPS.map((label, i) => (
+          {STEPS.map((_, i) => (
             <div key={i} className="flex items-center gap-1 flex-1">
               <div className={`flex-1 h-1.5 rounded-full transition-all ${i <= step ? 'bg-blue-600' : 'bg-gray-200'}`} />
             </div>
@@ -123,11 +135,13 @@ export default function SetupPage() {
                   </div>
                   <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900 mb-1">{acc.name}</div>
+                    {/* FR-016: type="text" + inputMode="numeric" + 쉼표 포맷 */}
                     <div className="relative">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         placeholder="0"
-                        value={acc.balance || ''}
+                        value={balanceInputs[acc.id] ?? ''}
                         onChange={e => updateBalance(acc.id, e.target.value)}
                         className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -140,7 +154,7 @@ export default function SetupPage() {
             {totalBalance > 0 && (
               <div className="mt-4 bg-blue-50 rounded-xl p-3 text-center">
                 <span className="text-xs text-gray-500">총 잔액 </span>
-                <span className="text-sm font-bold text-blue-600">{formatKRW(totalBalance)}원</span>
+                <span className="text-sm font-bold text-blue-600">{fmtComma(totalBalance)}원</span>
               </div>
             )}
           </div>
@@ -170,7 +184,7 @@ export default function SetupPage() {
                     className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="number" placeholder="현재 금액 (원)" value={savingForm.currentAmount}
+                  <input type="text" inputMode="numeric" placeholder="현재 금액 (원)" value={savingForm.currentAmount}
                     onChange={e => setSavingForm(f => ({ ...f, currentAmount: e.target.value }))}
                     className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <input type="number" placeholder="연 이율 (%)" value={savingForm.interestRate}
@@ -210,7 +224,7 @@ export default function SetupPage() {
                       <span className="text-xs text-gray-400 ml-1">· {s.bank}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-gray-900">{formatKRW(s.currentAmount)}원</span>
+                      <span className="text-sm font-bold text-gray-900">{s.currentAmount.toLocaleString('ko-KR')}원</span>
                       <button onClick={() => setSavings(prev => prev.filter(x => x.id !== s.id))}
                         className="text-gray-300 hover:text-red-400 text-xs">삭제</button>
                     </div>
@@ -274,7 +288,7 @@ export default function SetupPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-400">{pct}%</span>
-                        <span className="text-sm font-bold text-gray-900">{formatKRW(g.currentAmount)}원</span>
+                        <span className="text-sm font-bold text-gray-900">{g.currentAmount.toLocaleString('ko-KR')}원</span>
                         <button onClick={() => setGoals(prev => prev.filter(x => x.id !== g.id))}
                           className="text-gray-300 hover:text-red-400 text-xs">삭제</button>
                       </div>

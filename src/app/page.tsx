@@ -91,10 +91,23 @@ export default function Dashboard() {
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
     .slice(0, 8)
 
-  // 계좌 실시간 잔액
+  // FR-015: 날짜 선택 시 해당 날짜 기준 잔액 계산
+  // 오늘(현재월)이면 전체 거래 반영, 과거 날짜면 해당 날짜까지의 거래만 반영
+  const isHistoricalDay   = viewMode === 'day'   && !isToday
+  const isHistoricalMonth = viewMode === 'month' && !isThisMonth
+
+  // 계좌별 잔액 계산용 거래 필터
+  const txsForBalance = (isHistoricalDay || isHistoricalMonth)
+    ? transactions.filter(t => {
+        if (isHistoricalDay)   return t.date <= selectedDay
+        if (isHistoricalMonth) return t.date.slice(0,7) <= selectedMonth
+        return true
+      })
+    : transactions
+
   const accountBalances = accounts.map(a => ({
     ...a,
-    computed: computeAccountBalance(a.id, a.balance, transactions),
+    computed: computeAccountBalance(a.id, a.balance, txsForBalance),
   }))
   const totalBalance = accountBalances.reduce((s, a) => s + a.computed, 0)
 
@@ -215,9 +228,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 총 자산 */}
+        {/* FR-015: 총 자산 라벨 — 날짜 선택 시 "[선택날짜] 기준 자산" */}
         <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between">
-          <div className="text-xs opacity-70">현재 총 자산</div>
+          <div className="text-xs opacity-70">
+            {isHistoricalDay
+              ? `${selectedDay} 기준 자산`
+              : isHistoricalMonth
+              ? `${selectedMonth} 기준 자산`
+              : '오늘 기준 자산'}
+          </div>
           <div className="text-lg font-bold tabular-nums">{fmtKRW(totalBalance)}</div>
         </div>
       </div>
