@@ -20,6 +20,7 @@ export default function SettingsPage() {
 
   // ── 통장 상태 ──────────────────────────────────────────────────────────────
   const [showAccountModal, setShowAccountModal] = useState(false)
+  const [editAccountId, setEditAccountId] = useState<string | null>(null)   // null=추가, string=수정
   const [editBalances, setEditBalances] = useState<Record<string, string>>({})
   const [editingAccount, setEditingAccount] = useState<string | null>(null)
   const [accountForm, setAccountForm] = useState({ name: '', bank: '', color: '#0064FF', balance: '' })
@@ -78,17 +79,39 @@ export default function SettingsPage() {
     setEditingAccount(null)
   }
 
-  function addAccount() {
+  function openAddAccount() {
+    setEditAccountId(null)
+    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '' })
+    setShowAccountModal(true)
+  }
+
+  function openEditAccount(acc: Account) {
+    setEditAccountId(acc.id)
+    setAccountForm({ name: acc.name, bank: acc.bank, color: acc.color, balance: acc.balance === 0 ? '' : fmtInput(String(acc.balance)) })
+    setShowAccountModal(true)
+  }
+
+  function saveAccount() {
     if (!accountForm.name || !accountForm.bank) return
-    const newAcc: Account = {
-      id: `acc_${Date.now()}`,
-      name: accountForm.name,
-      bank: accountForm.bank,
-      balance: parseAmt(accountForm.balance),
-      color: accountForm.color,
+    if (editAccountId) {
+      // 수정
+      setAccounts(accounts.map(a => a.id === editAccountId
+        ? { ...a, name: accountForm.name, bank: accountForm.bank, color: accountForm.color, balance: parseAmt(accountForm.balance) }
+        : a
+      ))
+    } else {
+      // 추가
+      const newAcc: Account = {
+        id: `acc_${Date.now()}`,
+        name: accountForm.name,
+        bank: accountForm.bank,
+        balance: parseAmt(accountForm.balance),
+        color: accountForm.color,
+      }
+      setAccounts([...accounts, newAcc])
     }
-    setAccounts([...accounts, newAcc])
     setShowAccountModal(false)
+    setEditAccountId(null)
     setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '' })
   }
 
@@ -233,8 +256,12 @@ export default function SettingsPage() {
                       <div className="text-xs text-gray-400">{acc.bank}</div>
                     </div>
                   </div>
-                  <button onClick={() => deleteAccount(acc.id)}
-                    className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => openEditAccount(acc)}
+                      className="text-xs text-blue-400 hover:text-blue-600 transition-colors font-medium">수정</button>
+                    <button onClick={() => deleteAccount(acc.id)}
+                      className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
+                  </div>
                 </div>
 
                 {/* 실시간 잔액 */}
@@ -324,7 +351,7 @@ export default function SettingsPage() {
             )
           })}
 
-          <button onClick={() => setShowAccountModal(true)}
+          <button onClick={openAddAccount}
             className="w-full bg-white rounded-2xl shadow-sm py-4 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">
             <span className="text-xl">+</span> 통장 추가
           </button>
@@ -571,8 +598,8 @@ export default function SettingsPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">통장 추가</h2>
-              <button onClick={() => setShowAccountModal(false)} className="text-gray-400 text-xl leading-none">×</button>
+              <h2 className="text-base font-bold">{editAccountId ? '통장 수정' : '통장 추가'}</h2>
+              <button onClick={() => { setShowAccountModal(false); setEditAccountId(null) }} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
@@ -596,8 +623,10 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
-              <button onClick={addAccount}
-                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">추가하기</button>
+              <button onClick={saveAccount}
+                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">
+                {editAccountId ? '저장하기' : '추가하기'}
+              </button>
             </div>
           </div>
         </div>
