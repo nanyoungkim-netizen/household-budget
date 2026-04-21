@@ -11,6 +11,37 @@ function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.to
 const PRESET_COLORS = ['#0064FF','#FFB800','#00B493','#FF6B6B','#4ECDC4','#9B59B6','#E67E22','#1ABC9C','#E74C3C','#0065CC','#E60000','#1A1A1A','#1259AA','#2ECC71','#F39C12']
 const PRESET_ICONS = ['🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','📦','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️','🌿','🎯']
 
+// 은행 약칭 프리셋
+const BANK_PRESETS = [
+  { name: '토스뱅크',   abbr: '토스',   color: '#0064FF' },
+  { name: '카카오뱅크', abbr: '카카오', color: '#FEE500', textColor: '#3D3000' },
+  { name: 'KB국민은행', abbr: 'KB',     color: '#FFC500', textColor: '#3D2800' },
+  { name: '국민은행',   abbr: 'KB',     color: '#FFC500', textColor: '#3D2800' },
+  { name: '신한은행',   abbr: '신한',   color: '#005BAC' },
+  { name: '우리은행',   abbr: '우리',   color: '#007BC7' },
+  { name: '하나은행',   abbr: '하나',   color: '#008C6E' },
+  { name: 'NH농협',     abbr: '농협',   color: '#007B40' },
+  { name: '광주은행',   abbr: '광주',   color: '#00B493' },
+  { name: '카카오페이', abbr: '카카오', color: '#FEE500', textColor: '#3D3000' },
+  { name: '삼성카드',   abbr: '삼성',   color: '#1259AA' },
+]
+function getBankPreset(bankName: string) {
+  return BANK_PRESETS.find(b => b.name === bankName) ?? null
+}
+function AccIcon({ acc }: { acc: Account }) {
+  const preset = getBankPreset(acc.bank)
+  const bg    = preset?.color ?? acc.color
+  const text  = preset?.textColor ?? '#fff'
+  const label = preset ? preset.abbr : acc.name.charAt(0)
+  const small = label.length > 2
+  return (
+    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold flex-shrink-0 ${small ? 'text-[10px]' : 'text-sm'}`}
+      style={{ backgroundColor: bg, color: text }}>
+      {label}
+    </div>
+  )
+}
+
 type TabType = '통장' | '카드' | '카테고리' | '규칙'
 
 export default function SettingsPage() {
@@ -248,12 +279,10 @@ export default function SettingsPage() {
               <div key={acc.id} className="bg-white rounded-2xl p-5 shadow-sm" style={{ borderLeft: `4px solid ${acc.color}` }}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>
-                      {acc.name.charAt(0)}
-                    </div>
+                    <AccIcon acc={acc} />
                     <div>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>
                       <div className="font-semibold text-gray-900">{acc.name}</div>
-                      <div className="text-xs text-gray-400">{acc.bank}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
