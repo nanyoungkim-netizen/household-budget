@@ -75,7 +75,7 @@ export default function Dashboard() {
   if (!isSetupComplete) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-3xl font-bold mb-4">가</div>
+        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-3xl mb-4">🌰</div>
         <h1 className="text-xl font-bold text-gray-900 mb-2">가계부에 오신 걸 환영해요!</h1>
         <p className="text-sm text-gray-500 mb-6">시작 전 현재 보유 금액을 설정해드릴게요.</p>
         <button onClick={() => router.push('/setup')}
