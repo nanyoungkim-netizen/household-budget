@@ -234,22 +234,23 @@ export default function SavingsPage() {
                   <div className="font-semibold text-gray-900 mt-1">{s.name}</div>
                   <div className="text-xs text-gray-400">{s.bank} · 연 {s.interestRate}%</div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-gray-900">{fmtKRW(s.currentAmount)}</div>
-                  <div className="flex gap-2 justify-end mt-0.5">
-                    <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
-                    <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
-                  </div>
+                <div className="flex gap-2 items-start mt-0.5">
+                  <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
+                  <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-3 gap-2 mb-3">
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="text-xs text-gray-500 mb-0.5">만기 예상 수령액</div>
-                  <div className="text-sm font-semibold text-gray-900">{fmtKRW(s.expectedAmount)}</div>
+                  <div className="text-xs text-gray-400 mb-0.5">원금</div>
+                  <div className="text-sm font-semibold text-gray-900">{fmtKRW(s.currentAmount)}</div>
                 </div>
                 <div className="bg-emerald-50 rounded-xl p-3">
-                  <div className="text-xs text-emerald-600 mb-0.5">이자 수익 (세후)</div>
+                  <div className="text-xs text-emerald-600 mb-0.5">이자</div>
                   <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(Math.max(0, interestIncome))}</div>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <div className="text-xs text-blue-600 mb-0.5">만기수령액</div>
+                  <div className="text-sm font-semibold text-blue-700">{fmtKRW(s.expectedAmount)}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
