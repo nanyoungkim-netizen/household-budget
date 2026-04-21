@@ -93,6 +93,7 @@ export default function SavingsPage() {
   const { data, setSavings } = useApp()
   const { savings } = data
   const [showModal, setShowModal] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)   // null=추가, string=수정
   const [form, setForm] = useState(EMPTY_FORM)
   // FR-013: 탭 전환 확인 다이얼로그
   const [pendingTab, setPendingTab] = useState<'saving' | 'deposit' | null>(null)
@@ -132,14 +133,37 @@ export default function SavingsPage() {
   ), [form.type, form.monthlyAmount, form.currentAmount, form.interestRate,
       form.startDate, form.maturityDate, form.interestType, form.taxType])
 
-  function handleAdd() {
+  function openAdd() {
+    setEditId(null)
+    setForm(EMPTY_FORM)
+    setShowModal(true)
+  }
+
+  function openEdit(s: Saving) {
+    setEditId(s.id)
+    setForm({
+      name: s.name,
+      bank: s.bank,
+      type: s.type,
+      monthlyAmount: s.monthlyAmount ? fmtInput(String(s.monthlyAmount)) : '',
+      interestRate: String(s.interestRate),
+      startDate: s.startDate,
+      maturityDate: s.maturityDate,
+      currentAmount: s.currentAmount ? fmtInput(String(s.currentAmount)) : '',
+      interestType: s.interestType ?? 'simple',
+      taxType: s.taxType ?? 'general',
+    })
+    setShowModal(true)
+  }
+
+  function handleSave() {
     if (!form.name || !form.bank) return
     const cur   = parseAmt(form.currentAmount)
     const rate  = Number(form.interestRate) || 0
     const maturity = calcResult?.maturityAmount ?? cur * (1 + rate / 100)
 
-    setSavings([...savings, {
-      id: `s${Date.now()}`,
+    const saving: Saving = {
+      id: editId ?? `s${Date.now()}`,
       name: form.name,
       bank: form.bank,
       type: form.type,
@@ -151,8 +175,15 @@ export default function SavingsPage() {
       expectedAmount: maturity,
       interestType: form.interestType,
       taxType: form.taxType,
-    } as Saving])
+    }
+
+    if (editId) {
+      setSavings(savings.map(s => s.id === editId ? saving : s))
+    } else {
+      setSavings([...savings, saving])
+    }
     setShowModal(false)
+    setEditId(null)
     setForm(EMPTY_FORM)
   }
 
@@ -165,7 +196,7 @@ export default function SavingsPage() {
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">적금·예금 관리</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">+ 추가</button>
+        <button onClick={openAdd} className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">+ 추가</button>
       </div>
 
       {/* 요약 카드 */}
@@ -205,7 +236,10 @@ export default function SavingsPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">{fmtKRW(s.currentAmount)}</div>
-                  <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400 mt-0.5">삭제</button>
+                  <div className="flex gap-2 justify-end mt-0.5">
+                    <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
+                    <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -265,8 +299,8 @@ export default function SavingsPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">적금·예금 추가</h2>
-              <button onClick={() => { setShowModal(false); setForm(EMPTY_FORM) }} className="text-gray-400 text-xl leading-none">×</button>
+              <h2 className="text-base font-bold">{editId ? '적금·예금 수정' : '적금·예금 추가'}</h2>
+              <button onClick={() => { setShowModal(false); setEditId(null); setForm(EMPTY_FORM) }} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
               {/* FR-013: 탭 전환 핸들러 적용 */}
@@ -375,9 +409,9 @@ export default function SavingsPage() {
                 </div>
               )}
 
-              <button onClick={handleAdd}
+              <button onClick={handleSave}
                 className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">
-                추가하기
+                {editId ? '저장하기' : '추가하기'}
               </button>
             </div>
           </div>
