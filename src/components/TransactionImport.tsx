@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { useApp } from '@/lib/AppContext'
-import { Transaction, PaymentMethod } from '@/types'
+import { Transaction, PaymentMethod, Category } from '@/types'
 
 // ── PDF 파싱 (pdfjs-dist) ─────────────────────────────────────────────────────
 async function extractPDFRows(file: File, password?: string): Promise<string[][]> {
@@ -211,8 +211,21 @@ function txTypeToDir(txType: string): 'income' | 'expense' | null {
   return null
 }
 
-function suggestCategory(desc: string, txType: string, type: 'income' | 'expense'): string {
+function suggestCategory(
+  desc: string,
+  txType: string,
+  type: 'income' | 'expense',
+  userRules: { keyword: string; categoryId: string }[] = []
+): string {
   const lower = (desc + txType).toLowerCase().replace(/\s/g, '')
+
+  // FR-08: 사용자 정의 규칙 우선 (가장 긴 키워드 기준)
+  const matchedUserRules = userRules.filter(r => lower.includes(r.keyword.toLowerCase().replace(/\s/g, '')))
+  if (matchedUserRules.length > 0) {
+    matchedUserRules.sort((a, b) => b.keyword.length - a.keyword.length)
+    return matchedUserRules[0].categoryId
+  }
+
   for (const rule of KEYWORD_MAP) {
     if (rule.type !== type) continue
     if (rule.keywords.some(kw => lower.includes(kw.toLowerCase().replace(/\s/g, '')))) {
@@ -290,8 +303,8 @@ type Step = 'upload' | 'map' | 'review'
 const steps: Step[] = ['upload', 'map', 'review']
 
 export default function TransactionImport({ onClose }: TransactionImportProps) {
-  const { data, categories, addTransaction } = useApp()
-  const { accounts, cards } = data
+  const { data, categories, addTransaction, setCategories } = useApp()
+  const { accounts, cards, mappingRules } = data
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<Step>('upload')
@@ -321,6 +334,16 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
   const [bulkType, setBulkType]         = useState<'income' | 'expense' | 'transfer'>('expense')
   const [bulkCatId, setBulkCatId]       = useState('')
+
+  // FR-06: 헤더 일괄 적용 상태
+  const [headerType,    setHeaderType]    = useState<'income' | 'expense' | 'transfer' | ''>('')
+  const [headerCatId,   setHeaderCatId]   = useState('')
+  const [headerAccId,   setHeaderAccId]   = useState('')
+
+  // FR-07: 새 카테고리 추가
+  const [newCatRowKey,   setNewCatRowKey]   = useState<string | null>(null)
+  const [newCatName,     setNewCatName]     = useState('')
+  const [newCatType,     setNewCatType]     = useState<'income' | 'expense'>('expense')
 
   function toggleBulkSelect(key: string, checked: boolean) {
     setBulkSelected(prev => {
@@ -506,14 +529,23 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         // 단일 금액 컬럼 (토스뱅크: 음수=지출, 양수=수입)
         const signed = parseAmountSigned(amtVal)
         if (signed === 0) return
-        // 거래유형 컬럼이 있으면 우선 활용
-        const dirFromType = txType ? txTypeToDir(txType) : null
-        if (dirFromType) {
-          type = dirFromType
+        // FR-09: 카드 소스일 경우 기본값 지출
+        if (importSourceType === 'card') {
+          type = 'expense'
         } else {
-          type = signed < 0 ? 'expense' : 'income'
+          const dirFromType = txType ? txTypeToDir(txType) : null
+          if (dirFromType) {
+            type = dirFromType
+          } else {
+            type = signed < 0 ? 'expense' : 'income'
+          }
         }
         amount = Math.abs(signed)
+      }
+
+      // FR-09: 출금/입금 분리 컬럼에서도 카드면 expense 우선
+      if (importSourceType === 'card' && type === 'income' && colWithdrawal < 0) {
+        type = 'expense'
       }
 
       if (amount === 0) return
@@ -525,7 +557,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
       let categoryId = 'transfer'
       let autoSuggested = false
       if (!isTransfer) {
-        const suggestedCatId = suggestCategory(desc, txType, type)
+        const suggestedCatId = suggestCategory(desc, txType, type, mappingRules)
         const catList = type === 'income' ? incomeLeaf : expenseLeaf
         const catExists = catList.some(c => c.id === suggestedCatId)
         categoryId = catExists ? suggestedCatId : (catList[0]?.id || '')
@@ -557,6 +589,47 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   // ── 행 업데이트 ───────────────────────────────────────────────────────────
   function updateRow(key: string, patch: Partial<ImportRow>) {
     setRows(rs => rs.map(r => r._key === key ? { ...r, ...patch } : r))
+  }
+
+  // FR-07: 새 카테고리 추가 + 기초설정 자동 동기화
+  function addNewCategory(rowKey: string) {
+    const name = newCatName.trim()
+    if (!name) return
+    if (categories.some(c => c.name === name)) {
+      alert('이미 존재하는 카테고리입니다')
+      return
+    }
+    const parentId = newCatType === 'income' ? 'pg_income' : 'pg_etc'
+    const newCat: Category = {
+      id: `cat_${Date.now()}`,
+      name,
+      type: newCatType,
+      icon: newCatType === 'income' ? '💰' : '📦',
+      color: '#CFD8DC',
+      parentId,
+    }
+    setCategories([...categories, newCat])
+    updateRow(rowKey, { categoryId: newCat.id, type: newCatType, autoSuggested: false })
+    setNewCatRowKey(null)
+    setNewCatName('')
+  }
+
+  // FR-06: 헤더 일괄 적용
+  function applyHeaderType(t: 'income' | 'expense' | 'transfer') {
+    setHeaderType(t)
+    setRows(prev => prev.map(r => {
+      if (t === 'transfer') return { ...r, type: 'transfer', categoryId: 'transfer', autoSuggested: false }
+      const cats = t === 'income' ? incomeLeaf : expenseLeaf
+      return { ...r, type: t, categoryId: cats[0]?.id || '', autoSuggested: false }
+    }))
+  }
+  function applyHeaderCat(catId: string) {
+    setHeaderCatId(catId)
+    setRows(prev => prev.map(r => r.type !== 'transfer' ? { ...r, categoryId: catId, autoSuggested: false } : r))
+  }
+  function applyHeaderAcc(accId: string) {
+    setHeaderAccId(accId)
+    setRows(prev => prev.map(r => ({ ...r, accountId: accId })))
   }
 
   function toggleAll(checked: boolean) {
@@ -753,7 +826,17 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
           <div className="flex-1 overflow-y-auto p-6">
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-1">📄 <span className="font-medium">{fileName}</span></p>
-              <p className="text-xs text-gray-400">자동으로 컬럼을 감지했습니다. 맞지 않으면 직접 선택하세요.</p>
+              {/* FR-10: 자동 감지 결과 요약 */}
+              <div className="mt-2 bg-blue-50 rounded-xl px-4 py-2.5 text-xs text-blue-700 flex flex-wrap gap-x-4 gap-y-1">
+                <span className="font-semibold">🔍 자동 인식 결과:</span>
+                {colDate >= 0       && <span>날짜 → <b>{rawHeaders[colDate] || `열${colDate+1}`}</b></span>}
+                {colDesc >= 0       && <span>내용 → <b>{rawHeaders[colDesc] || `열${colDesc+1}`}</b></span>}
+                {colTxType >= 0     && <span>거래유형 → <b>{rawHeaders[colTxType] || `열${colTxType+1}`}</b></span>}
+                {colWithdrawal >= 0 && <span>출금 → <b>{rawHeaders[colWithdrawal] || `열${colWithdrawal+1}`}</b></span>}
+                {colDeposit >= 0    && <span>입금 → <b>{rawHeaders[colDeposit] || `열${colDeposit+1}`}</b></span>}
+                {colAmount >= 0     && <span>금액 → <b>{rawHeaders[colAmount] || `열${colAmount+1}`}</b></span>}
+                {colDate < 0 && <span className="text-red-500 font-semibold">⚠ 날짜 컬럼 미인식 — 직접 선택 필요</span>}
+              </div>
             </div>
 
             {/* 계좌/카드 선택 */}
@@ -927,7 +1010,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
               {/* 검토 테이블 */}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                  {/* FR-11: sticky 헤더 + FR-06: 헤더 일괄 적용 */}
+                  <thead className="sticky top-0 z-10">
+                    {/* 헤더 Row 1: 컬럼명 */}
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="px-2 py-2.5 text-center w-8">
                         <input type="checkbox"
@@ -957,6 +1042,51 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                         <>
                           <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">계좌</th>
                           <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">결제</th>
+                        </>
+                      )}
+                    </tr>
+                    {/* FR-06: 헤더 Row 2: 전체 적용 드롭다운 */}
+                    <tr className="bg-indigo-50 border-b border-indigo-100">
+                      <td colSpan={2} className="px-2 py-1 text-[10px] text-indigo-500 font-semibold text-center whitespace-nowrap">전체적용</td>
+                      <td className="px-3 py-1" />{/* 날짜 */}
+                      <td className="px-3 py-1" />{/* 내용 */}
+                      {colTxType >= 0 && <td className="px-3 py-1" />}
+                      <td className="px-3 py-1" />{/* 금액 */}
+                      {/* 유형 전체 적용 */}
+                      <td className="px-3 py-1 text-center">
+                        <select value={headerType}
+                          onChange={e => applyHeaderType(e.target.value as 'income' | 'expense' | 'transfer')}
+                          className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 text-indigo-700">
+                          <option value="">—</option>
+                          <option value="expense">전체 지출</option>
+                          <option value="income">전체 수입</option>
+                          <option value="transfer">전체 이체</option>
+                        </select>
+                      </td>
+                      {/* 카테고리 전체 적용 */}
+                      <td className="px-3 py-1">
+                        <select value={headerCatId}
+                          onChange={e => applyHeaderCat(e.target.value)}
+                          className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-32">
+                          <option value="">— 카테고리</option>
+                          {expenseLeaf.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                          {incomeLeaf.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                        </select>
+                      </td>
+                      {/* 계좌 전체 적용 */}
+                      {importSourceType === 'card' ? (
+                        <td className="px-3 py-1" />
+                      ) : (
+                        <>
+                          <td className="px-3 py-1">
+                            <select value={headerAccId}
+                              onChange={e => applyHeaderAcc(e.target.value)}
+                              className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-28">
+                              <option value="">— 계좌</option>
+                              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-1" />
                         </>
                       )}
                     </tr>
@@ -1048,16 +1178,52 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                 </select>
                               </div>
                             ) : (
-                              <select value={row.categoryId}
-                                onChange={e => updateRow(row._key, { categoryId: e.target.value, autoSuggested: false })}
-                                className={`border rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                                  row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
-                                }`}
-                              >
-                                {catList.map(c => (
-                                  <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                                ))}
-                              </select>
+                              <div className="flex flex-col gap-1">
+                                <select value={row.categoryId}
+                                  onChange={e => {
+                                    if (e.target.value === '__new__') {
+                                      setNewCatRowKey(row._key)
+                                      setNewCatType(row.type === 'income' ? 'income' : 'expense')
+                                      setNewCatName('')
+                                    } else {
+                                      updateRow(row._key, { categoryId: e.target.value, autoSuggested: false })
+                                    }
+                                  }}
+                                  className={`border rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                    row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
+                                  }`}
+                                >
+                                  {catList.map(c => (
+                                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                  ))}
+                                  <option value="__new__">➕ 새 카테고리 추가</option>
+                                </select>
+                                {/* FR-07: 새 카테고리 인라인 추가 UI */}
+                                {newCatRowKey === row._key && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={newCatName}
+                                      onChange={e => setNewCatName(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') addNewCategory(row._key)
+                                        if (e.key === 'Escape') setNewCatRowKey(null)
+                                      }}
+                                      placeholder="카테고리명"
+                                      className="border border-indigo-300 rounded px-1.5 py-0.5 text-[10px] w-20 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                    />
+                                    <button
+                                      onClick={() => addNewCategory(row._key)}
+                                      className="text-[10px] bg-indigo-500 text-white rounded px-1.5 py-0.5 hover:bg-indigo-600"
+                                    >추가</button>
+                                    <button
+                                      onClick={() => setNewCatRowKey(null)}
+                                      className="text-[10px] text-gray-400 hover:text-gray-600"
+                                    >✕</button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </td>
                           {/* 계좌 / 카드 표시 */}

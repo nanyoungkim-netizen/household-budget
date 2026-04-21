@@ -4,7 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
-import { Transaction } from '@/types'
+import { Transaction, AssetType } from '@/types'
+
+// FR-01: 자산 유형 메타
+const ASSET_SECTIONS: { value: AssetType; label: string; icon: string; color: string }[] = [
+  { value: 'cash',       label: '현금성 자산', icon: '💵', color: '#3B82F6' },
+  { value: 'savings',    label: '예·적금',     icon: '🏦', color: '#10B981' },
+  { value: 'investment', label: '투자 자산',   icon: '📈', color: '#8B5CF6' },
+]
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function fmtShort(n: number) {
@@ -241,29 +248,45 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 계좌별 잔액 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-        {accountBalances.map(acc => {
-          const diff = acc.computed - acc.balance
-          return (
-            <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
-              {/* FR-03: 은행명 + 계좌명 동시 표시 */}
-              <div className="mb-2">
-                {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
-                <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+      {/* FR-01: 자산 유형별 섹션으로 계좌 표시 */}
+      {ASSET_SECTIONS.map(section => {
+        const sectionAccounts = accountBalances.filter(a => (a.assetType ?? 'cash') === section.value)
+        if (sectionAccounts.length === 0) return null
+        const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
+        return (
+          <div key={section.value} className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">{section.icon}</span>
+                <span className="text-xs font-bold text-gray-500">{section.label}</span>
               </div>
-              <div className="text-xl font-bold text-gray-900 tabular-nums">
-                {acc.computed.toLocaleString('ko-KR')}원
-              </div>
-              {diff !== 0 && (
-                <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                  기초 대비 {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
-                </div>
-              )}
+              <span className="text-xs font-semibold" style={{ color: section.color }}>{fmtKRW(subtotal)}</span>
             </div>
-          )
-        })}
-      </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {sectionAccounts.map(acc => {
+                const diff = acc.computed - acc.balance
+                return (
+                  <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
+                    {/* FR-03: 은행명 + 계좌명 동시 표시 */}
+                    <div className="mb-2">
+                      {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
+                      <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                    </div>
+                    <div className="text-xl font-bold text-gray-900 tabular-nums">
+                      {acc.computed.toLocaleString('ko-KR')}원
+                    </div>
+                    {diff !== 0 && (
+                      <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                        기초 대비 {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* 예산 현황 (항상 월 기준) */}

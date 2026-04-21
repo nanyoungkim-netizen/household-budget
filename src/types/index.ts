@@ -1,11 +1,15 @@
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'refund'
 
+// FR-01: 자산 유형
+export type AssetType = 'cash' | 'savings' | 'investment'
+
 export interface Account {
   id: string
   name: string
   bank: string
   balance: number
   color: string
+  assetType?: AssetType  // FR-01: 현금성/예적금/투자
 }
 
 export interface Category {
@@ -95,4 +99,11 @@ export interface Goal {
   currentAmount: number
   deadline: string
   color: string
+}
+
+// FR-08: 가맹점-카테고리 매핑 규칙
+export interface MappingRule {
+  id: string
+  keyword: string      // 가맹점명 키워드 (예: "스타벅스")
+  categoryId: string   // 매핑할 카테고리 ID
 }

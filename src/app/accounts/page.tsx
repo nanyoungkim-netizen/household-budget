@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useApp } from '@/lib/AppContext'
-import { Account } from '@/types'
+import { Account, AssetType } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
@@ -10,6 +10,14 @@ function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.to
 
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
+
+// FR-01: 자산 유형 레이블/색상
+const ASSET_TYPES: { value: AssetType; label: string; icon: string; color: string }[] = [
+  { value: 'cash',       label: '현금성 자산', icon: '💵', color: '#3B82F6' },
+  { value: 'savings',    label: '예·적금',     icon: '🏦', color: '#10B981' },
+  { value: 'investment', label: '투자 자산',   icon: '📈', color: '#8B5CF6' },
+]
+function getAssetType(at?: AssetType) { return ASSET_TYPES.find(t => t.value === at) ?? ASSET_TYPES[0] }
 
 // FR-012: 은행 프리셋 (브랜드 색상 + 약칭)
 const BANK_PRESETS = [
@@ -29,7 +37,6 @@ function getBankPreset(bankName: string) {
   return BANK_PRESETS.find(b => b.name === bankName) ?? null
 }
 
-// 계좌 아이콘: 은행명이 프리셋에 있으면 약칭+브랜드색, 없으면 첫 글자
 function AccountIcon({ account }: { account: Account }) {
   const preset = getBankPreset(account.bank)
   const bg     = preset?.color ?? account.color
@@ -47,7 +54,7 @@ function AccountIcon({ account }: { account: Account }) {
   )
 }
 
-const EMPTY_FORM = { name: '', bank: '토스뱅크', balance: '', color: '#0064FF' }
+const EMPTY_FORM = { name: '', bank: '토스뱅크', balance: '', color: '#0064FF', assetType: 'cash' as AssetType }
 
 export default function AccountsPage() {
   const { data, setAccounts } = useApp()
@@ -67,7 +74,6 @@ export default function AccountsPage() {
     return transactions.filter(t => t.accountId === id).sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime()).slice(0,3)
   }
 
-  // 은행 선택 시 색상 자동 적용
   function handleBankChange(bankName: string) {
     const preset = getBankPreset(bankName)
     setForm(f => ({ ...f, bank: bankName, color: preset?.color ?? f.color }))
@@ -81,23 +87,29 @@ export default function AccountsPage() {
 
   function openEdit(acc: Account) {
     setEditId(acc.id)
-    setForm({ name: acc.name, bank: acc.bank, balance: acc.balance === 0 ? '' : fmtInput(String(acc.balance)), color: acc.color })
+    setForm({
+      name: acc.name,
+      bank: acc.bank,
+      balance: acc.balance === 0 ? '' : fmtInput(String(acc.balance)),
+      color: acc.color,
+      assetType: acc.assetType ?? 'cash',
+    })
     setShowModal(true)
   }
 
   function handleSave() {
     if (!form.name || !form.bank) return
-    const preset = getBankPreset(form.bank)
-    const color  = preset?.color ?? form.color
+    const preset  = getBankPreset(form.bank)
+    const color   = preset?.color ?? form.color
     const balance = parseAmt(form.balance)
 
     if (editId) {
       setAccounts(accounts.map(a =>
-        a.id === editId ? { ...a, name: form.name, bank: form.bank, balance, color } : a
+        a.id === editId ? { ...a, name: form.name, bank: form.bank, balance, color, assetType: form.assetType } : a
       ))
     } else {
       setAccounts([...accounts, {
-        id: `acc${Date.now()}`, name: form.name, bank: form.bank, balance, color,
+        id: `acc${Date.now()}`, name: form.name, bank: form.bank, balance, color, assetType: form.assetType,
       } as Account])
     }
     setShowModal(false)
@@ -110,7 +122,26 @@ export default function AccountsPage() {
     setAccounts(accounts.map(a => a.id === id ? { ...a, balance: parseAmt(val) } : a))
   }
 
+  // FR-02: 순서 변경 (위/아래)
+  function moveAccount(id: string, dir: 'up' | 'down') {
+    const idx = accounts.findIndex(a => a.id === id)
+    if (idx < 0) return
+    if (dir === 'up'   && idx === 0) return
+    if (dir === 'down' && idx === accounts.length - 1) return
+    const next = [...accounts]
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
+    ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
+    setAccounts(next)
+  }
+
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
+
+  // FR-01: 자산 유형별 그룹핑
+  const grouped = ASSET_TYPES.map(at => ({
+    ...at,
+    items: accounts.filter(a => (a.assetType ?? 'cash') === at.value),
+    subtotal: accounts.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s, a) => s + a.balance, 0),
+  })).filter(g => g.items.length > 0)
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -121,81 +152,113 @@ export default function AccountsPage() {
         </button>
       </div>
 
+      {/* 전체 잔액 */}
       <div className="bg-blue-600 text-white rounded-2xl p-5 mb-5">
         <div className="text-sm opacity-80 mb-1">전체 잔액</div>
         <div className="text-3xl font-bold">{fmtKRW(totalBalance)}</div>
-        <div className="text-sm opacity-70 mt-1">계좌 {accounts.length}개</div>
-      </div>
-
-      <div className="space-y-3">
-        {accounts.map(acc => {
-          const income   = getMonthlyIncome(acc.id)
-          const expense  = getMonthlyExpense(acc.id)
-          const recentTx = getRecentTx(acc.id)
-
-          return (
-            <div key={acc.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    {/* FR-012: 브랜드 아이콘 */}
-                    <AccountIcon account={acc} />
-                    <div>
-                      <div className="font-semibold text-gray-900">{acc.name}</div>
-                      <div className="text-xs text-gray-400">{acc.bank}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-2">
-                      <input type="text" inputMode="numeric"
-                        value={acc.balance === 0 ? '' : acc.balance.toLocaleString('ko-KR')}
-                        onChange={e => handleBalanceEdit(acc.id, e.target.value)}
-                        className="text-xl font-bold text-gray-900 text-right w-36 border-b border-transparent hover:border-gray-200 focus:border-blue-400 focus:outline-none transition-colors bg-transparent" />
-                      <span className="text-sm text-gray-400">원</span>
-                    </div>
-                    <div className="flex gap-3 justify-end mt-0.5">
-                      {/* FR-012: 수정 버튼 */}
-                      <button onClick={() => openEdit(acc)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
-                      <button onClick={() => handleDelete(acc.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-emerald-50 rounded-xl p-3">
-                    <div className="text-xs text-emerald-600 mb-0.5">이달 수입</div>
-                    <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(income)}</div>
-                  </div>
-                  <div className="bg-red-50 rounded-xl p-3">
-                    <div className="text-xs text-red-500 mb-0.5">이달 지출</div>
-                    <div className="text-sm font-semibold text-red-600">-{fmtKRW(expense)}</div>
-                  </div>
-                </div>
+        {/* FR-01: 자산 유형별 소계 요약 */}
+        <div className="flex gap-4 mt-3 flex-wrap">
+          {ASSET_TYPES.map(at => {
+            const sub = accounts.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s,a) => s + a.balance, 0)
+            if (sub === 0) return null
+            return (
+              <div key={at.value} className="text-xs opacity-80">
+                {at.icon} {at.label} <span className="font-semibold">{fmtKRW(sub)}</span>
               </div>
-              {recentTx.length > 0 && (
-                <div className="border-t border-gray-50 px-5 py-3">
-                  <div className="text-xs text-gray-400 mb-2">최근 거래</div>
-                  <div className="space-y-1.5">
-                    {recentTx.map(t => (
-                      <div key={t.id} className="flex items-center justify-between">
-                        <span className="text-xs text-gray-600">{t.description}</span>
-                        <span className={`text-xs font-medium ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
-        {accounts.length === 0 && (
-          <div className="text-center py-16 text-gray-400">
-            <div className="text-4xl mb-2">🏦</div>
-            <div className="text-sm">등록된 계좌가 없습니다</div>
-          </div>
-        )}
+            )
+          })}
+        </div>
       </div>
+
+      {/* FR-01: 자산 유형별 섹션 */}
+      {grouped.length > 0 ? grouped.map(group => (
+        <div key={group.value} className="mb-6">
+          {/* 섹션 헤더 */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-base">{group.icon}</span>
+              <span className="text-sm font-bold text-gray-700">{group.label}</span>
+              <span className="text-xs text-gray-400">({group.items.length}개)</span>
+            </div>
+            <span className="text-sm font-semibold" style={{ color: group.color }}>{fmtKRW(group.subtotal)}</span>
+          </div>
+
+          <div className="space-y-3">
+            {group.items.map((acc, idx) => {
+              const income   = getMonthlyIncome(acc.id)
+              const expense  = getMonthlyExpense(acc.id)
+              const recentTx = getRecentTx(acc.id)
+              const accIdx   = accounts.findIndex(a => a.id === acc.id)
+
+              return (
+                <div key={acc.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <AccountIcon account={acc} />
+                        <div>
+                          <div className="font-semibold text-gray-900">{acc.name}</div>
+                          <div className="text-xs text-gray-400">{acc.bank}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric"
+                            value={acc.balance === 0 ? '' : acc.balance.toLocaleString('ko-KR')}
+                            onChange={e => handleBalanceEdit(acc.id, e.target.value)}
+                            className="text-xl font-bold text-gray-900 text-right w-36 border-b border-transparent hover:border-gray-200 focus:border-blue-400 focus:outline-none transition-colors bg-transparent" />
+                          <span className="text-sm text-gray-400">원</span>
+                        </div>
+                        <div className="flex gap-2 justify-end mt-0.5 items-center">
+                          {/* FR-02: 순서 변경 버튼 */}
+                          <button onClick={() => moveAccount(acc.id, 'up')}
+                            disabled={accIdx === 0}
+                            className="text-xs text-gray-300 hover:text-blue-400 disabled:opacity-20">▲</button>
+                          <button onClick={() => moveAccount(acc.id, 'down')}
+                            disabled={accIdx === accounts.length - 1}
+                            className="text-xs text-gray-300 hover:text-blue-400 disabled:opacity-20">▼</button>
+                          <button onClick={() => openEdit(acc)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
+                          <button onClick={() => handleDelete(acc.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-emerald-50 rounded-xl p-3">
+                        <div className="text-xs text-emerald-600 mb-0.5">이달 수입</div>
+                        <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(income)}</div>
+                      </div>
+                      <div className="bg-red-50 rounded-xl p-3">
+                        <div className="text-xs text-red-500 mb-0.5">이달 지출</div>
+                        <div className="text-sm font-semibold text-red-600">-{fmtKRW(expense)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  {recentTx.length > 0 && (
+                    <div className="border-t border-gray-50 px-5 py-3">
+                      <div className="text-xs text-gray-400 mb-2">최근 거래</div>
+                      <div className="space-y-1.5">
+                        {recentTx.map(t => (
+                          <div key={t.id} className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">{t.description}</span>
+                            <span className={`text-xs font-medium ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {t.type === 'income' ? '+' : '-'}{fmtKRW(t.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )) : (
+        <div className="text-center py-16 text-gray-400">
+          <div className="text-4xl mb-2">🏦</div>
+          <div className="text-sm">등록된 계좌가 없습니다</div>
+        </div>
+      )}
 
       {/* 추가/수정 모달 */}
       {showModal && (
@@ -215,32 +278,26 @@ export default function AccountsPage() {
                 <label className="text-xs text-gray-500 block mb-1">은행 선택</label>
                 <select value={form.bank} onChange={e => handleBankChange(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                  {BANK_PRESETS.map(b => (
+                  {BANK_PRESETS.filter((b, i, arr) => arr.findIndex(x => x.abbr === b.abbr && x.color === b.color) === i).map(b => (
                     <option key={b.name} value={b.name}>{b.name}</option>
                   ))}
                 </select>
               </div>
 
-              {/* FR-012: 선택 은행 미리보기 */}
-              {form.bank && (
-                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-2.5">
-                  {(() => {
-                    const preset = getBankPreset(form.bank)
-                    const bg     = preset?.color ?? form.color
-                    const txtClr = preset?.textColor ?? '#fff'
-                    const label  = preset ? preset.abbr : form.name.charAt(0) || '?'
-                    return (
-                      <>
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
-                          style={{ backgroundColor: bg, color: txtClr }}>
-                          {label}
-                        </div>
-                        <span className="text-sm text-gray-600">{form.bank} 아이콘 미리보기</span>
-                      </>
-                    )
-                  })()}
+              {/* FR-01: 자산 유형 선택 */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">자산 유형</label>
+                <div className="flex gap-2">
+                  {ASSET_TYPES.map(at => (
+                    <button key={at.value} onClick={() => setForm(f => ({ ...f, assetType: at.value }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+                        form.assetType === at.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                      }`}>
+                      {at.icon} {at.label}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
 
               <input type="text" inputMode="numeric" placeholder="현재 잔액 (원)" value={form.balance}
                 onChange={e => setForm(f => ({ ...f, balance: fmtInput(e.target.value) }))}

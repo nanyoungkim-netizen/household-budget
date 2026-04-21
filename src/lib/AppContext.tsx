@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -46,9 +46,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
 ]
 
 export const DEFAULT_ACCOUNTS: Account[] = [
-  { id: 'toss',    name: '토스뱅크', bank: '토스뱅크', balance: 0, color: '#0064FF' },
-  { id: 'kb',      name: '국민은행', bank: '국민은행', balance: 0, color: '#FFB800' },
-  { id: 'gwangju', name: '광주은행', bank: '광주은행', balance: 0, color: '#00B493' },
+  { id: 'toss',    name: '토스뱅크', bank: '토스뱅크', balance: 0, color: '#0064FF', assetType: 'cash' },
+  { id: 'kb',      name: '국민은행', bank: '국민은행', balance: 0, color: '#FFB800', assetType: 'cash' },
+  { id: 'gwangju', name: '광주은행', bank: '광주은행', balance: 0, color: '#00B493', assetType: 'cash' },
 ]
 
 export const DEFAULT_CARDS: Card[] = [
@@ -69,6 +69,7 @@ interface AppData {
   savings: Saving[]
   goals: Goal[]
   cardBillings: CardBilling[]   // FR-009
+  mappingRules: MappingRule[]   // FR-08: 가맹점-카테고리 매핑 규칙
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -83,6 +84,7 @@ const INITIAL_DATA: AppData = {
   savings: [],
   goals: [],
   cardBillings: [],
+  mappingRules: [],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -120,6 +122,8 @@ interface AppContextType {
   setCardBillings: (billings: CardBilling[]) => void
   // 카테고리
   setCategories: (categories: Category[]) => void
+  // 자동 분류 규칙 (FR-08)
+  setMappingRules: (rules: MappingRule[]) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -397,6 +401,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, categories, lastModified: now() }))
   }, [update])
 
+  const setMappingRules = useCallback((mappingRules: MappingRule[]) => {
+    update(d => ({ ...d, mappingRules, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -431,6 +439,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setGoals,
       setCardBillings,
       setCategories,
+      setMappingRules,
       completeSetup,
       resetAll,
     }}>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
-import { Account, Card, Category } from '@/types'
+import { Account, Card, Category, MappingRule } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
@@ -11,11 +11,11 @@ function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.to
 const PRESET_COLORS = ['#0064FF','#FFB800','#00B493','#FF6B6B','#4ECDC4','#9B59B6','#E67E22','#1ABC9C','#E74C3C','#0065CC','#E60000','#1A1A1A','#1259AA','#2ECC71','#F39C12']
 const PRESET_ICONS = ['🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','📦','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️','🌿','🎯']
 
-type TabType = '통장' | '카드' | '카테고리'
+type TabType = '통장' | '카드' | '카테고리' | '규칙'
 
 export default function SettingsPage() {
-  const { data, user, signOut, setAccounts, setCards, setCategories, resetAll } = useApp()
-  const { accounts, cards, categories, transactions } = data
+  const { data, user, signOut, setAccounts, setCards, setCategories, setMappingRules, resetAll } = useApp()
+  const { accounts, cards, categories, transactions, mappingRules } = data
   const [tab, setTab] = useState<TabType>('통장')
 
   // ── 통장 상태 ──────────────────────────────────────────────────────────────
@@ -38,6 +38,10 @@ export default function SettingsPage() {
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC' })
   const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income' })
   const [confirmReset, setConfirmReset] = useState(false)
+
+  // ── FR-08: 자동 분류 규칙 상태 ────────────────────────────────────────────
+  const [ruleKeyword, setRuleKeyword]   = useState('')
+  const [ruleCatId,   setRuleCatId]     = useState('')
 
   // 수정 모달용
   const [editingCat, setEditingCat] = useState<Category | null>(null)
@@ -161,6 +165,22 @@ export default function SettingsPage() {
     setConfirmReset(false)
   }
 
+  // ── FR-08: 자동 분류 규칙 함수 ────────────────────────────────────────────
+  const allLeaf = categories.filter(c => c.parentId && c.parentId !== null)
+
+  function addMappingRule() {
+    const kw = ruleKeyword.trim()
+    if (!kw || !ruleCatId) return
+    const rule: MappingRule = { id: `rule_${Date.now()}`, keyword: kw, categoryId: ruleCatId }
+    setMappingRules([...mappingRules, rule])
+    setRuleKeyword('')
+    setRuleCatId('')
+  }
+
+  function deleteMappingRule(id: string) {
+    setMappingRules(mappingRules.filter(r => r.id !== id))
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="mb-6">
@@ -187,7 +207,7 @@ export default function SettingsPage() {
 
       {/* 탭 */}
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-5 gap-1">
-        {(['통장', '카드', '카테고리'] as const).map(t => (
+        {(['통장', '카드', '카테고리', '규칙'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === t ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
             {t}
@@ -460,6 +480,89 @@ export default function SettingsPage() {
             <button onClick={resetAll}
               className="text-xs text-red-400 hover:text-red-600 transition-colors">전체 초기화</button>
           </div>
+        </div>
+      )}
+
+      {/* ── FR-08: 자동 분류 규칙 탭 ────────────────────────────────────── */}
+      {tab === '규칙' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 rounded-2xl px-4 py-3 text-xs text-blue-700">
+            💡 가맹점명 키워드를 입력하면 거래 내역 업로드 시 카테고리를 자동으로 제안합니다.<br/>
+            여러 규칙이 매칭될 경우 더 긴 키워드 규칙이 우선 적용됩니다.
+          </div>
+
+          {/* 규칙 추가 폼 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="text-sm font-semibold text-gray-700 mb-3">새 규칙 추가</div>
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                placeholder="가맹점 키워드 (예: 스타벅스)"
+                value={ruleKeyword}
+                onChange={e => setRuleKeyword(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addMappingRule() }}
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={ruleCatId}
+                onChange={e => setRuleCatId(e.target.value)}
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">카테고리 선택</option>
+                <optgroup label="── 지출">
+                  {allLeaf.filter(c => c.type === 'expense').map(c => (
+                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="── 수입">
+                  {allLeaf.filter(c => c.type === 'income').map(c => (
+                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+              <button
+                onClick={addMappingRule}
+                disabled={!ruleKeyword.trim() || !ruleCatId}
+                className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-700 transition-colors text-sm disabled:opacity-40"
+              >
+                규칙 추가
+              </button>
+            </div>
+          </div>
+
+          {/* 규칙 목록 */}
+          {mappingRules.length === 0 ? (
+            <div className="text-center text-sm text-gray-400 py-8">
+              등록된 규칙이 없습니다
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {mappingRules.map(rule => {
+                const cat = categories.find(c => c.id === rule.categoryId)
+                return (
+                  <div key={rule.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="text-base">{cat?.icon || '📦'}</div>
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">
+                          &quot;{rule.keyword}&quot;
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          → {cat?.name || '알 수 없는 카테고리'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteMappingRule(rule.id)}
+                      className="text-xs text-gray-300 hover:text-red-400 transition-colors ml-2"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
