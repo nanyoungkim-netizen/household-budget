@@ -5,6 +5,8 @@ import { useApp } from '@/lib/AppContext'
 import { Saving } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
+function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
+function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 const today = new Date()
 
 // ── FR-011: 만기예상금 계산 (네이버 금융 계산기 기준) ─────────────────────────
@@ -121,7 +123,7 @@ export default function SavingsPage() {
   // FR-011: 실시간 계산
   const calcResult = useMemo(() => calcMaturity(
     form.type,
-    Number(form.type === 'saving' ? form.monthlyAmount : form.currentAmount) || 0,
+    parseAmt(form.type === 'saving' ? form.monthlyAmount : form.currentAmount),
     Number(form.interestRate) || 0,
     form.startDate,
     form.maturityDate,
@@ -132,7 +134,7 @@ export default function SavingsPage() {
 
   function handleAdd() {
     if (!form.name || !form.bank) return
-    const cur   = Number(form.currentAmount) || 0
+    const cur   = parseAmt(form.currentAmount)
     const rate  = Number(form.interestRate) || 0
     const maturity = calcResult?.maturityAmount ?? cur * (1 + rate / 100)
 
@@ -141,7 +143,7 @@ export default function SavingsPage() {
       name: form.name,
       bank: form.bank,
       type: form.type,
-      monthlyAmount: Number(form.monthlyAmount) || 0,
+      monthlyAmount: parseAmt(form.monthlyAmount),
       interestRate: rate,
       startDate: form.startDate,
       maturityDate: form.maturityDate,
@@ -235,9 +237,9 @@ export default function SavingsPage() {
         )}
       </div>
 
-      {/* FR-013: 탭 전환 확인 다이얼로그 */}
+      {/* FR-013: 탭 전환 확인 다이얼로그 — z-[60]으로 모달보다 앞에 표시 */}
       {pendingTab && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
             <h3 className="text-base font-bold text-gray-900 mb-2">탭 전환 확인</h3>
             <p className="text-sm text-gray-500 mb-5">
@@ -286,12 +288,12 @@ export default function SavingsPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {form.type === 'saving' ? (
-                  <input type="number" placeholder="월 납입액 (원)" value={form.monthlyAmount}
-                    onChange={e => setForm(f => ({ ...f, monthlyAmount: e.target.value }))}
+                  <input type="text" inputMode="numeric" placeholder="월 납입액 (원)" value={form.monthlyAmount}
+                    onChange={e => setForm(f => ({ ...f, monthlyAmount: fmtInput(e.target.value) }))}
                     className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 ) : (
-                  <input type="number" placeholder="원금 (원)" value={form.currentAmount}
-                    onChange={e => setForm(f => ({ ...f, currentAmount: e.target.value }))}
+                  <input type="text" inputMode="numeric" placeholder="원금 (원)" value={form.currentAmount}
+                    onChange={e => setForm(f => ({ ...f, currentAmount: fmtInput(e.target.value) }))}
                     className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 )}
                 <input type="number" placeholder="연 이율 (%)" value={form.interestRate}

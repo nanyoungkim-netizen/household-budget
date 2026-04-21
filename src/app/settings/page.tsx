@@ -5,6 +5,8 @@ import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppCont
 import { Account, Card, Category } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
+function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
+function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 
 const PRESET_COLORS = ['#0064FF','#FFB800','#00B493','#FF6B6B','#4ECDC4','#9B59B6','#E67E22','#1ABC9C','#E74C3C','#0065CC','#E60000','#1A1A1A','#1259AA','#2ECC71','#F39C12']
 const PRESET_ICONS = ['🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','📦','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️','🌿','🎯']
@@ -28,7 +30,7 @@ export default function SettingsPage() {
 
   // ── 카드 상태 ──────────────────────────────────────────────────────────────
   const [showCardModal, setShowCardModal] = useState(false)
-  const [cardForm, setCardForm] = useState({ name: '', billingDate: '15', color: '#0065CC' })
+  const [cardForm, setCardForm] = useState({ name: '', bank: '', billingDate: '15', color: '#0065CC' })
 
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState<'child' | 'parent' | 'edit' | null>(null)
@@ -67,10 +69,8 @@ export default function SettingsPage() {
 
   // ── 통장 함수 ──────────────────────────────────────────────────────────────
   function saveBalance(id: string) {
-    const val = Number(editBalances[id] ?? '')
-    if (!isNaN(val)) {
-      setAccounts(accounts.map(a => a.id === id ? { ...a, balance: val } : a))
-    }
+    const val = parseAmt(editBalances[id] ?? '')
+    setAccounts(accounts.map(a => a.id === id ? { ...a, balance: val } : a))
     setEditingAccount(null)
   }
 
@@ -80,7 +80,7 @@ export default function SettingsPage() {
       id: `acc_${Date.now()}`,
       name: accountForm.name,
       bank: accountForm.bank,
-      balance: Number(accountForm.balance) || 0,
+      balance: parseAmt(accountForm.balance),
       color: accountForm.color,
     }
     setAccounts([...accounts, newAcc])
@@ -98,13 +98,13 @@ export default function SettingsPage() {
     const newCard: Card = {
       id: `card_${Date.now()}`,
       name: cardForm.name,
-      bank: cardForm.name,   // bank 필드 유지하되 name과 동일하게
+      bank: cardForm.bank || cardForm.name,
       billingDate: Number(cardForm.billingDate) || 15,
       color: cardForm.color,
     }
     setCards([...cards, newCard])
     setShowCardModal(false)
-    setCardForm({ name: '', billingDate: '15', color: '#0065CC' })
+    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC' })
   }
 
   function deleteCard(id: string) {
@@ -244,9 +244,10 @@ export default function SettingsPage() {
                         <div className="bg-white rounded-lg p-2">
                           <div className="text-gray-400 mb-0.5">앱/실제 잔액 입력</div>
                           <input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             value={verifyInputs[acc.id] ?? ''}
-                            onChange={e => setVerifyInputs(v => ({ ...v, [acc.id]: e.target.value }))}
+                            onChange={e => setVerifyInputs(v => ({ ...v, [acc.id]: fmtInput(e.target.value) }))}
                             placeholder="직접 입력"
                             className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 font-bold"
                           />
@@ -254,7 +255,7 @@ export default function SettingsPage() {
                       </div>
                       {verifyInputs[acc.id] && (
                         (() => {
-                          const actual = Number(verifyInputs[acc.id])
+                          const actual = parseAmt(verifyInputs[acc.id])
                           const diff2 = actual - computed
                           const ok = diff2 === 0
                           return (
@@ -280,9 +281,10 @@ export default function SettingsPage() {
                   {editingAccount === acc.id ? (
                     <div className="flex items-center gap-2 flex-1">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={editBalances[acc.id] ?? ''}
-                        onChange={e => setEditBalances(prev => ({ ...prev, [acc.id]: e.target.value }))}
+                        onChange={e => setEditBalances(prev => ({ ...prev, [acc.id]: fmtInput(e.target.value) }))}
                         onKeyDown={e => { if (e.key === 'Enter') saveBalance(acc.id); if (e.key === 'Escape') setEditingAccount(null) }}
                         className="flex-1 border border-blue-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         autoFocus
@@ -317,11 +319,12 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: card.color }}>
-                    {card.name.slice(0, 2)}
+                    {/* FR-13: 은행명 약칭 표시 */}
+                    {(card.bank || card.name).slice(0, 2)}
                   </div>
                   <div>
                     <div className="font-semibold text-gray-900">{card.name}</div>
-                    <div className="text-xs text-gray-400">{card.bank} · 매월 {card.billingDate}일 결제</div>
+                    <div className="text-xs text-gray-400">{card.bank || card.name} · 매월 {card.billingDate}일 결제</div>
                   </div>
                 </div>
                 <button onClick={() => deleteCard(card.id)}
@@ -477,8 +480,8 @@ export default function SettingsPage() {
                   onChange={e => setAccountForm(f => ({ ...f, bank: e.target.value }))}
                   className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <input type="number" placeholder="현재 잔액 (원)" value={accountForm.balance}
-                onChange={e => setAccountForm(f => ({ ...f, balance: e.target.value }))}
+              <input type="text" inputMode="numeric" placeholder="현재 잔액 (원)" value={accountForm.balance}
+                onChange={e => setAccountForm(f => ({ ...f, balance: fmtInput(e.target.value) }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <div>
                 <div className="text-xs text-gray-400 mb-1.5">색상</div>
@@ -506,9 +509,14 @@ export default function SettingsPage() {
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
-              <input type="text" placeholder="카드 이름 (예: 현대카드, 신한 Deep Dream)" value={cardForm.name}
-                onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="카드 이름" value={cardForm.name}
+                  onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" placeholder="은행명 (예: 신한)" value={cardForm.bank}
+                  onChange={e => setCardForm(f => ({ ...f, bank: e.target.value }))}
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-0.5">결제일</label>
                 <input type="number" min="1" max="31" placeholder="15" value={cardForm.billingDate}

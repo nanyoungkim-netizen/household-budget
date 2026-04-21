@@ -4,8 +4,8 @@ import { AppProvider } from "@/lib/AppContext";
 import AuthGuard from "@/components/AuthGuard";
 
 export const metadata: Metadata = {
-  title: "가계부 - 스마트 재무 관리",
-  description: "다중 계좌 통합 가계부 서비스",
+  title: "🌰 밤티부 - 스마트 재무 관리",
+  description: "밤티부 예산관리 시스템",
 };
 
 export default function RootLayout({

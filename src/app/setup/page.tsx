@@ -25,6 +25,9 @@ export default function SetupPage() {
   const [balanceInputs, setBalanceInputs] = useState<Record<string, string>>(
     Object.fromEntries(DEFAULT_ACCOUNTS.map(a => [a.id, '']))
   )
+  // FR-014: 계좌명 인라인 수정
+  const [editingAccName, setEditingAccName] = useState<string | null>(null)
+  const [accNameInput, setAccNameInput] = useState('')
 
   // Step 1 - 적금·예금
   const [savings, setSavings] = useState<Saving[]>([])
@@ -40,6 +43,13 @@ export default function SetupPage() {
   })
 
   const PRESET_COLORS = ['#0064FF', '#00B493', '#FF6B6B', '#FFB800', '#9B59B6', '#E67E22']
+
+  // FR-014: 계좌명 수정
+  function saveAccName(id: string) {
+    const name = accNameInput.trim()
+    if (name) setAccounts(prev => prev.map(a => a.id === id ? { ...a, name } : a))
+    setEditingAccName(null)
+  }
 
   // FR-016: 잔액 입력 — 실시간 쉼표 포맷
   function updateBalance(id: string, rawVal: string) {
@@ -73,8 +83,8 @@ export default function SetupPage() {
     setGoals(prev => [...prev, {
       id: `g${Date.now()}`,
       name: goalForm.name,
-      targetAmount: Number(goalForm.targetAmount),
-      currentAmount: Number(goalForm.currentAmount) || 0,
+      targetAmount: parseNum(goalForm.targetAmount),
+      currentAmount: parseNum(goalForm.currentAmount),
       deadline: goalForm.deadline,
       color: goalForm.color,
     }])
@@ -134,7 +144,24 @@ export default function SetupPage() {
                     {acc.name.charAt(0)}
                   </div>
                   <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900 mb-1">{acc.name}</div>
+                    {/* FR-014: 계좌명 인라인 수정 */}
+                    {editingAccName === acc.id ? (
+                      <input
+                        type="text"
+                        value={accNameInput}
+                        onChange={e => setAccNameInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveAccName(acc.id); if (e.key === 'Escape') setEditingAccName(null) }}
+                        onBlur={() => saveAccName(acc.id)}
+                        className="w-full text-sm font-medium border-b-2 border-blue-400 bg-transparent outline-none mb-1"
+                        autoFocus
+                      />
+                    ) : (
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-sm font-medium text-gray-900">{acc.name}</span>
+                        <button onClick={() => { setEditingAccName(acc.id); setAccNameInput(acc.name) }}
+                          className="text-xs text-gray-300 hover:text-blue-400 transition-colors">✏️</button>
+                      </div>
+                    )}
                     {/* FR-016: type="text" + inputMode="numeric" + 쉼표 포맷 */}
                     <div className="relative">
                       <input
@@ -246,11 +273,11 @@ export default function SetupPage() {
                   onChange={e => setGoalForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="number" placeholder="목표 금액" value={goalForm.targetAmount}
-                    onChange={e => setGoalForm(f => ({ ...f, targetAmount: e.target.value }))}
+                  <input type="text" inputMode="numeric" placeholder="목표 금액" value={goalForm.targetAmount}
+                    onChange={e => setGoalForm(f => ({ ...f, targetAmount: fmtComma(parseNum(e.target.value)) }))}
                     className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input type="number" placeholder="현재 금액" value={goalForm.currentAmount}
-                    onChange={e => setGoalForm(f => ({ ...f, currentAmount: e.target.value }))}
+                  <input type="text" inputMode="numeric" placeholder="현재 금액" value={goalForm.currentAmount}
+                    onChange={e => setGoalForm(f => ({ ...f, currentAmount: fmtComma(parseNum(e.target.value)) }))}
                     className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>

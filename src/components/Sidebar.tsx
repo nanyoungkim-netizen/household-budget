@@ -29,9 +29,9 @@ export default function Sidebar() {
       <aside className="hidden md:flex flex-col fixed left-0 top-0 h-full w-56 bg-white border-r border-gray-100 z-30 shadow-sm">
         <div className="p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">가</div>
+            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-lg">🌰</div>
             <div>
-              <div className="font-bold text-sm text-gray-900">가계부</div>
+              <div className="font-bold text-sm text-gray-900">밤티부</div>
               <div className="text-xs text-gray-400">스마트 재무 관리</div>
             </div>
           </div>

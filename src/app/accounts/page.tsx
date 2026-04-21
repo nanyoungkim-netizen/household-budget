@@ -5,6 +5,9 @@ import { useApp } from '@/lib/AppContext'
 import { Account } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
+function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
+function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
+
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
 
@@ -13,6 +16,7 @@ const BANK_PRESETS = [
   { name: '토스뱅크',   abbr: '토스',  color: '#0064FF' },
   { name: '카카오뱅크', abbr: '카카오', color: '#FEE500', textColor: '#3D3000' },
   { name: 'KB국민은행', abbr: 'KB',    color: '#FFC500', textColor: '#3D2800' },
+  { name: '국민은행',   abbr: 'KB',    color: '#FFC500', textColor: '#3D2800' },   // alias
   { name: '신한은행',   abbr: '신한',  color: '#005BAC' },
   { name: '우리은행',   abbr: '우리',  color: '#007BC7' },
   { name: '하나은행',   abbr: '하나',  color: '#008C6E' },
@@ -77,7 +81,7 @@ export default function AccountsPage() {
 
   function openEdit(acc: Account) {
     setEditId(acc.id)
-    setForm({ name: acc.name, bank: acc.bank, balance: acc.balance === 0 ? '' : String(acc.balance), color: acc.color })
+    setForm({ name: acc.name, bank: acc.bank, balance: acc.balance === 0 ? '' : fmtInput(String(acc.balance)), color: acc.color })
     setShowModal(true)
   }
 
@@ -85,14 +89,15 @@ export default function AccountsPage() {
     if (!form.name || !form.bank) return
     const preset = getBankPreset(form.bank)
     const color  = preset?.color ?? form.color
+    const balance = parseAmt(form.balance)
 
     if (editId) {
       setAccounts(accounts.map(a =>
-        a.id === editId ? { ...a, name: form.name, bank: form.bank, balance: Number(form.balance)||0, color } : a
+        a.id === editId ? { ...a, name: form.name, bank: form.bank, balance, color } : a
       ))
     } else {
       setAccounts([...accounts, {
-        id: `acc${Date.now()}`, name: form.name, bank: form.bank, balance: Number(form.balance)||0, color,
+        id: `acc${Date.now()}`, name: form.name, bank: form.bank, balance, color,
       } as Account])
     }
     setShowModal(false)
@@ -102,7 +107,7 @@ export default function AccountsPage() {
 
   function handleDelete(id: string) { setAccounts(accounts.filter(a => a.id !== id)) }
   function handleBalanceEdit(id: string, val: string) {
-    setAccounts(accounts.map(a => a.id === id ? { ...a, balance: Number(val)||0 } : a))
+    setAccounts(accounts.map(a => a.id === id ? { ...a, balance: parseAmt(val) } : a))
   }
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
@@ -142,7 +147,8 @@ export default function AccountsPage() {
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-2">
-                      <input type="number" value={acc.balance}
+                      <input type="text" inputMode="numeric"
+                        value={acc.balance === 0 ? '' : acc.balance.toLocaleString('ko-KR')}
                         onChange={e => handleBalanceEdit(acc.id, e.target.value)}
                         className="text-xl font-bold text-gray-900 text-right w-36 border-b border-transparent hover:border-gray-200 focus:border-blue-400 focus:outline-none transition-colors bg-transparent" />
                       <span className="text-sm text-gray-400">원</span>
@@ -236,8 +242,8 @@ export default function AccountsPage() {
                 </div>
               )}
 
-              <input type="number" placeholder="현재 잔액 (원)" value={form.balance}
-                onChange={e => setForm(f => ({ ...f, balance: e.target.value }))}
+              <input type="text" inputMode="numeric" placeholder="현재 잔액 (원)" value={form.balance}
+                onChange={e => setForm(f => ({ ...f, balance: fmtInput(e.target.value) }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
 
               <button onClick={handleSave}
