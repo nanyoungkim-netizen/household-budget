@@ -17,7 +17,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
   // 지출 대분류
   { id: 'pg_living',     name: '관리비',      type: 'expense', icon: '🏠', color: '#FF6B6B', parentId: null },
   { id: 'pg_loan',       name: '대출이자',    type: 'expense', icon: '🏦', color: '#EC7063', parentId: null },
-  { id: 'pg_saving',     name: '적금',        type: 'expense', icon: '💰', color: '#A8D8EA', parentId: null },
+  { id: 'pg_saving',     name: '적금',        type: 'expense', icon: '💰', color: '#A8D8EA', parentId: null, role: 'savings' },
   { id: 'pg_transport',  name: '교통비',      type: 'expense', icon: '🚌', color: '#4ECDC4', parentId: null },
   { id: 'pg_comm',       name: '통신비',      type: 'expense', icon: '📱', color: '#45B7D1', parentId: null },
   { id: 'pg_insurance',  name: '보험료',      type: 'expense', icon: '🛡️', color: '#96CEB4', parentId: null },
@@ -41,9 +41,20 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'travel',        name: '여행',        type: 'expense', icon: '✈️', color: '#85C1E9', parentId: 'pg_etc' },
   { id: 'daily',         name: '생필품',      type: 'expense', icon: '🧴', color: '#A9CCE3', parentId: 'pg_etc' },
   { id: 'subscription',  name: '구독료',      type: 'expense', icon: '📺', color: '#DDA0DD', parentId: 'pg_etc' },
-  { id: 'card',          name: '카드대금',    type: 'expense', icon: '💳', color: '#B0BEC5', parentId: 'pg_etc' },
+  { id: 'card',          name: '카드대금',    type: 'expense', icon: '💳', color: '#B0BEC5', parentId: 'pg_etc', role: 'card_payment' },
   { id: 'etc',           name: '기타',        type: 'expense', icon: '📦', color: '#CFD8DC', parentId: 'pg_etc' },
 ]
+
+// 기존 데이터에 role 자동 부여 (이름/ID 기반 → 1회 마이그레이션)
+export function migrateCategories(cats: Category[]): Category[] {
+  return cats.map(cat => {
+    if (cat.role !== undefined) return cat  // 이미 설정된 경우 절대 덮어쓰지 않음
+    if (cat.id === 'card' || /카드대금/.test(cat.name)) return { ...cat, role: 'card_payment' as const }
+    if (cat.parentId === null && /적금|예금|저축/.test(cat.name)) return { ...cat, role: 'savings' as const }
+    if (cat.savingId) return { ...cat, role: 'savings' as const }
+    return cat
+  })
+}
 
 export const DEFAULT_ACCOUNTS: Account[] = [
   { id: 'toss',    name: '토스뱅크', bank: '토스뱅크', balance: 0, color: '#0064FF', assetType: 'cash' },
@@ -189,12 +200,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
           const parsed = JSON.parse(stored) as Partial<AppData>
+          const rawCats = (parsed.categories && parsed.categories.length > 0)
+            ? parsed.categories
+            : DEFAULT_CATEGORIES
           localData = {
             ...INITIAL_DATA,
             ...parsed,
-            categories: (parsed.categories && parsed.categories.length > 0)
-              ? parsed.categories
-              : DEFAULT_CATEGORIES,
+            categories: migrateCategories(rawCats),
           }
         }
       } catch { /* ignore */ }
@@ -218,9 +230,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               remoteData = {
                 ...INITIAL_DATA,
                 ...remoteRow.data,
-                categories: remoteRow.data.categories?.length > 0
-                  ? remoteRow.data.categories
-                  : DEFAULT_CATEGORIES,
+                categories: migrateCategories(
+                  remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES
+                ),
               }
             }
 
@@ -258,7 +270,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 remoteData = {
                   ...INITIAL_DATA,
                   ...remoteRow.data,
-                  categories: remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES,
+                  categories: migrateCategories(
+                    remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES
+                  ),
                 }
               }
 

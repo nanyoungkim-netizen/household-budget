@@ -12,6 +12,8 @@ export interface Account {
   assetType?: AssetType  // FR-01: 현금성/예적금/투자
 }
 
+export type CategoryRole = 'card_payment' | 'savings'
+
 export interface Category {
   id: string
   name: string
@@ -20,6 +22,7 @@ export interface Category {
   color: string
   parentId?: string | null  // null = 대분류, string = 소분류, undefined = 레거시
   savingId?: string          // 연동된 적금·예금 상품 ID
+  role?: CategoryRole        // 연동 역할: card_payment | savings
 }
 
 export type PaymentMethod = 'account' | 'card'

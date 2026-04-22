@@ -11,7 +11,6 @@ function parseAmt(s: string): number { return parseInt(s.replace(/[^0-9]/g, ''))
 function fmtInput(s: string): string { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 
 // FR-010: 적금 카테고리 ID 집합 (기본값)
-const SAVING_CAT_IDS = new Set(['pg_saving', 'saving'])
 
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
@@ -57,9 +56,8 @@ export default function TransactionsPage() {
   const { accounts, transactions, cards } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
-    if (categoryId === 'card') return true
     const cat = categories.find(c => c.id === categoryId)
-    return !!cat && /카드대금/.test(cat.name)
+    return cat?.role === 'card_payment' ?? false
   }
 
   const [month, setMonth] = useState(currentMonth)
@@ -375,14 +373,12 @@ export default function TransactionsPage() {
   // - savingId가 연결돼 있거나
   // - 부모 카테고리 이름이 적금/예금/저축 관련이면 인식
   function isSavingCat(categoryId: string): boolean {
-    if (SAVING_CAT_IDS.has(categoryId)) return true
     const cat = categories.find(c => c.id === categoryId)
     if (!cat) return false
+    if (cat.role === 'savings') return true
     if (cat.savingId) return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    if (parent && /적금|예금|저축/.test(parent.name)) return true
-    if (cat.parentId === null && /적금|예금|저축/.test(cat.name)) return true
-    return false
+    return parent?.role === 'savings' ?? false
   }
 
   // 환급은 지출 카테고리 목록 사용

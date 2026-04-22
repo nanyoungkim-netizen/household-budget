@@ -72,8 +72,8 @@ export default function SettingsPage() {
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState<'child' | 'parent' | 'edit' | null>(null)
   const [catParentId, setCatParentId] = useState('')
-  const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC', savingId: '' })
-  const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income' })
+  const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC', savingId: '', role: '' })
+  const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income', role: '' })
   const [confirmReset, setConfirmReset] = useState(false)
 
   // ── FR-08: 자동 분류 규칙 상태 ────────────────────────────────────────────
@@ -82,24 +82,25 @@ export default function SettingsPage() {
 
   // 수정 모달용
   const [editingCat, setEditingCat] = useState<Category | null>(null)
-  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '📦', color: '#CFD8DC', parentId: null as string | null, type: 'expense' as 'expense' | 'income', savingId: '' })
+  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '📦', color: '#CFD8DC', parentId: null as string | null, type: 'expense' as 'expense' | 'income', savingId: '', role: '' })
 
   function openEditCat(cat: Category) {
     setEditingCat(cat)
-    setEditCatForm({ name: cat.name, icon: cat.icon, color: cat.color, parentId: cat.parentId ?? null, type: (cat.type === 'income' ? 'income' : 'expense'), savingId: cat.savingId || '' })
+    setEditCatForm({ name: cat.name, icon: cat.icon, color: cat.color, parentId: cat.parentId ?? null, type: (cat.type === 'income' ? 'income' : 'expense'), savingId: cat.savingId || '', role: cat.role || '' })
     setCatModal('edit')
   }
 
   function saveEditCat() {
     if (!editingCat || !editCatForm.name) return
     const isParent = editingCat.parentId === null
+    const role = (editCatForm.role as import('@/types').CategoryRole) || undefined
     setCategories(categories.map(c => {
       if (c.id !== editingCat.id) return c
       if (isParent) {
-        return { ...c, name: editCatForm.name, icon: editCatForm.icon, color: editCatForm.color, type: editCatForm.type }
+        return { ...c, name: editCatForm.name, icon: editCatForm.icon, color: editCatForm.color, type: editCatForm.type, role }
       } else {
         const newParentCat = categories.find(p => p.id === editCatForm.parentId)
-        return { ...c, name: editCatForm.name, icon: editCatForm.icon, color: editCatForm.color, parentId: editCatForm.parentId, type: newParentCat?.type || c.type, savingId: editCatForm.savingId || undefined }
+        return { ...c, name: editCatForm.name, icon: editCatForm.icon, color: editCatForm.color, parentId: editCatForm.parentId, type: newParentCat?.type || c.type, savingId: editCatForm.savingId || undefined, role }
       }
     }))
     setCatModal(null)
@@ -191,10 +192,11 @@ export default function SettingsPage() {
       color: newCat.color,
       parentId: catParentId,
       savingId: newCat.savingId || undefined,
+      role: (newCat.role as import('@/types').CategoryRole) || undefined,
     }
     setCategories([...categories, child])
     setCatModal(null)
-    setNewCat({ name: '', icon: '📦', color: '#CFD8DC', savingId: '' })
+    setNewCat({ name: '', icon: '📦', color: '#CFD8DC', savingId: '', role: '' })
   }
 
   function addParent() {
@@ -206,10 +208,11 @@ export default function SettingsPage() {
       icon: newParent.icon,
       color: newParent.color,
       parentId: null,
+      role: (newParent.role as import('@/types').CategoryRole) || undefined,
     }
     setCategories([...categories, parent])
     setCatModal(null)
-    setNewParent({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' })
+    setNewParent({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense', role: '' })
   }
 
   function deleteCategory(id: string) {
@@ -717,10 +720,23 @@ export default function SettingsPage() {
               <input type="text" placeholder="항목 이름" value={newCat.name}
                 onChange={e => setNewCat(f => ({ ...f, name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
-              {/* 적금·예금·저축 대분류 하위일 때: 상품 연동 선택 */}
-              {(() => {
+              {/* 카테고리 역할 */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1.5">카테고리 역할 <span className="text-gray-300">(거래 등록 시 자동 연동)</span></label>
+                <div className="flex gap-1.5">
+                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금']] as const).map(([val, label]) => (
+                    <button key={val} type="button"
+                      onClick={() => setNewCat(f => ({ ...f, role: val }))}
+                      className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${newCat.role === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 적금 역할이거나 부모가 savings일 때: 상품 연동 선택 */}
+              {data.savings.length > 0 && (() => {
                 const parent = categories.find(c => c.id === catParentId)
-                return parent && /적금|예금|저축/.test(parent.name) && data.savings.length > 0
+                return newCat.role === 'savings' || parent?.role === 'savings'
               })() && (
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">연동 적금·예금 상품 <span className="text-gray-300">(선택)</span></label>
@@ -783,6 +799,19 @@ export default function SettingsPage() {
               <input type="text" placeholder="대분류 이름" value={newParent.name}
                 onChange={e => setNewParent(f => ({ ...f, name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
+              {/* 카테고리 역할 */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1.5">카테고리 역할 <span className="text-gray-300">(이 대분류의 소분류에도 적용)</span></label>
+                <div className="flex gap-1.5">
+                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금']] as const).map(([val, label]) => (
+                    <button key={val} type="button"
+                      onClick={() => setNewParent(f => ({ ...f, role: val }))}
+                      className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${newParent.role === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <div className="text-xs text-gray-400 mb-1.5">아이콘</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -857,10 +886,23 @@ export default function SettingsPage() {
                 onChange={e => setEditCatForm(f => ({ ...f, name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
 
-              {/* 소분류이고 적금·예금·저축 대분류 하위일 때: 상품 연동 선택 */}
+              {/* 카테고리 역할 */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1.5">카테고리 역할</label>
+                <div className="flex gap-1.5">
+                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금']] as const).map(([val, label]) => (
+                    <button key={val} type="button"
+                      onClick={() => setEditCatForm(f => ({ ...f, role: val }))}
+                      className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${editCatForm.role === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 적금 역할일 때: 상품 연동 선택 */}
               {editingCat?.parentId !== null && data.savings.length > 0 && (() => {
                 const parent = categories.find(c => c.id === editCatForm.parentId)
-                return (parent && /적금|예금|저축/.test(parent.name)) || !!editCatForm.savingId
+                return editCatForm.role === 'savings' || parent?.role === 'savings' || !!editCatForm.savingId
               })() && (
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">연동 적금·예금 상품 <span className="text-gray-300">(선택)</span></label>

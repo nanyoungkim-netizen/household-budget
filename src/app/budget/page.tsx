@@ -37,9 +37,8 @@ export default function BudgetPage() {
   const { budgets, transactions } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
-    if (categoryId === 'card') return true
     const cat = categories.find(c => c.id === categoryId)
-    return !!cat && /카드대금/.test(cat.name)
+    return cat?.role === 'card_payment' ?? false
   }
   const [month, setMonth] = useState(currentMonth)
   const router = useRouter()
