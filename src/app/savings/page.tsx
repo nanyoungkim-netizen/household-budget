@@ -223,19 +223,41 @@ export default function SavingsPage() {
         {savings.map(s => {
           const dday = getDday(s.maturityDate)
           const isDone = dday === '만기완료'
-          const pct = s.expectedAmount > 0 ? Math.min(s.currentAmount / s.expectedAmount * 100, 100) : 0
-          const interestIncome = s.expectedAmount - s.currentAmount
 
-          // 연동 거래 계산
+          // 총 개월 수 계산
+          const totalMonths = s.startDate && s.maturityDate
+            ? (() => {
+                const st = new Date(s.startDate), en = new Date(s.maturityDate)
+                return (en.getFullYear() - st.getFullYear()) * 12 + (en.getMonth() - st.getMonth())
+              })()
+            : 0
+
+          // 만기 예상: 총 납입 원금 / 이자 / 만기수령액
+          const totalPrincipal = s.type === 'saving'
+            ? s.monthlyAmount * Math.max(totalMonths, 1)
+            : s.currentAmount
+          const interestIncome = Math.max(0, s.expectedAmount - totalPrincipal)
+
+          // 납입 현황: 기존 원금 + 연동 거래 합산
           const linkedTxs = data.transactions.filter(t =>
             t.savingLinks?.some(l => l.savingId === s.id)
           ).sort((a, b) => b.date.localeCompare(a.date))
+          const linkedPaid = linkedTxs.reduce((sum, t) => {
+            const lnk = t.savingLinks?.find(l => l.savingId === s.id)
+            return sum + (lnk ? lnk.amount : 0)
+          }, 0)
+          const paidAmount = (s.currentAmount || 0) + linkedPaid
+          const remainingAmount = Math.max(0, totalPrincipal - paidAmount)
+          const paidPct = totalPrincipal > 0 ? Math.min(paidAmount / totalPrincipal * 100, 100) : 0
+          const paidMonths = s.monthlyAmount > 0 ? Math.floor(paidAmount / s.monthlyAmount) : 0
+
           const thisMonthLinked = linkedTxs.filter(t => t.date.startsWith(currentMonthStr))
           const isPaidThisMonth = thisMonthLinked.length > 0
           const isExpanded = expandedSavingId === s.id
 
           return (
             <div key={s.id} className={`bg-white rounded-2xl p-5 shadow-sm ${isDone ? 'border-2 border-emerald-200' : ''}`}>
+              {/* 헤더 */}
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -246,51 +268,87 @@ export default function SavingsPage() {
                     {s.interestType && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400">{s.interestType === 'simple' ? '단리' : '월복리'}</span>
                     )}
-                    {/* 납입완료 배지 */}
                     {isPaidThisMonth ? (
-                      <button
-                        onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
+                      <button onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
                         className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-                        ✓ 납입완료 {thisMonthLinked.length > 1 ? `${thisMonthLinked.length}건` : ''}
-                        <span className="ml-0.5">{isExpanded ? '▲' : '▼'}</span>
+                        ✓ 납입완료 {thisMonthLinked.length > 1 ? `${thisMonthLinked.length}건` : ''} {isExpanded ? '▲' : '▼'}
                       </button>
                     ) : linkedTxs.length > 0 ? (
-                      <button
-                        onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
+                      <button onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
                         className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
                         이번 달 미납입 {isExpanded ? '▲' : '▼'}
                       </button>
                     ) : null}
                   </div>
                   <div className="font-semibold text-gray-900 mt-1">{s.name}</div>
-                  <div className="text-xs text-gray-400">{s.bank} · 연 {s.interestRate}%</div>
+                  <div className="text-xs text-gray-400">{s.bank} · 연 {s.interestRate}% {totalMonths > 0 ? `· ${totalMonths}개월` : ''}</div>
                 </div>
                 <div className="flex gap-2 items-start mt-0.5">
                   <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
                   <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                 </div>
               </div>
+
+              {/* 만기 예상 */}
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="text-xs text-gray-400 mb-0.5">원금</div>
-                  <div className="text-sm font-semibold text-gray-900">{fmtKRW(s.currentAmount)}</div>
+                  <div className="text-xs text-gray-400 mb-0.5">총 납입 원금</div>
+                  <div className="text-sm font-semibold text-gray-900">{fmtKRW(totalPrincipal)}</div>
                 </div>
                 <div className="bg-emerald-50 rounded-xl p-3">
                   <div className="text-xs text-emerald-600 mb-0.5">이자</div>
-                  <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(Math.max(0, interestIncome))}</div>
+                  <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(interestIncome)}</div>
                 </div>
                 <div className="bg-blue-50 rounded-xl p-3">
                   <div className="text-xs text-blue-600 mb-0.5">만기수령액</div>
                   <div className="text-sm font-semibold text-blue-700">{fmtKRW(s.expectedAmount)}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+
+              {/* 납입 현황 (적금) */}
+              {s.type === 'saving' && totalMonths > 0 && (
+                <div className="bg-gray-50 rounded-xl p-3 mb-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-gray-500">납입 현황</span>
+                    <span className="text-xs text-gray-400">{paidMonths}/{totalMonths}개월</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 bg-white rounded-lg p-2.5 border border-emerald-100">
+                      <div className="text-xs text-emerald-600 mb-0.5">납입 완료</div>
+                      <div className="text-sm font-bold text-emerald-700">{fmtKRW(paidAmount)}</div>
+                      {s.currentAmount > 0 && linkedPaid > 0 && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          기존 {fmtKRW(s.currentAmount)} + 연동 {fmtKRW(linkedPaid)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 bg-white rounded-lg p-2.5 border border-gray-100">
+                      <div className="text-xs text-gray-400 mb-0.5">남은 납입</div>
+                      <div className="text-sm font-bold text-gray-700">{fmtKRW(remainingAmount)}</div>
+                      {remainingAmount > 0 && s.monthlyAmount > 0 && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {Math.ceil(remainingAmount / s.monthlyAmount)}개월 남음
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all ${isDone ? 'bg-emerald-500' : 'bg-emerald-400'}`}
+                        style={{ width: `${paidPct}%` }}
+                      />
+                    </div>
+                    <div className="text-right text-xs text-gray-400">{paidPct.toFixed(1)}%</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 기간 바 */}
+              <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span>{s.startDate}</span>
                 <div className="flex-1 h-px bg-gray-100" />
                 <span>{s.maturityDate}</span>
-              </div>
-              <div className="bg-gray-100 rounded-full h-1.5">
-                <div className={`h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
               </div>
 
               {/* 연동 거래 내역 (펼쳤을 때) */}
