@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
@@ -61,7 +61,7 @@ function calcStats(txs: Transaction[]) {
 export default function Dashboard() {
   const { data, categories } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, lastModified, isSetupComplete } = data
+  const { accounts, transactions, goals, budgets, savings, lastModified, isSetupComplete } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -124,6 +124,20 @@ export default function Dashboard() {
   const budgetUsed   = Object.values(getCategoryExpenses(transactions, budgetMonth)).reduce((s, v) => s + v, 0)
   const budgetPct    = totalBudget > 0 ? Math.min((budgetUsed / totalBudget) * 100, 100) : 0
   const budgetLeft   = totalBudget - budgetUsed
+
+  // ── 적금·예금 요약 ──────────────────────────────────────────────────────────
+  const savingsSummary = useMemo(() => {
+    let totalPrincipal = 0
+    let totalExpected = 0
+    let totalInterest = 0
+    for (const s of savings) {
+      const principal = s.type === 'deposit' ? (s.currentAmount ?? 0) : (s.currentAmount ?? 0)
+      totalPrincipal += principal
+      totalExpected  += s.expectedAmount ?? 0
+      totalInterest  += Math.max(0, (s.expectedAmount ?? 0) - principal)
+    }
+    return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
+  }, [savings])
 
   // ── 라벨 ─────────────────────────────────────────────────────────────────
   const periodLabel = viewMode === 'day' ? dayLabel(selectedDay) : monthLabel(selectedMonth)
@@ -287,6 +301,34 @@ export default function Dashboard() {
           </div>
         )
       })}
+
+      {/* 적금·예금 요약 */}
+      {savingsSummary.count > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">🏦</span>
+              <span className="font-semibold text-gray-900 text-sm">적금·예금</span>
+              <span className="text-xs text-gray-400">{savingsSummary.count}건</span>
+            </div>
+            <Link href="/savings" className="text-xs text-blue-600">자세히 →</Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="text-xs text-gray-400 mb-1">납입원금</div>
+              <div className="text-sm font-bold text-gray-900 tabular-nums">{fmtShort(savingsSummary.totalPrincipal)}</div>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-3">
+              <div className="text-xs text-emerald-600 mb-1">예상이자</div>
+              <div className="text-sm font-bold text-emerald-700 tabular-nums">+{fmtShort(savingsSummary.totalInterest)}</div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3">
+              <div className="text-xs text-blue-600 mb-1">만기수령액</div>
+              <div className="text-sm font-bold text-blue-700 tabular-nums">{fmtShort(savingsSummary.totalExpected)}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* 예산 현황 (항상 월 기준) */}

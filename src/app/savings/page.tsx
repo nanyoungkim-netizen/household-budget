@@ -99,7 +99,10 @@ export default function SavingsPage() {
   const [pendingTab, setPendingTab] = useState<'saving' | 'deposit' | null>(null)
 
   function getDday(d: string) {
-    const diff = Math.ceil((new Date(d).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    if (!d) return '날짜 미설정'
+    const dt = new Date(d)
+    if (isNaN(dt.getTime())) return '날짜 미설정'
+    const diff = Math.ceil((dt.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     if (diff < 0) return '만기완료'
     if (diff === 0) return 'D-Day'
     return `D-${diff}`
