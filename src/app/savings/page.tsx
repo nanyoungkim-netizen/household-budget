@@ -237,11 +237,21 @@ export default function SavingsPage() {
               })()
             : 0
 
-          // 만기 예상: 총 납입 원금 / 이자 / 만기수령액
-          const totalPrincipal = s.type === 'saving'
-            ? s.monthlyAmount * Math.max(totalMonths, 1)
-            : s.currentAmount
-          const interestIncome = Math.max(0, s.expectedAmount - totalPrincipal)
+          // 만기 예상: calcMaturity로 실시간 재계산 (저장값 의존 제거)
+          const cardCalc = calcMaturity(
+            s.type,
+            s.type === 'saving' ? s.monthlyAmount : s.currentAmount,
+            s.interestRate,
+            s.startDate,
+            s.maturityDate,
+            s.interestType ?? 'simple',
+            s.taxType ?? 'general',
+          )
+          const totalPrincipal = cardCalc
+            ? cardCalc.principal
+            : (s.type === 'saving' ? s.monthlyAmount * Math.max(totalMonths, 1) : s.currentAmount)
+          const interestIncome = cardCalc ? cardCalc.netInterest : Math.max(0, s.expectedAmount - totalPrincipal)
+          const displayMaturity = cardCalc ? cardCalc.maturityAmount : s.expectedAmount
 
           // 납입 현황: 기존 원금 + 연동 거래 합산
           const linkedTxs = data.transactions.filter(t =>
@@ -306,7 +316,7 @@ export default function SavingsPage() {
                 </div>
                 <div className="bg-blue-50 rounded-xl p-3">
                   <div className="text-xs text-blue-600 mb-0.5">만기수령액</div>
-                  <div className="text-sm font-semibold text-blue-700">{fmtKRW(s.expectedAmount)}</div>
+                  <div className="text-sm font-semibold text-blue-700">{fmtKRW(displayMaturity)}</div>
                 </div>
               </div>
 
