@@ -19,6 +19,7 @@ export interface Category {
   icon: string
   color: string
   parentId?: string | null  // null = 대분류, string = 소분류, undefined = 레거시
+  savingId?: string          // 연동된 적금·예금 상품 ID
 }
 
 export type PaymentMethod = 'account' | 'card'

@@ -10,7 +10,7 @@ function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string): number { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
 function fmtInput(s: string): string { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 
-// FR-010: 적금 카테고리 ID 집합
+// FR-010: 적금 카테고리 ID 집합 (기본값)
 const SAVING_CAT_IDS = new Set(['pg_saving', 'saving'])
 
 const today = new Date()
@@ -127,7 +127,7 @@ export default function TransactionsPage() {
   const expense   = Math.max(0, expenseRaw - refundAmt)
   const transfer  = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
   // FR-010: 적금 분리 계산
-  const savingExpense = filtered.filter(t => t.type === 'expense' && SAVING_CAT_IDS.has(t.categoryId)).reduce((s, t) => s + t.amount, 0)
+  const savingExpense = filtered.filter(t => t.type === 'expense' && isSavingCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
   const realExpense   = Math.max(0, expense - savingExpense)
 
   // 계좌별 실시간 잔액 (전체 거래 기준, 월 필터 없음)
@@ -297,7 +297,7 @@ export default function TransactionsPage() {
         return
       }
 
-      const resolvedSavingLinks = SAVING_CAT_IDS.has(form.categoryId) && savingLinks.length > 0
+      const resolvedSavingLinks = isSavingCat(form.categoryId) && savingLinks.length > 0
         ? savingLinks.filter(l => l.savingId && parseAmt(l.amount) > 0).map(l => ({ savingId: l.savingId, amount: parseAmt(l.amount) }))
         : undefined
 
@@ -337,6 +337,13 @@ export default function TransactionsPage() {
         categoryId: categories.find(c => c.type === t && c.parentId !== null)?.id || ''
       }))
     }
+  }
+
+  // pg_saving 하위 카테고리 또는 savingId가 있는 카테고리 모두 적금으로 판별
+  function isSavingCat(categoryId: string): boolean {
+    if (SAVING_CAT_IDS.has(categoryId)) return true
+    const cat = categories.find(c => c.id === categoryId)
+    return cat?.parentId === 'pg_saving' || !!cat?.savingId
   }
 
   // 환급은 지출 카테고리 목록 사용
@@ -633,7 +640,7 @@ export default function TransactionsPage() {
               const isRefund   = t.type === 'refund'
               const runningBalance = runningBalanceMap.get(t.id)
 
-              const isSavingTx = t.type === 'expense' && SAVING_CAT_IDS.has(t.categoryId)
+              const isSavingTx = t.type === 'expense' && isSavingCat(t.categoryId)
               return (
                 <div key={t.id}
                   className={`flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer ${isSavingTx ? 'bg-blue-50/40' : ''}`}
@@ -908,7 +915,16 @@ export default function TransactionsPage() {
                             const newCatId = e.target.value
                             setForm(f => ({ ...f, categoryId: newCatId }))
                             setCatSearch('')
-                            if (!SAVING_CAT_IDS.has(newCatId)) setSavingLinks([])
+                            if (!isSavingCat(newCatId)) {
+                              setSavingLinks([])
+                            } else {
+                              // 카테고리에 연동 상품이 설정돼 있으면 자동 선택
+                              const cat = categories.find(c => c.id === newCatId)
+                              if (cat?.savingId && !savingLinks.some(l => l.savingId === cat.savingId)) {
+                                const s = data.savings.find(sv => sv.id === cat.savingId)
+                                if (s) setSavingLinks([{ savingId: s.id, amount: s.monthlyAmount ? fmtInput(String(s.monthlyAmount)) : '' }])
+                              }
+                            }
                           }}
                           size={Math.min(searchedCats.length || 1, 5)}
                           className={`w-full px-3 py-1 text-sm focus:outline-none bg-white ${
@@ -924,7 +940,7 @@ export default function TransactionsPage() {
                   )}
 
                   {/* ── 적금·예금 상품 연동 섹션 ── */}
-                  {formType === 'expense' && SAVING_CAT_IDS.has(form.categoryId) && (
+                  {formType === 'expense' && isSavingCat(form.categoryId) && (
                     <div className="border border-blue-100 rounded-xl bg-blue-50/40 p-3 space-y-2.5">
                       <div className="text-xs font-semibold text-blue-700">💰 적금·예금 상품 연동</div>
 
