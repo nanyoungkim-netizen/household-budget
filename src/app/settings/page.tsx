@@ -717,8 +717,11 @@ export default function SettingsPage() {
               <input type="text" placeholder="항목 이름" value={newCat.name}
                 onChange={e => setNewCat(f => ({ ...f, name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
-              {/* 적금 대분류 하위일 때: 상품 연동 선택 */}
-              {catParentId === 'pg_saving' && data.savings.length > 0 && (
+              {/* 적금·예금·저축 대분류 하위일 때: 상품 연동 선택 */}
+              {(() => {
+                const parent = categories.find(c => c.id === catParentId)
+                return parent && /적금|예금|저축/.test(parent.name) && data.savings.length > 0
+              })() && (
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">연동 적금·예금 상품 <span className="text-gray-300">(선택)</span></label>
                   <select
@@ -854,8 +857,11 @@ export default function SettingsPage() {
                 onChange={e => setEditCatForm(f => ({ ...f, name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
 
-              {/* 소분류이고 적금 대분류 하위일 때: 상품 연동 선택 */}
-              {editingCat?.parentId !== null && (editCatForm.parentId === 'pg_saving' || editCatForm.savingId) && data.savings.length > 0 && (
+              {/* 소분류이고 적금·예금·저축 대분류 하위일 때: 상품 연동 선택 */}
+              {editingCat?.parentId !== null && data.savings.length > 0 && (() => {
+                const parent = categories.find(c => c.id === editCatForm.parentId)
+                return (parent && /적금|예금|저축/.test(parent.name)) || !!editCatForm.savingId
+              })() && (
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">연동 적금·예금 상품 <span className="text-gray-300">(선택)</span></label>
                   <select

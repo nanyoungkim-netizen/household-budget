@@ -339,11 +339,19 @@ export default function TransactionsPage() {
     }
   }
 
-  // pg_saving 하위 카테고리 또는 savingId가 있는 카테고리 모두 적금으로 판별
+  // 적금·예금·저축 관련 카테고리 판별
+  // - 기본 ID 집합에 있거나
+  // - savingId가 연결돼 있거나
+  // - 부모 카테고리 이름이 적금/예금/저축 관련이면 인식
   function isSavingCat(categoryId: string): boolean {
     if (SAVING_CAT_IDS.has(categoryId)) return true
     const cat = categories.find(c => c.id === categoryId)
-    return cat?.parentId === 'pg_saving' || !!cat?.savingId
+    if (!cat) return false
+    if (cat.savingId) return true
+    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+    if (parent && /적금|예금|저축/.test(parent.name)) return true
+    if (cat.parentId === null && /적금|예금|저축/.test(cat.name)) return true
+    return false
   }
 
   // 환급은 지출 카테고리 목록 사용

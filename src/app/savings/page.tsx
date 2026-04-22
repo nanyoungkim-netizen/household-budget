@@ -389,6 +389,17 @@ export default function SavingsPage() {
                   onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))}
                   className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+              {/* 적금: 앱 사용 시작 전 기존 납입 원금 입력 */}
+              {form.type === 'saving' && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">
+                    기존 납입 원금 <span className="text-gray-300">(앱 사용 전 이미 납입한 금액, 선택)</span>
+                  </label>
+                  <input type="text" inputMode="numeric" placeholder="0원" value={form.currentAmount}
+                    onChange={e => setForm(f => ({ ...f, currentAmount: fmtInput(e.target.value) }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-0.5">가입일</label>
