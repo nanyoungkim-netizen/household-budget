@@ -29,15 +29,20 @@ function getBankPreset(bankName: string) {
   return BANK_PRESETS.find(b => b.name === bankName) ?? null
 }
 function AccIcon({ acc }: { acc: Account }) {
-  const preset = getBankPreset(acc.bank)
-  const bg    = preset?.color ?? acc.color
-  const text  = preset?.textColor ?? '#fff'
-  const label = preset ? preset.abbr : acc.name.charAt(0)
-  const small = label.length > 2
+  const preset   = getBankPreset(acc.bank)
+  const bg       = preset?.color ?? acc.color
+  const textColor = preset?.textColor ?? '#fff'
+  // 윗줄: 은행 약칭 or 계좌명 앞글자
+  const topLabel = preset ? preset.abbr : acc.name.charAt(0)
+  // 아랫줄: 계좌명 앞 3자 (공백 제거)
+  const nameShort = acc.name.replace(/\s/g, '').slice(0, 3)
   return (
-    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold flex-shrink-0 ${small ? 'text-[10px]' : 'text-sm'}`}
-      style={{ backgroundColor: bg, color: text }}>
-      {label}
+    <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold flex-shrink-0 leading-tight"
+      style={{ backgroundColor: bg, color: textColor }}>
+      <span className={topLabel.length > 2 ? 'text-[9px]' : 'text-[11px]'}>{topLabel}</span>
+      {nameShort && (
+        <span className="text-[9px] opacity-80 mt-0.5">{nameShort}</span>
+      )}
     </div>
   )
 }
