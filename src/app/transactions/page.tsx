@@ -28,6 +28,28 @@ interface FormState {
   paymentMethod: PaymentMethod
   cardId: string
   installmentMonths: string   // '1' = 일시불, '2'~ = 할부
+  billingMonth: string        // 카드대금 납부 시 청구 월 (YYYY-MM)
+}
+
+function prevMonthStr(): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function recentMonthOptions(): string[] {
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() - (i + 1))
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+}
+
+function fmtMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-')
+  return `${y}년 ${parseInt(m)}월`
 }
 
 export default function TransactionsPage() {
@@ -96,6 +118,7 @@ export default function TransactionsPage() {
     paymentMethod: 'account',
     cardId: cards[0]?.id || '',
     installmentMonths: '1',
+    billingMonth: '',
   }), [accounts, cards, categories])
 
   const [form, setForm] = useState<FormState>(defaultForm)
@@ -200,6 +223,7 @@ export default function TransactionsPage() {
       paymentMethod: t.paymentMethod,
       cardId: t.cardId || cards[0]?.id || '',
       installmentMonths: '1',
+      billingMonth: t.billingMonth || '',
     })
     setSavingLinks((t.savingLinks || []).map(l => ({ savingId: l.savingId, amount: fmtInput(String(l.amount)) })))
     setSavingSearch('')
@@ -312,6 +336,7 @@ export default function TransactionsPage() {
         paymentMethod: form.paymentMethod,
         cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
         savingLinks: resolvedSavingLinks,
+        billingMonth: form.categoryId === 'card' && form.billingMonth ? form.billingMonth : undefined,
       }
     }
 
@@ -921,7 +946,11 @@ export default function TransactionsPage() {
                         <select value={form.categoryId}
                           onChange={e => {
                             const newCatId = e.target.value
-                            setForm(f => ({ ...f, categoryId: newCatId }))
+                            setForm(f => ({
+                              ...f,
+                              categoryId: newCatId,
+                              billingMonth: newCatId === 'card' && !f.billingMonth ? prevMonthStr() : f.billingMonth,
+                            }))
                             setCatSearch('')
                             if (!isSavingCat(newCatId)) {
                               setSavingLinks([])
@@ -945,6 +974,27 @@ export default function TransactionsPage() {
                         </select>
                       </div>
                     </>
+                  )}
+
+                  {/* ── 카드대금 청구 월 선택 ── */}
+                  {form.categoryId === 'card' && (
+                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3">
+                      <label className="text-xs font-semibold text-purple-700 block mb-2">💳 청구 월 선택</label>
+                      <select
+                        value={form.billingMonth}
+                        onChange={e => setForm(f => ({ ...f, billingMonth: e.target.value }))}
+                        className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                        <option value="">청구 월 선택 (선택사항)</option>
+                        {recentMonthOptions().map(ym => (
+                          <option key={ym} value={ym}>{fmtMonthLabel(ym)} 카드대금</option>
+                        ))}
+                      </select>
+                      {form.billingMonth && (
+                        <p className="text-xs text-purple-500 mt-1.5">
+                          {fmtMonthLabel(form.billingMonth)}에 사용한 카드 내역의 대금을 납부하는 거래로 기록됩니다.
+                        </p>
+                      )}
+                    </div>
                   )}
 
                   {/* ── 적금·예금 상품 연동 섹션 ── */}

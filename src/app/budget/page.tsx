@@ -22,6 +22,11 @@ function prevMonth(month: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+function fmtMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-')
+  return `${y}년 ${parseInt(m)}월`
+}
+
 const PRESET_ICONS = ['🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','📦','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️']
 const PRESET_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6F','#DDA0DD','#82E0AA','#F1948A','#85C1E9','#F0B27A','#A9CCE3','#EC7063','#A8D8EA','#B0BEC5','#CFD8DC']
 
@@ -73,6 +78,9 @@ export default function BudgetPage() {
 
   // ── 카드별 청구 예정 ────────────────────────────────────────────────────────
   const { cards } = data
+  const prev = prevMonth(month)
+
+  // 이달 카드 사용 (→ 다음달 청구 예정)
   const cardBreakdown = cards
     .map(card => ({
       ...card,
@@ -81,6 +89,29 @@ export default function BudgetPage() {
         .reduce((s, t) => s + t.amount, 0),
     }))
     .filter(c => c.amount > 0)
+
+  // 전달 카드 사용액 → 이달 납부 예정
+  const prevMonthCardTxs = transactions.filter(t =>
+    t.date.startsWith(prev) && t.type === 'expense' && t.paymentMethod === 'card'
+  )
+  const prevCardBreakdown = cards
+    .map(card => {
+      const charged = prevMonthCardTxs
+        .filter(t => t.cardId === card.id)
+        .reduce((s, t) => s + t.amount, 0)
+      // 이달에 해당 청구월로 납부한 거래
+      const paidTxs = transactions.filter(t =>
+        t.date.startsWith(month) && t.categoryId === 'card' && t.billingMonth === prev
+      )
+      const paid = paidTxs.reduce((s, t) => s + t.amount, 0)
+      return { ...card, charged, paid, isPaid: paid >= charged && charged > 0 }
+    })
+    .filter(c => c.charged > 0)
+
+  // billingMonth 없이 납부한 카드대금 합계 (구분 불가)
+  const untaggedCardPayment = transactions
+    .filter(t => t.date.startsWith(month) && t.categoryId === 'card' && !t.billingMonth)
+    .reduce((s, t) => s + t.amount, 0)
 
   function getChildren(parentId: string) {
     return categories.filter(c => c.parentId === parentId)
@@ -284,12 +315,48 @@ export default function BudgetPage() {
             <div className="text-sm font-bold text-purple-700">{fmtKRW(cardExpense)}</div>
           </div>
         </div>
+        {/* 이달 납부 예정 (전달 카드 사용분) */}
+        <div className="border-t border-gray-100 pt-3 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-700">
+              {fmtMonthLabel(prev)} 카드대금 납부 예정
+            </span>
+            {untaggedCardPayment > 0 && (
+              <span className="text-xs text-gray-400">기타 납부 {fmtKRW(untaggedCardPayment)}</span>
+            )}
+          </div>
+          {prevCardBreakdown.length > 0 ? (
+            <div className="space-y-1.5">
+              {prevCardBreakdown.map(card => (
+                <div key={card.id} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: card.color }} />
+                    <span className="text-gray-700 font-medium">{card.name}</span>
+                    <span className="text-gray-300">결제일 {card.billingDate}일</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-800">{fmtKRW(card.charged)}</span>
+                    {card.isPaid
+                      ? <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 font-medium">납부완료</span>
+                      : <span className="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">미납</span>
+                    }
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-100">
+                <span className="text-gray-400">합계</span>
+                <span className="font-bold text-purple-700">{fmtKRW(prevCardBreakdown.reduce((s, c) => s + c.charged, 0))}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400">{fmtMonthLabel(prev)} 카드 사용 내역 없음</div>
+          )}
+        </div>
+
+        {/* 이달 카드 사용 → 다음달 청구 예정 */}
         <div className="border-t border-gray-100 pt-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-500">카드 청구 예정</span>
-            {cardPayment > 0 && (
-              <span className="text-xs text-gray-400">이달 납부완료 {fmtKRW(cardPayment)}</span>
-            )}
+            <span className="text-xs font-semibold text-gray-500">이달 카드 사용 <span className="text-gray-300 font-normal">(다음달 청구 예정)</span></span>
           </div>
           {cardBreakdown.length > 0 ? (
             <div className="space-y-1.5">
@@ -298,7 +365,6 @@ export default function BudgetPage() {
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: card.color }} />
                     <span className="text-gray-700 font-medium">{card.name}</span>
-                    <span className="text-gray-300">결제일 {card.billingDate}일</span>
                   </div>
                   <span className="font-semibold text-gray-800">{fmtKRW(card.amount)}</span>
                 </div>

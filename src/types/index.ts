@@ -46,6 +46,7 @@ export interface Transaction {
   installmentMonths?: number
   installmentCurrent?: number
   savingLinks?: SavingLink[]  // 적금·예금 상품 연동
+  billingMonth?: string       // 카드대금 납부 시 해당 청구 월 (YYYY-MM)
 }
 
 export interface Budget {
