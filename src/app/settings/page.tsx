@@ -32,8 +32,8 @@ function AccIcon({ acc }: { acc: Account }) {
   const preset   = getBankPreset(acc.bank)
   const bg       = preset?.color ?? acc.color
   const textColor = preset?.textColor ?? '#fff'
-  // 윗줄: 은행 약칭 or 계좌명 앞글자
-  const topLabel = preset ? preset.abbr : acc.name.charAt(0)
+  // 윗줄: 은행 약칭 → 은행명(직접) → 계좌명 첫글자 순으로 폴백
+  const topLabel = preset ? preset.abbr : (acc.bank ? acc.bank.slice(0, 3) : acc.name.charAt(0))
   // 아랫줄: 계좌명 앞 3자 (공백 제거)
   const nameShort = acc.name.replace(/\s/g, '').slice(0, 3)
   return (
