@@ -35,6 +35,12 @@ type ModalType = 'addChild' | 'addParent' | null
 export default function BudgetPage() {
   const { data, categories, setBudgets, setCategories } = useApp()
   const { budgets, transactions } = data
+
+  function isCardPaymentCat(categoryId: string): boolean {
+    if (categoryId === 'card') return true
+    const cat = categories.find(c => c.id === categoryId)
+    return !!cat && /카드대금/.test(cat.name)
+  }
   const [month, setMonth] = useState(currentMonth)
   const router = useRouter()
 
@@ -57,23 +63,23 @@ export default function BudgetPage() {
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
-  // 지출 + 통장환급(차감)만 포함 — 카드 환급 제외, 카드대금(card) 제외 (카드 사용과 이중 계산 방지)
+  // 지출 + 통장환급(차감)만 포함 — 카드 환급 제외, 카드대금 제외 (카드 사용과 이중 계산 방지)
   const monthTx = transactions.filter(t =>
     t.date.startsWith(month) &&
-    t.categoryId !== 'card' &&
+    !isCardPaymentCat(t.categoryId) &&
     (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
 
   // ── 지출 방식 분석 ─────────────────────────────────────────────────────────
   const allMonthExpense = transactions.filter(t => t.date.startsWith(month) && t.type === 'expense')
   const accountExpense = allMonthExpense
-    .filter(t => t.paymentMethod === 'account' && t.categoryId !== 'card')
+    .filter(t => t.paymentMethod === 'account' && !isCardPaymentCat(t.categoryId))
     .reduce((s, t) => s + t.amount, 0)
   const cardExpense = allMonthExpense
     .filter(t => t.paymentMethod === 'card')
     .reduce((s, t) => s + t.amount, 0)
   const cardPayment = allMonthExpense
-    .filter(t => t.categoryId === 'card')
+    .filter(t => isCardPaymentCat(t.categoryId))
     .reduce((s, t) => s + t.amount, 0)
 
   // ── 카드별 청구 예정 ────────────────────────────────────────────────────────
@@ -101,7 +107,7 @@ export default function BudgetPage() {
         .reduce((s, t) => s + t.amount, 0)
       // 이달에 해당 청구월로 납부한 거래
       const paidTxs = transactions.filter(t =>
-        t.date.startsWith(month) && t.categoryId === 'card' && t.billingMonth === prev
+        t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev
       )
       const paid = paidTxs.reduce((s, t) => s + t.amount, 0)
       return { ...card, charged, paid, isPaid: paid >= charged && charged > 0 }
@@ -110,7 +116,7 @@ export default function BudgetPage() {
 
   // billingMonth 없이 납부한 카드대금 합계 (구분 불가)
   const untaggedCardPayment = transactions
-    .filter(t => t.date.startsWith(month) && t.categoryId === 'card' && !t.billingMonth)
+    .filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && !t.billingMonth)
     .reduce((s, t) => s + t.amount, 0)
 
   function getChildren(parentId: string) {

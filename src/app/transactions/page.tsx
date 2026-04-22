@@ -56,6 +56,12 @@ export default function TransactionsPage() {
   const { data, categories, addTransaction, updateTransaction, deleteTransaction, setSavings } = useApp()
   const { accounts, transactions, cards } = data
 
+  function isCardPaymentCat(categoryId: string): boolean {
+    if (categoryId === 'card') return true
+    const cat = categories.find(c => c.id === categoryId)
+    return !!cat && /카드대금/.test(cat.name)
+  }
+
   const [month, setMonth] = useState(currentMonth)
   const [filterAccount, setFilterAccount] = useState('all')
   const [filterCard, setFilterCard] = useState('all')
@@ -336,7 +342,7 @@ export default function TransactionsPage() {
         paymentMethod: form.paymentMethod,
         cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
         savingLinks: resolvedSavingLinks,
-        billingMonth: form.categoryId === 'card' && form.billingMonth ? form.billingMonth : undefined,
+        billingMonth: isCardPaymentCat(form.categoryId) && form.billingMonth ? form.billingMonth : undefined,
       }
     }
 
@@ -949,7 +955,7 @@ export default function TransactionsPage() {
                             setForm(f => ({
                               ...f,
                               categoryId: newCatId,
-                              billingMonth: newCatId === 'card' && !f.billingMonth ? prevMonthStr() : f.billingMonth,
+                              billingMonth: isCardPaymentCat(newCatId) && !f.billingMonth ? prevMonthStr() : f.billingMonth,
                             }))
                             setCatSearch('')
                             if (!isSavingCat(newCatId)) {
@@ -977,7 +983,7 @@ export default function TransactionsPage() {
                   )}
 
                   {/* ── 카드대금 청구 월 선택 ── */}
-                  {form.categoryId === 'card' && (
+                  {isCardPaymentCat(form.categoryId) && (
                     <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3">
                       <label className="text-xs font-semibold text-purple-700 block mb-2">💳 청구 월 선택</label>
                       <select
