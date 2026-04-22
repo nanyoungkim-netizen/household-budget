@@ -89,6 +89,8 @@ function isFormEmpty(form: typeof EMPTY_FORM) {
     && !form.startDate && !form.maturityDate && !form.currentAmount
 }
 
+const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
+
 export default function SavingsPage() {
   const { data, setSavings } = useApp()
   const { savings } = data
@@ -97,6 +99,8 @@ export default function SavingsPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   // FR-013: 탭 전환 확인 다이얼로그
   const [pendingTab, setPendingTab] = useState<'saving' | 'deposit' | null>(null)
+  // 납입완료 내역 펼치기
+  const [expandedSavingId, setExpandedSavingId] = useState<string | null>(null)
 
   function getDday(d: string) {
     if (!d) return '날짜 미설정'
@@ -221,6 +225,15 @@ export default function SavingsPage() {
           const isDone = dday === '만기완료'
           const pct = s.expectedAmount > 0 ? Math.min(s.currentAmount / s.expectedAmount * 100, 100) : 0
           const interestIncome = s.expectedAmount - s.currentAmount
+
+          // 연동 거래 계산
+          const linkedTxs = data.transactions.filter(t =>
+            t.savingLinks?.some(l => l.savingId === s.id)
+          ).sort((a, b) => b.date.localeCompare(a.date))
+          const thisMonthLinked = linkedTxs.filter(t => t.date.startsWith(currentMonthStr))
+          const isPaidThisMonth = thisMonthLinked.length > 0
+          const isExpanded = expandedSavingId === s.id
+
           return (
             <div key={s.id} className={`bg-white rounded-2xl p-5 shadow-sm ${isDone ? 'border-2 border-emerald-200' : ''}`}>
               <div className="flex items-start justify-between mb-3">
@@ -233,6 +246,21 @@ export default function SavingsPage() {
                     {s.interestType && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400">{s.interestType === 'simple' ? '단리' : '월복리'}</span>
                     )}
+                    {/* 납입완료 배지 */}
+                    {isPaidThisMonth ? (
+                      <button
+                        onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
+                        className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+                        ✓ 납입완료 {thisMonthLinked.length > 1 ? `${thisMonthLinked.length}건` : ''}
+                        <span className="ml-0.5">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+                    ) : linkedTxs.length > 0 ? (
+                      <button
+                        onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
+                        className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
+                        이번 달 미납입 {isExpanded ? '▲' : '▼'}
+                      </button>
+                    ) : null}
                   </div>
                   <div className="font-semibold text-gray-900 mt-1">{s.name}</div>
                   <div className="text-xs text-gray-400">{s.bank} · 연 {s.interestRate}%</div>
@@ -264,6 +292,29 @@ export default function SavingsPage() {
               <div className="bg-gray-100 rounded-full h-1.5">
                 <div className={`h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
               </div>
+
+              {/* 연동 거래 내역 (펼쳤을 때) */}
+              {isExpanded && linkedTxs.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">연동된 거래 내역</div>
+                  {linkedTxs.slice(0, 10).map(t => {
+                    const linkAmt = t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? t.amount
+                    const isThisMonth = t.date.startsWith(currentMonthStr)
+                    return (
+                      <div key={t.id} className={`flex justify-between items-center text-xs rounded-lg px-2.5 py-1.5 ${isThisMonth ? 'bg-emerald-50' : 'bg-gray-50'}`}>
+                        <div>
+                          <span className={`font-medium ${isThisMonth ? 'text-emerald-700' : 'text-gray-600'}`}>{t.date}</span>
+                          <span className="text-gray-400 ml-1.5">{t.description}</span>
+                        </div>
+                        <span className={`font-semibold ${isThisMonth ? 'text-emerald-600' : 'text-blue-600'}`}>{fmtKRW(linkAmt)}</span>
+                      </div>
+                    )
+                  })}
+                  {linkedTxs.length > 10 && (
+                    <p className="text-xs text-gray-400 text-center">외 {linkedTxs.length - 10}건</p>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useApp, computeAccountBalance } from '@/lib/AppContext'
-import { Transaction, PaymentMethod } from '@/types'
+import { Transaction, PaymentMethod, Saving } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -31,7 +31,7 @@ interface FormState {
 }
 
 export default function TransactionsPage() {
-  const { data, categories, addTransaction, updateTransaction, deleteTransaction } = useApp()
+  const { data, categories, addTransaction, updateTransaction, deleteTransaction, setSavings } = useApp()
   const { accounts, transactions, cards } = data
 
   const [month, setMonth] = useState(currentMonth)
@@ -76,6 +76,15 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [formType, setFormType] = useState<TxFormType>('expense')
+
+  // 적금·예금 상품 연동 상태
+  const [savingLinks, setSavingLinks] = useState<{ savingId: string; amount: string }[]>([])
+  const [savingSearch, setSavingSearch] = useState('')
+  const [showQuickAddSaving, setShowQuickAddSaving] = useState(false)
+  const [quickSavingForm, setQuickSavingForm] = useState({
+    name: '', bank: '', type: 'saving' as 'saving' | 'deposit',
+    monthlyAmount: '', interestRate: '', startDate: '', maturityDate: '',
+  })
 
   const defaultForm = useCallback((): FormState => ({
     date: today.toISOString().slice(0, 10),
@@ -172,6 +181,8 @@ export default function TransactionsPage() {
     setEditingId(null)
     setFormType('expense')
     setForm(defaultForm())
+    setSavingLinks([])
+    setSavingSearch('')
     setShowModal(true)
   }
 
@@ -190,17 +201,53 @@ export default function TransactionsPage() {
       cardId: t.cardId || cards[0]?.id || '',
       installmentMonths: '1',
     })
+    setSavingLinks((t.savingLinks || []).map(l => ({ savingId: l.savingId, amount: fmtInput(String(l.amount)) })))
+    setSavingSearch('')
     setShowModal(true)
   }
 
   function closeModal() {
     setShowModal(false)
     setEditingId(null)
+    setSavingLinks([])
+    setSavingSearch('')
+  }
+
+  // ── 적금 빠른 추가 ──────────────────────────────────────────────────────────
+  function handleQuickAddSaving() {
+    if (!quickSavingForm.name || !quickSavingForm.bank || !quickSavingForm.monthlyAmount) return
+    const newSaving: Saving = {
+      id: `s${Date.now()}`,
+      name: quickSavingForm.name,
+      bank: quickSavingForm.bank,
+      type: quickSavingForm.type,
+      monthlyAmount: parseAmt(quickSavingForm.monthlyAmount),
+      interestRate: Number(quickSavingForm.interestRate) || 0,
+      startDate: quickSavingForm.startDate,
+      maturityDate: quickSavingForm.maturityDate,
+      currentAmount: 0,
+      expectedAmount: parseAmt(quickSavingForm.monthlyAmount),
+      interestType: 'simple',
+      taxType: 'general',
+    }
+    setSavings([...data.savings, newSaving])
+    setSavingLinks(prev => [...prev, { savingId: newSaving.id, amount: quickSavingForm.monthlyAmount }])
+    setShowQuickAddSaving(false)
+    setQuickSavingForm({ name: '', bank: '', type: 'saving', monthlyAmount: '', interestRate: '', startDate: '', maturityDate: '' })
   }
 
   // ── 저장 ─────────────────────────────────────────────────────────────────────
   function handleSave() {
     if (!form.amount) return
+
+    // 적금 연동 금액 합계 검증
+    if (savingLinks.length > 0) {
+      const totalLinked = savingLinks.reduce((s, l) => s + parseAmt(l.amount), 0)
+      if (totalLinked > parseAmt(form.amount)) {
+        alert('연동 금액의 합계가 거래 금액을 초과할 수 없습니다.')
+        return
+      }
+    }
 
     let tx: Transaction
 
@@ -250,6 +297,10 @@ export default function TransactionsPage() {
         return
       }
 
+      const resolvedSavingLinks = SAVING_CAT_IDS.has(form.categoryId) && savingLinks.length > 0
+        ? savingLinks.filter(l => l.savingId && parseAmt(l.amount) > 0).map(l => ({ savingId: l.savingId, amount: parseAmt(l.amount) }))
+        : undefined
+
       tx = {
         id: editingId || `t${Date.now()}`,
         date: form.date,
@@ -260,6 +311,7 @@ export default function TransactionsPage() {
         categoryId: form.categoryId,
         paymentMethod: form.paymentMethod,
         cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
+        savingLinks: resolvedSavingLinks,
       }
     }
 
@@ -595,7 +647,11 @@ export default function TransactionsPage() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
                         {isRefund && <span className="text-xs bg-purple-100 text-purple-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">환급</span>}
-                        {isSavingTx && <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">저축</span>}
+                        {isSavingTx && (
+                          t.savingLinks && t.savingLinks.length > 0
+                            ? <span className="text-xs bg-emerald-100 text-emerald-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">납입완료 {t.savingLinks.length}건</span>
+                            : <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">저축</span>
+                        )}
                         {t.isInstallment && t.installmentCurrent && t.installmentMonths && (
                           <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap">
                             할부 {t.installmentCurrent}/{t.installmentMonths}
@@ -848,7 +904,12 @@ export default function TransactionsPage() {
                           {catSearch && <button onClick={() => setCatSearch('')} className="text-gray-300 hover:text-gray-500 text-xs">×</button>}
                         </div>
                         <select value={form.categoryId}
-                          onChange={e => { setForm(f => ({ ...f, categoryId: e.target.value })); setCatSearch('') }}
+                          onChange={e => {
+                            const newCatId = e.target.value
+                            setForm(f => ({ ...f, categoryId: newCatId }))
+                            setCatSearch('')
+                            if (!SAVING_CAT_IDS.has(newCatId)) setSavingLinks([])
+                          }}
                           size={Math.min(searchedCats.length || 1, 5)}
                           className={`w-full px-3 py-1 text-sm focus:outline-none bg-white ${
                             formType === 'refund' ? 'focus:ring-purple-400' : 'focus:ring-blue-500'
@@ -860,6 +921,129 @@ export default function TransactionsPage() {
                         </select>
                       </div>
                     </>
+                  )}
+
+                  {/* ── 적금·예금 상품 연동 섹션 ── */}
+                  {formType === 'expense' && SAVING_CAT_IDS.has(form.categoryId) && (
+                    <div className="border border-blue-100 rounded-xl bg-blue-50/40 p-3 space-y-2.5">
+                      <div className="text-xs font-semibold text-blue-700">💰 적금·예금 상품 연동</div>
+
+                      {data.savings.length === 0 ? (
+                        <div className="text-center py-3">
+                          <p className="text-xs text-gray-400 mb-2">등록된 적금·예금 상품이 없습니다</p>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickAddSaving(true)}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium underline">
+                            + 새 상품 추가
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* 상품 검색 */}
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+                            <input
+                              type="text"
+                              value={savingSearch}
+                              onChange={e => setSavingSearch(e.target.value)}
+                              placeholder="상품명 검색..."
+                              className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            />
+                          </div>
+
+                          {/* 미선택 상품 목록 */}
+                          {(() => {
+                            const unlinked = data.savings.filter(s =>
+                              !savingLinks.some(l => l.savingId === s.id) &&
+                              (!savingSearch.trim() || s.name.includes(savingSearch.trim()) || s.bank.includes(savingSearch.trim()))
+                            )
+                            return unlinked.length > 0 ? (
+                              <div className="max-h-32 overflow-y-auto space-y-1">
+                                {unlinked.map(s => (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const defaultAmt = s.monthlyAmount
+                                        ? fmtInput(String(s.monthlyAmount))
+                                        : (form.amount || '')
+                                      setSavingLinks(prev => [...prev, { savingId: s.id, amount: defaultAmt }])
+                                      setSavingSearch('')
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left">
+                                    <div>
+                                      <span className="text-xs font-medium text-gray-800">{s.name}</span>
+                                      <span className="text-xs text-gray-400 ml-1.5">{s.bank}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {s.monthlyAmount > 0 && (
+                                        <span className="text-xs text-gray-400">{fmtKRW(s.monthlyAmount)}</span>
+                                      )}
+                                      <span className="text-xs text-blue-500 font-bold">+</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              savingSearch.trim() && <p className="text-xs text-gray-400 text-center py-1">일치하는 상품 없음</p>
+                            )
+                          })()}
+
+                          {/* 선택된 상품 & 금액 입력 */}
+                          {savingLinks.length > 0 && (
+                            <div className="space-y-1.5 pt-1 border-t border-blue-100">
+                              <div className="text-xs text-gray-500 font-medium">연동 상품</div>
+                              {savingLinks.map((link, i) => {
+                                const s = data.savings.find(sv => sv.id === link.savingId)
+                                return (
+                                  <div key={i} className="flex items-center gap-2 bg-white rounded-lg px-2.5 py-2 border border-blue-100">
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-xs font-medium text-gray-800 truncate block">{s?.name}</span>
+                                      <span className="text-xs text-gray-400">{s?.bank}</span>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={link.amount}
+                                      onChange={e => setSavingLinks(prev => prev.map((l, j) =>
+                                        j === i ? { ...l, amount: fmtInput(e.target.value) } : l
+                                      ))}
+                                      placeholder="금액"
+                                      className="w-28 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setSavingLinks(prev => prev.filter((_, j) => j !== i))}
+                                      className="text-gray-300 hover:text-red-400 text-sm leading-none flex-shrink-0">×</button>
+                                  </div>
+                                )
+                              })}
+                              {/* 남은 금액 */}
+                              {form.amount && (() => {
+                                const total = parseAmt(form.amount)
+                                const linked = savingLinks.reduce((s, l) => s + parseAmt(l.amount), 0)
+                                const remaining = total - linked
+                                return (
+                                  <div className={`text-xs text-right font-medium ${remaining < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                                    남은 금액: {remaining < 0 ? '-' : ''}{fmtKRW(Math.abs(remaining))}
+                                    {remaining < 0 && ' ⚠️ 초과'}
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )}
+
+                          {/* + 새 상품 추가 */}
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickAddSaving(true)}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                            + 새 상품 추가
+                          </button>
+                        </>
+                      )}
+                    </div>
                   )}
                 </>
               )}
@@ -882,6 +1066,67 @@ export default function TransactionsPage() {
                   {isEditing ? '수정 완료' : formType === 'transfer' ? '이체하기' : formType === 'refund' ? '환급 추가' : '추가하기'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 적금 빠른 추가 모달 (z-[60]: 메인 모달보다 위) ── */}
+      {showQuickAddSaving && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-gray-900">새 상품 추가</h3>
+              <button onClick={() => setShowQuickAddSaving(false)} className="text-gray-400 text-xl leading-none">×</button>
+            </div>
+            <div className="space-y-3">
+              {/* 적금/예금 탭 */}
+              <div className="flex bg-gray-100 rounded-xl p-1">
+                {(['saving', 'deposit'] as const).map(t => (
+                  <button key={t} type="button"
+                    onClick={() => setQuickSavingForm(f => ({ ...f, type: t }))}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${quickSavingForm.type === t ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
+                    {t === 'saving' ? '적금' : '예금'}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="상품명 *" value={quickSavingForm.name}
+                  onChange={e => setQuickSavingForm(f => ({ ...f, name: e.target.value }))}
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" placeholder="은행명 *" value={quickSavingForm.bank}
+                  onChange={e => setQuickSavingForm(f => ({ ...f, bank: e.target.value }))}
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <input type="text" inputMode="numeric"
+                placeholder={quickSavingForm.type === 'saving' ? '월 납입액 (원) *' : '원금 (원) *'}
+                value={quickSavingForm.monthlyAmount}
+                onChange={e => setQuickSavingForm(f => ({ ...f, monthlyAmount: fmtInput(e.target.value) }))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="number" placeholder="연 이율 (%)" value={quickSavingForm.interestRate}
+                  onChange={e => setQuickSavingForm(f => ({ ...f, interestRate: e.target.value }))}
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <div>
+                  <label className="text-xs text-gray-400 block mb-0.5">가입일</label>
+                  <input type="date" value={quickSavingForm.startDate}
+                    onChange={e => setQuickSavingForm(f => ({ ...f, startDate: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-0.5">만기일</label>
+                <input type="date" value={quickSavingForm.maturityDate}
+                  onChange={e => setQuickSavingForm(f => ({ ...f, maturityDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickAddSaving}
+                disabled={!quickSavingForm.name || !quickSavingForm.bank || !quickSavingForm.monthlyAmount}
+                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                추가 후 연동하기
+              </button>
             </div>
           </div>
         </div>

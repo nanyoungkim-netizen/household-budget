@@ -23,6 +23,12 @@ export interface Category {
 
 export type PaymentMethod = 'account' | 'card'
 
+// 적금/예금 상품 연동 (PRD: 적금예금관리 자동연동)
+export interface SavingLink {
+  savingId: string
+  amount: number
+}
+
 export interface Transaction {
   id: string
   date: string
@@ -38,6 +44,7 @@ export interface Transaction {
   isInstallment?: boolean
   installmentMonths?: number
   installmentCurrent?: number
+  savingLinks?: SavingLink[]  // 적금·예금 상품 연동
 }
 
 export interface Budget {
