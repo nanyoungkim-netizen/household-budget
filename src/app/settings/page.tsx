@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
-import { Account, Card, Category, MappingRule } from '@/types'
+import { Account, Card, Category, CategoryRole, MappingRule } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
@@ -93,7 +93,7 @@ export default function SettingsPage() {
   function saveEditCat() {
     if (!editingCat || !editCatForm.name) return
     const isParent = editingCat.parentId === null
-    const role = (editCatForm.role as import('@/types').CategoryRole) || undefined
+    const role = (editCatForm.role as CategoryRole) || undefined
     setCategories(categories.map(c => {
       if (c.id !== editingCat.id) return c
       if (isParent) {
@@ -192,7 +192,7 @@ export default function SettingsPage() {
       color: newCat.color,
       parentId: catParentId,
       savingId: newCat.savingId || undefined,
-      role: (newCat.role as import('@/types').CategoryRole) || undefined,
+      role: (newCat.role as CategoryRole) || undefined,
     }
     setCategories([...categories, child])
     setCatModal(null)
@@ -208,7 +208,7 @@ export default function SettingsPage() {
       icon: newParent.icon,
       color: newParent.color,
       parentId: null,
-      role: (newParent.role as import('@/types').CategoryRole) || undefined,
+      role: (newParent.role as CategoryRole) || undefined,
     }
     setCategories([...categories, parent])
     setCatModal(null)

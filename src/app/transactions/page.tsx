@@ -57,7 +57,7 @@ export default function TransactionsPage() {
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
-    return cat?.role === 'card_payment' ?? false
+    return cat?.role === 'card_payment'
   }
 
   const [month, setMonth] = useState(currentMonth)
@@ -378,7 +378,7 @@ export default function TransactionsPage() {
     if (cat.role === 'savings') return true
     if (cat.savingId) return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    return parent?.role === 'savings' ?? false
+    return parent?.role === 'savings'
   }
 
   // 환급은 지출 카테고리 목록 사용

@@ -38,7 +38,7 @@ export default function BudgetPage() {
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
-    return cat?.role === 'card_payment' ?? false
+    return cat?.role === 'card_payment'
   }
   const [month, setMonth] = useState(currentMonth)
   const router = useRouter()
