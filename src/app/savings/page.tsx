@@ -196,7 +196,12 @@ export default function SavingsPage() {
 
   function handleDelete(id: string) { setSavings(savings.filter(s => s.id !== id)) }
 
-  const totalCurrent  = savings.reduce((s, a) => s + a.currentAmount, 0)
+  const totalCurrent = savings.reduce((sum, s) => {
+    const linkedPaid = data.transactions
+      .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
+      .reduce((acc, t) => acc + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
+    return sum + (s.currentAmount || 0) + linkedPaid
+  }, 0)
   const totalExpected = savings.reduce((s, a) => s + a.expectedAmount, 0)
 
   return (

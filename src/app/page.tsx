@@ -131,13 +131,16 @@ export default function Dashboard() {
     let totalExpected = 0
     let totalInterest = 0
     for (const s of savings) {
-      const principal = s.type === 'deposit' ? (s.currentAmount ?? 0) : (s.currentAmount ?? 0)
+      const linkedPaid = transactions
+        .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
+        .reduce((acc, t) => acc + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
+      const principal = (s.currentAmount ?? 0) + linkedPaid
       totalPrincipal += principal
       totalExpected  += s.expectedAmount ?? 0
       totalInterest  += Math.max(0, (s.expectedAmount ?? 0) - principal)
     }
     return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
-  }, [savings])
+  }, [savings, transactions])
 
   // ── 라벨 ─────────────────────────────────────────────────────────────────
   const periodLabel = viewMode === 'day' ? dayLabel(selectedDay) : monthLabel(selectedMonth)
