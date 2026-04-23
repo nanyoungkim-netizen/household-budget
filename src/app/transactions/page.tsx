@@ -160,6 +160,23 @@ export default function TransactionsPage() {
   const savingExpense = filtered.filter(t => t.type === 'expense' && isSavingCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
   const realExpense   = Math.max(0, expense - savingExpense)
 
+  // 카드 탭: 당월 결제 vs 할부 이월 분석
+  // 할부 이월 판별: installmentCurrent > 1 이거나 설명에 "(2/3)" "(3/12)" 같은 패턴
+  const { cardNewChargeAmt, cardCarryoverAmt } = (() => {
+    if (paymentTab !== 'card') return { cardNewChargeAmt: 0, cardCarryoverAmt: 0 }
+    const cardExpTxs = filtered.filter(t => t.type === 'expense' && t.paymentMethod === 'card')
+    let newCharge = 0, carryover = 0
+    cardExpTxs.forEach(t => {
+      const descMatch = t.description.match(/\((\d+)\/\d+\)/)
+      const isCarryover =
+        (t.installmentCurrent !== undefined && t.installmentCurrent > 1) ||
+        (descMatch !== null && parseInt(descMatch[1]) > 1)
+      if (isCarryover) carryover += t.amount
+      else newCharge += t.amount
+    })
+    return { cardNewChargeAmt: newCharge, cardCarryoverAmt: carryover }
+  })()
+
   // 계좌별 실시간 잔액 (전체 거래 기준, 월 필터 없음)
   const accountBalances = accounts.map(acc => ({
     acc,
@@ -715,7 +732,22 @@ export default function TransactionsPage() {
           <div className="text-xs text-gray-500 mb-1">지출{refundAmt > 0 ? ' (환급 차감)' : ''}</div>
           <div className="text-base font-bold text-red-500">-{fmtKRW(expense)}</div>
           {refundAmt > 0 && (
-            <div className="text-xs text-purple-500 mt-0.5">환급 -{fmtKRW(refundAmt)}</div>
+            <div className="text-xs text-purple-500 mt-0.5">↩ 환급 -{fmtKRW(refundAmt)}</div>
+          )}
+          {/* 카드 탭: 당월 결제 vs 할부 이월 */}
+          {paymentTab === 'card' && cardCarryoverAmt > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-400">당월 결제</span>
+                <span className="text-[11px] font-semibold text-red-400 tabular-nums">{fmtKRW(cardNewChargeAmt)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-orange-400 flex items-center gap-0.5">
+                  <span>↩</span> 할부 이월
+                </span>
+                <span className="text-[11px] font-semibold text-orange-500 tabular-nums">{fmtKRW(cardCarryoverAmt)}</span>
+              </div>
+            </div>
           )}
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
