@@ -59,6 +59,7 @@ export default function InvestmentsPage() {
   const [investmentForm, setInvestmentForm] = useState<Omit<Investment, 'id'>>(EMPTY_INVESTMENT)
   const [tradeForm, setTradeForm] = useState<Omit<InvestmentTrade, 'id' | 'investmentId'>>(EMPTY_TRADE)
   const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
+  const [initialBuy, setInitialBuy] = useState<{ date: string; quantity: string; price: string; fee: string } | null>(null)
 
   // ── 보유 종목별 계산 ────────────────────────────────────────────────────────
   const holdingsMap = useMemo(() => {
@@ -124,25 +125,48 @@ export default function InvestmentsPage() {
   function openAddInvestment() {
     setEditInvestmentId(null)
     setInvestmentForm(EMPTY_INVESTMENT)
+    setInitialBuy({ date: today, quantity: '', price: '', fee: '' })
     setShowInvestmentModal(true)
   }
 
   function openEditInvestment(inv: Investment) {
     setEditInvestmentId(inv.id)
     setInvestmentForm({ assetType: inv.assetType, name: inv.name, ticker: inv.ticker, exchange: inv.exchange, currency: inv.currency, currentPrice: inv.currentPrice })
+    setInitialBuy(null)
     setShowInvestmentModal(true)
   }
 
   function handleSaveInvestment() {
     if (!investmentForm.name) return
-    const newInv: Investment = { id: editInvestmentId ?? `inv${Date.now()}`, ...investmentForm }
+    const invId = editInvestmentId ?? `inv${Date.now()}`
+    const newInv: Investment = { id: invId, ...investmentForm }
     if (editInvestmentId) {
       setInvestments(investments.map(i => i.id === editInvestmentId ? newInv : i))
     } else {
       setInvestments([...investments, newInv])
+      // 첫 매수 정보 입력된 경우 거래 이력에도 추가
+      if (initialBuy && initialBuy.quantity && initialBuy.price) {
+        const qty = parseAmt(initialBuy.quantity)
+        const price = parseAmt(initialBuy.price)
+        const fee = parseAmt(initialBuy.fee)
+        if (qty > 0 && price > 0) {
+          const trade: InvestmentTrade = {
+            id: `tr${Date.now()}`,
+            investmentId: invId,
+            type: 'buy',
+            date: initialBuy.date,
+            quantity: qty,
+            price,
+            currency: investmentForm.currency,
+            fee: fee > 0 ? fee : undefined,
+          }
+          setInvestmentTrades([...investmentTrades, trade])
+        }
+      }
     }
     setShowInvestmentModal(false)
     setEditInvestmentId(null)
+    setInitialBuy(null)
   }
 
   function handleDeleteInvestment(id: string) {
@@ -474,6 +498,44 @@ export default function InvestmentsPage() {
                   ))}
                 </div>
               </div>
+              {/* 첫 매수 정보 (신규 등록 시만) */}
+              {!editInvestmentId && initialBuy && (
+                <div className="border border-blue-100 bg-blue-50/50 rounded-xl p-3 space-y-2">
+                  <div className="text-xs font-semibold text-blue-600">첫 매수 정보 입력</div>
+                  <input type="date" value={initialBuy.date}
+                    onChange={e => setInitialBuy(b => b && ({ ...b, date: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">매수 수량 (주)</label>
+                      <input type="number" min={0} step="any" placeholder="0"
+                        value={initialBuy.quantity}
+                        onChange={e => setInitialBuy(b => b && ({ ...b, quantity: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">매수 단가</label>
+                      <input type="number" min={0} step="any" placeholder="0"
+                        value={initialBuy.price}
+                        onChange={e => setInitialBuy(b => b && ({ ...b, price: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">수수료 (선택)</label>
+                    <input type="number" min={0} step="any" placeholder="0"
+                      value={initialBuy.fee}
+                      onChange={e => setInitialBuy(b => b && ({ ...b, fee: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  {initialBuy.quantity && initialBuy.price && (
+                    <div className="text-xs text-blue-600 font-medium">
+                      총 원금: {fmtKRW(Math.round(parseAmt(initialBuy.quantity) * parseAmt(initialBuy.price) + parseAmt(initialBuy.fee)))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2 pt-1">
                 {editInvestmentId && (
                   <button onClick={() => setDeleteInvestmentId(editInvestmentId)}

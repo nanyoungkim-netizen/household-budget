@@ -162,9 +162,14 @@ export default function TransactionsPage() {
   const refundAmt  = filtered.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
   const expense   = Math.max(0, expenseRaw - refundAmt)
   const transfer  = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
-  // FR-010: 적금 분리 계산
-  const savingExpense = filtered.filter(t => t.type === 'expense' && isSavingCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
-  const realExpense   = Math.max(0, expense - savingExpense)
+  // FR-010: 적금·카드대금 분리 계산
+  const savingExpense  = filtered.filter(t => t.type === 'expense' && isSavingCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
+  const cardPayExpense = filtered.filter(t => t.type === 'expense' && isCardPaymentCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
+  const cardPayByCard  = cards.map(card => ({
+    ...card,
+    amount: filtered.filter(t => t.type === 'expense' && isCardPaymentCat(t.categoryId) && t.cardId === card.id).reduce((s, t) => s + t.amount, 0),
+  }))
+  const realExpense    = Math.max(0, expense - savingExpense - cardPayExpense)
 
   // 카드 탭: 당월 결제 vs 할부 이월 분석
   // 할부 이월 판별: installmentCurrent > 1 이거나 설명에 "(2/3)" "(3/12)" 같은 패턴
@@ -778,11 +783,11 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* FR-010: 지출 내 적금 분리 요약 */}
-      {savingExpense > 0 && (
+      {/* FR-010: 지출 상세 분석 (적금·카드대금 분리) */}
+      {(savingExpense > 0 || cardPayExpense > 0) && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
           <div className="text-xs font-semibold text-gray-500 mb-3">지출 상세 분석</div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 mb-2">
             <div className="bg-red-50 rounded-xl p-3">
               <div className="text-xs text-red-400 mb-0.5">실제 지출</div>
               <div className="text-sm font-bold text-red-500">-{fmtKRW(realExpense)}</div>
@@ -791,8 +796,23 @@ export default function TransactionsPage() {
               <div className="text-xs text-blue-400 mb-0.5">적금 (저축)</div>
               <div className="text-sm font-bold text-blue-600">-{fmtKRW(savingExpense)}</div>
             </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="text-xs text-gray-400 mb-0.5">합계</div>
+          </div>
+          {cardPayExpense > 0 && (
+            <>
+              <div className="text-xs text-gray-400 mb-2">카드대금 납부 <span className="text-gray-300">({fmtKRW(cardPayExpense)})</span></div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {cardPayByCard.filter(c => c.amount > 0).map(card => (
+                  <div key={card.id} className="bg-amber-50 rounded-xl p-3">
+                    <div className="text-xs text-amber-500 mb-0.5 truncate">{card.name}</div>
+                    <div className="text-sm font-bold text-amber-700">-{fmtKRW(card.amount)}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="bg-gray-50 rounded-xl p-3">
+            <div className="flex justify-between items-center">
+              <div className="text-xs text-gray-400">합계 (총 지출)</div>
               <div className="text-sm font-bold text-gray-700">-{fmtKRW(expense)}</div>
             </div>
           </div>
