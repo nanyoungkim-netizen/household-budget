@@ -34,8 +34,8 @@ const PRESET_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6
 type ModalType = 'addChild' | 'addParent' | null
 
 export default function BudgetPage() {
-  const { data, categories, setBudgets, setCategories } = useApp()
-  const { budgets, transactions } = data
+  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths } = useApp()
+  const { budgets, transactions, categoryHiddenMonths } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
@@ -237,18 +237,30 @@ export default function BudgetPage() {
   }
 
   function deleteMonthBudget(id: string) {
-    // 이번 달 예산만 삭제 — 카테고리·다른달 예산은 유지
+    // 이번 달 예산 삭제 + 이번 달 숨김 처리 — 카테고리·다른달 예산은 유지
     const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
-    const toDelete = new Set([id, ...childIds])
-    setBudgets(budgets.filter(b => !(toDelete.has(b.categoryId) && b.month === month)))
+    const toHide = [id, ...childIds]
+    setBudgets(budgets.filter(b => !(toHide.includes(b.categoryId) && b.month === month)))
+    const next = { ...categoryHiddenMonths }
+    toHide.forEach(cid => {
+      next[cid] = Array.from(new Set([...(next[cid] ?? []), month]))
+    })
+    setCategoryHiddenMonths(next)
+  }
+
+  function isHiddenThisMonth(catId: string) {
+    return (categoryHiddenMonths[catId] ?? []).includes(month)
   }
 
   function deleteCategoryGlobal(id: string) {
-    // 카테고리 자체 + 모든 달 예산 완전 삭제
+    // 카테고리 자체 + 모든 달 예산 + 숨김 기록 완전 삭제
     const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
     const toDelete = new Set([id, ...childIds])
     setCategories(categories.filter(c => !toDelete.has(c.id)))
     setBudgets(budgets.filter(b => !toDelete.has(b.categoryId)))
+    const next = { ...categoryHiddenMonths }
+    toDelete.forEach(cid => delete next[cid])
+    setCategoryHiddenMonths(next)
   }
 
   function toggleCollapse(id: string) {
@@ -399,8 +411,8 @@ export default function BudgetPage() {
 
       {/* 대분류별 테이블 */}
       <div className="space-y-3">
-        {expenseParents.map(parent => {
-          const children = getChildren(parent.id)
+        {expenseParents.filter(p => !isHiddenThisMonth(p.id)).map(parent => {
+          const children = getChildren(parent.id).filter(c => !isHiddenThisMonth(c.id))
           const { budget: grpBudget, actual: grpActual } = groupTotal(parent.id)
           const isCollapsed = collapsed.has(parent.id)
           const grpDiff = grpBudget - grpActual

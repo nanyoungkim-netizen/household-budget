@@ -318,7 +318,11 @@ export default function InvestmentsPage() {
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-gray-50 rounded-xl p-2.5">
                       <div className="text-xs text-gray-400 mb-0.5">보유수량</div>
-                      <div className="text-sm font-semibold text-gray-900">{h.holdingQty.toLocaleString()}</div>
+                      <div className="text-sm font-semibold text-gray-900">{h.holdingQty.toLocaleString()}주</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-2.5">
+                      <div className="text-xs text-gray-400 mb-0.5">총 매수금액</div>
+                      <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(h.totalBuyAmt))}</div>
                     </div>
                     <div className="bg-gray-50 rounded-xl p-2.5">
                       <div className="text-xs text-gray-400 mb-0.5">평균매수단가</div>
@@ -326,12 +330,26 @@ export default function InvestmentsPage() {
                     </div>
                     <div className="bg-gray-50 rounded-xl p-2.5">
                       <div className="text-xs text-gray-400 mb-0.5">현재가</div>
-                      <div className="text-sm font-semibold text-gray-900">{currentPrice > 0 ? currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '미입력'}</div>
+                      {currentPrice > 0 ? (() => {
+                        const priceDiff = currentPrice - h.avgPrice
+                        const priceRate = h.avgPrice > 0 ? (priceDiff / h.avgPrice) * 100 : 0
+                        return (
+                          <>
+                            <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
+                            <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ({fmtPct(priceRate)})
+                            </div>
+                          </>
+                        )
+                      })() : <div className="text-sm font-semibold text-gray-400">미입력</div>}
                     </div>
-                    <div className={`rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                      <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익</div>
-                      <div className={`text-sm font-semibold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                        {fmtKRW(Math.round(evalPnl))} <span className="text-xs">({fmtPct(evalRate)})</span>
+                    <div className={`col-span-2 rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                      <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익 (총 평가금액)</div>
+                      <div className="flex items-baseline justify-between">
+                        <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
+                          {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+                        </div>
+                        <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
                       </div>
                     </div>
                   </div>

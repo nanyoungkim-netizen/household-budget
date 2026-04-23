@@ -84,6 +84,7 @@ interface AppData {
   investments: Investment[]        // PRD 2.6
   investmentTrades: InvestmentTrade[]  // PRD 2.6
   savingPayments: SavingPayment[]  // PRD 2.2
+  categoryHiddenMonths: Record<string, string[]>  // 월별 카테고리 숨김
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -102,6 +103,7 @@ const INITIAL_DATA: AppData = {
   investments: [],
   investmentTrades: [],
   savingPayments: [],
+  categoryHiddenMonths: {},
   lastModified: null,
   isSetupComplete: false,
 }
@@ -146,6 +148,8 @@ interface AppContextType {
   setInvestmentTrades: (trades: InvestmentTrade[]) => void
   // PRD 2.2: 납입 이력
   setSavingPayments: (payments: SavingPayment[]) => void
+  // 월별 카테고리 숨김
+  setCategoryHiddenMonths: (map: Record<string, string[]>) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -209,6 +213,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       investments: raw.investments ?? [],
       investmentTrades: raw.investmentTrades ?? [],
       savingPayments: raw.savingPayments ?? [],
+      categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
     }
   }
 
@@ -419,6 +424,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, savingPayments, lastModified: now() }))
   }, [update])
 
+  const setCategoryHiddenMonths = useCallback((categoryHiddenMonths: Record<string, string[]>) => {
+    update(d => ({ ...d, categoryHiddenMonths, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -457,6 +466,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestments,
       setInvestmentTrades,
       setSavingPayments,
+      setCategoryHiddenMonths,
       completeSetup,
       resetAll,
     }}>
