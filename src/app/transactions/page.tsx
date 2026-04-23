@@ -787,26 +787,18 @@ export default function TransactionsPage() {
       {(savingExpense > 0 || cardPayExpense > 0) && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
           <div className="text-xs font-semibold text-gray-500 mb-3">지출 상세 분석</div>
-          <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="bg-red-50 rounded-xl p-3">
               <div className="text-xs text-red-400 mb-0.5">실제 지출</div>
               <div className="text-sm font-bold text-red-500">-{fmtKRW(realExpense)}</div>
             </div>
-            <div className="bg-blue-50 rounded-xl p-3">
-              <div className="text-xs text-blue-400 mb-0.5">적금 (저축)</div>
-              <div className="text-sm font-bold text-blue-600">-{fmtKRW(savingExpense)}</div>
+            <div className="bg-amber-50 rounded-xl p-3">
+              <div className="text-xs text-amber-500 mb-0.5">카드대금</div>
+              <div className="text-sm font-bold text-amber-700">-{fmtKRW(cardPayExpense)}</div>
             </div>
-            {cardPayByCard.filter(c => c.amount > 0).map(card => (
-              <div key={card.id} className="bg-amber-50 rounded-xl p-3">
-                <div className="text-xs text-amber-500 mb-0.5 truncate">💳 {card.name}</div>
-                <div className="text-sm font-bold text-amber-700">-{fmtKRW(card.amount)}</div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-gray-50 rounded-xl p-3">
-            <div className="flex justify-between items-center">
-              <div className="text-xs text-gray-400">합계 (총 지출)</div>
-              <div className="text-sm font-bold text-gray-700">-{fmtKRW(expense)}</div>
+            <div className="bg-blue-50 rounded-xl p-3">
+              <div className="text-xs text-blue-400 mb-0.5">적금</div>
+              <div className="text-sm font-bold text-blue-600">-{fmtKRW(savingExpense)}</div>
             </div>
           </div>
         </div>

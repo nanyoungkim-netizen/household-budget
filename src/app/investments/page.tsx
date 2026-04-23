@@ -411,6 +411,7 @@ export default function InvestmentsPage() {
                 {inv.currentPriceUpdatedAt && (
                   <div className="text-xs text-gray-400 mt-1">현재가 기준: {new Date(inv.currentPriceUpdatedAt).toLocaleString('ko-KR')}</div>
                 )}
+                <div className="text-xs text-gray-400 mt-1.5">💡 매수·매도 내역 수정은 <button onClick={() => { setSelectedInvestmentId(inv.id); setPageTab('trades') }} className="text-blue-500 underline">거래 이력 탭</button>에서 가능합니다</div>
               </div>
             )
           })}
