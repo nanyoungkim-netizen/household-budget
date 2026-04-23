@@ -173,6 +173,26 @@ export default function SettingsPage() {
     setCards(cards.filter(c => c.id !== id))
   }
 
+  function moveAccount(id: string, dir: -1 | 1) {
+    const idx = accounts.findIndex(a => a.id === id)
+    if (idx < 0) return
+    const next = idx + dir
+    if (next < 0 || next >= accounts.length) return
+    const arr = [...accounts];
+    [arr[idx], arr[next]] = [arr[next], arr[idx]]
+    setAccounts(arr)
+  }
+
+  function moveCard(id: string, dir: -1 | 1) {
+    const idx = cards.findIndex(c => c.id === id)
+    if (idx < 0) return
+    const next = idx + dir
+    if (next < 0 || next >= cards.length) return
+    const arr = [...cards];
+    [arr[idx], arr[next]] = [arr[next], arr[idx]]
+    setCards(arr)
+  }
+
   // ── 카테고리 함수 ──────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
   const incomeParents = categories.filter(c => c.parentId === null && c.type === 'income')
@@ -293,6 +313,12 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button onClick={() => moveAccount(acc.id, -1)} disabled={accounts.indexOf(acc) === 0}
+                        className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▲</button>
+                      <button onClick={() => moveAccount(acc.id, 1)} disabled={accounts.indexOf(acc) === accounts.length - 1}
+                        className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
+                    </div>
                     <button onClick={() => openEditAccount(acc)}
                       className="text-xs text-blue-400 hover:text-blue-600 transition-colors font-medium">수정</button>
                     <button onClick={() => deleteAccount(acc.id)}
@@ -410,8 +436,16 @@ export default function SettingsPage() {
                     <div className="text-xs text-gray-400">{card.bank || card.name} · 매월 {card.billingDate}일 결제</div>
                   </div>
                 </div>
-                <button onClick={() => deleteCard(card.id)}
-                  className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <button onClick={() => moveCard(card.id, -1)} disabled={cards.indexOf(card) === 0}
+                      className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▲</button>
+                    <button onClick={() => moveCard(card.id, 1)} disabled={cards.indexOf(card) === cards.length - 1}
+                      className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
+                  </div>
+                  <button onClick={() => deleteCard(card.id)}
+                    className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
+                </div>
               </div>
             </div>
           ))}

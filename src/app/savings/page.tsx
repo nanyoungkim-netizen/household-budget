@@ -473,15 +473,21 @@ export default function SavingsPage() {
 
           <div className="space-y-3">
             {displayedSub.map(s => {
-              const paidAmount = getPaidAmount(s)
+              const linkedTxs = data.transactions.filter(t =>
+                t.savingLinks?.some(l => l.savingId === s.id)
+              ).sort((a, b) => b.date.localeCompare(a.date))
+              const linkedPaid = linkedTxs.reduce((sum, t) => sum + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
+              const paidAmount = (s.currentAmount || 0) + linkedPaid
               const realIdx    = savings.findIndex(sv => sv.id === s.id)
-              const startYM    = s.startDate ? s.startDate.slice(0, 7) : ''
-              const elapsedMonths = startYM
+              const elapsedMonths = s.startDate
                 ? (() => {
                     const st = new Date(s.startDate)
                     return (today.getFullYear() - st.getFullYear()) * 12 + (today.getMonth() - st.getMonth())
                   })()
                 : 0
+              const thisMonthLinked = linkedTxs.filter(t => t.date.startsWith(currentMonthStr))
+              const isPaidThisMonth = thisMonthLinked.length > 0
+              const isExpanded = expandedSavingId === s.id
 
               return (
                 <div key={s.id} className="bg-white rounded-2xl p-5 shadow-sm">
@@ -492,6 +498,17 @@ export default function SavingsPage() {
                         {elapsedMonths > 0 && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{elapsedMonths}개월 경과</span>
                         )}
+                        {isPaidThisMonth ? (
+                          <button onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
+                            className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+                            ✓ 납입완료 {isExpanded ? '▲' : '▼'}
+                          </button>
+                        ) : linkedTxs.length > 0 ? (
+                          <button onClick={() => setExpandedSavingId(isExpanded ? null : s.id)}
+                            className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
+                            이번 달 미납입 {isExpanded ? '▲' : '▼'}
+                          </button>
+                        ) : null}
                       </div>
                       <div className="font-semibold text-gray-900">{s.name}</div>
                       <div className="text-xs text-gray-400">
@@ -513,10 +530,13 @@ export default function SavingsPage() {
                   </div>
 
                   {/* 납입 현황 */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-teal-50 rounded-xl p-3">
                       <div className="text-xs text-teal-600 mb-0.5">납입 원금</div>
                       <div className="text-sm font-bold text-teal-700">{fmtKRW(paidAmount)}</div>
+                      {s.currentAmount > 0 && linkedPaid > 0 && (
+                        <div className="text-xs text-gray-400 mt-0.5">기존 {fmtKRW(s.currentAmount)} + 연동 {fmtKRW(linkedPaid)}</div>
+                      )}
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <div className="text-xs text-gray-400 mb-0.5">월 납입액</div>
@@ -525,8 +545,29 @@ export default function SavingsPage() {
                   </div>
 
                   {s.startDate && (
-                    <div className="mt-2.5 text-xs text-gray-400">
+                    <div className="text-xs text-gray-400">
                       가입일 {s.startDate}
+                    </div>
+                  )}
+
+                  {/* 연동 거래 내역 */}
+                  {isExpanded && linkedTxs.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                      <div className="text-xs font-semibold text-gray-500 mb-2">연동된 거래 내역</div>
+                      {linkedTxs.slice(0, 10).map(t => {
+                        const linkAmt = t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? t.amount
+                        const isThis  = t.date.startsWith(currentMonthStr)
+                        return (
+                          <div key={t.id} className={`flex justify-between items-center text-xs rounded-lg px-2.5 py-1.5 ${isThis ? 'bg-emerald-50' : 'bg-gray-50'}`}>
+                            <div>
+                              <span className={`font-medium ${isThis ? 'text-emerald-700' : 'text-gray-600'}`}>{t.date}</span>
+                              <span className="text-gray-400 ml-1.5">{t.description}</span>
+                            </div>
+                            <span className={`font-semibold ${isThis ? 'text-emerald-600' : 'text-teal-600'}`}>{fmtKRW(linkAmt)}</span>
+                          </div>
+                        )
+                      })}
+                      {linkedTxs.length > 10 && <p className="text-xs text-gray-400 text-center">외 {linkedTxs.length - 10}건</p>}
                     </div>
                   )}
                 </div>

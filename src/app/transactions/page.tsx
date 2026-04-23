@@ -70,6 +70,7 @@ export default function TransactionsPage() {
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [catChipSearch, setCatChipSearch] = useState('')
+  const [catParentFilter, setCatParentFilter] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
 
   // URL 파라미터로 초기 상태 복원 (FR-002, FR-003)
@@ -108,7 +109,7 @@ export default function TransactionsPage() {
   const [savingSearch, setSavingSearch] = useState('')
   const [showQuickAddSaving, setShowQuickAddSaving] = useState(false)
   const [quickSavingForm, setQuickSavingForm] = useState({
-    name: '', bank: '', type: 'saving' as 'saving' | 'deposit',
+    name: '', bank: '', type: 'saving' as 'saving' | 'deposit' | 'subscription',
     monthlyAmount: '', interestRate: '', startDate: '', maturityDate: '',
   })
 
@@ -243,7 +244,7 @@ export default function TransactionsPage() {
 
   // ── 적금 빠른 추가 ──────────────────────────────────────────────────────────
   function handleQuickAddSaving() {
-    if (!quickSavingForm.name || !quickSavingForm.bank || !quickSavingForm.monthlyAmount) return
+    if (!quickSavingForm.name || !quickSavingForm.bank) return
     const newSaving: Saving = {
       id: `s${Date.now()}`,
       name: quickSavingForm.name,
@@ -499,37 +500,64 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* 카테고리 필터 태그 (FR-002 + 검색) */}
+      {/* 카테고리 필터 (대분류 탭 + 소분류 칩) */}
       {(() => {
         const leafCats = categories.filter(c => c.parentId != null)
         if (leafCats.length === 0) return null
-        const visibleCats = catChipSearch.trim()
-          ? leafCats.filter(c => c.name.toLowerCase().includes(catChipSearch.trim().toLowerCase()))
+        const parentCats = categories.filter(c => c.parentId === null)
+        const preFiltered = catParentFilter
+          ? leafCats.filter(c => c.parentId === catParentFilter)
           : leafCats
+        const visibleCats = catChipSearch.trim()
+          ? preFiltered.filter(c => c.name.toLowerCase().includes(catChipSearch.trim().toLowerCase()))
+          : preFiltered
         return (
           <div className="mb-3 bg-white rounded-2xl shadow-sm p-3">
-            {/* 검색 입력 */}
+            {/* 대분류 탭 */}
+            <div className="overflow-x-auto mb-2">
+              <div className="flex gap-1.5 pb-0.5" style={{ minWidth: 'max-content' }}>
+                <button
+                  onClick={() => { setCatParentFilter(''); setCatChipSearch('') }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex-shrink-0 transition-all ${
+                    !catParentFilter ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                  }`}>
+                  전체
+                </button>
+                {parentCats.map(p => (
+                  <button key={p.id}
+                    onClick={() => { setCatParentFilter(prev => prev === p.id ? '' : p.id); setCatChipSearch('') }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex-shrink-0 transition-all ${
+                      catParentFilter === p.id ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                    }`}
+                    style={catParentFilter === p.id ? { backgroundColor: p.color || '#4B5563', borderColor: p.color || '#4B5563' } : {}}>
+                    {p.icon} {p.name}
+                    <span className="ml-1 opacity-50 text-[10px]">{leafCats.filter(c => c.parentId === p.id).length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* 소분류 검색 */}
             <div className="relative mb-2">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
               <input
                 type="text"
                 value={catChipSearch}
                 onChange={e => setCatChipSearch(e.target.value)}
-                placeholder="카테고리 검색..."
+                placeholder="소분류 검색..."
                 className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {catChipSearch && (
                 <button onClick={() => setCatChipSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs">×</button>
               )}
             </div>
-            {/* 칩 목록 */}
+            {/* 소분류 칩 */}
             <div className="overflow-x-auto">
               <div className="flex gap-1.5 pb-0.5" style={{ minWidth: 'max-content' }}>
-                {!catChipSearch.trim() && (
+                {!catChipSearch.trim() && !catParentFilter && (
                   <button
                     onClick={() => setFilterCategories([])}
                     className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
-                      filterCategories.length === 0 ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                      filterCategories.length === 0 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'
                     }`}>
                     전체
                   </button>
@@ -551,7 +579,7 @@ export default function TransactionsPage() {
                 ))}
               </div>
             </div>
-            {/* 선택된 카테고리 표시 */}
+            {/* 선택된 카테고리 */}
             {filterCategories.length > 0 && !catChipSearch && (
               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-gray-400">선택:</span>
@@ -1002,7 +1030,7 @@ export default function TransactionsPage() {
                   {/* ── 적금·예금 상품 연동 섹션 ── */}
                   {formType === 'expense' && isSavingCat(form.categoryId) && (
                     <div className="border border-blue-100 rounded-xl bg-blue-50/40 p-3 space-y-2.5">
-                      <div className="text-xs font-semibold text-blue-700">💰 적금·예금 상품 연동</div>
+                      <div className="text-xs font-semibold text-blue-700">💰 저축 상품 연동 (적금·예금·청약)</div>
 
                       {data.savings.length === 0 ? (
                         <div className="text-center py-3">
@@ -1049,8 +1077,15 @@ export default function TransactionsPage() {
                                     }}
                                     className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left">
                                     <div>
-                                      <span className="text-xs font-medium text-gray-800">{s.name}</span>
-                                      <span className="text-xs text-gray-400 ml-1.5">{s.bank}</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                          s.type === 'saving' ? 'bg-blue-50 text-blue-500' :
+                                          s.type === 'deposit' ? 'bg-amber-50 text-amber-500' :
+                                          'bg-teal-50 text-teal-500'
+                                        }`}>{s.type === 'saving' ? '적금' : s.type === 'deposit' ? '예금' : '청약'}</span>
+                                        <span className="text-xs font-medium text-gray-800">{s.name}</span>
+                                      </div>
+                                      <span className="text-xs text-gray-400">{s.bank}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                       {s.monthlyAmount > 0 && (
@@ -1156,13 +1191,13 @@ export default function TransactionsPage() {
               <button onClick={() => setShowQuickAddSaving(false)} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
-              {/* 적금/예금 탭 */}
+              {/* 적금/예금/청약 탭 */}
               <div className="flex bg-gray-100 rounded-xl p-1">
-                {(['saving', 'deposit'] as const).map(t => (
+                {(['saving', 'deposit', 'subscription'] as const).map(t => (
                   <button key={t} type="button"
                     onClick={() => setQuickSavingForm(f => ({ ...f, type: t }))}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${quickSavingForm.type === t ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-                    {t === 'saving' ? '적금' : '예금'}
+                    {t === 'saving' ? '적금' : t === 'deposit' ? '예금' : '청약'}
                   </button>
                 ))}
               </div>

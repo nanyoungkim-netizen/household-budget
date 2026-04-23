@@ -118,6 +118,16 @@ export default function Dashboard() {
   }))
   const totalBalance = accountBalances.reduce((s, a) => s + a.computed, 0)
 
+  // 전일/전월 대비 계산
+  const prevPeriodEnd = viewMode === 'day' ? addDays(selectedDay, -1) : addMonths(selectedMonth, -1)
+  const txsForPrevBalance = viewMode === 'day'
+    ? transactions.filter(t => t.date <= prevPeriodEnd)
+    : transactions.filter(t => t.date.slice(0, 7) <= prevPeriodEnd)
+  const prevAccountBalances = accounts.map(a => ({
+    id: a.id,
+    computed: computeAccountBalance(a.id, a.balance, txsForPrevBalance),
+  }))
+
   // 예산 — 월 기준
   const budgetMonth  = viewMode === 'day' ? selectedDay.slice(0, 7) : selectedMonth
   const totalBudget  = budgets.filter(b => b.month === budgetMonth).reduce((s, b) => s + b.amount, 0)
@@ -281,7 +291,8 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {sectionAccounts.map(acc => {
-                const diff = acc.computed - acc.balance
+                const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
+                const diff = acc.computed - prevBal
                 return (
                   <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
                     {/* FR-03: 은행명 + 계좌명 동시 표시 */}
@@ -294,7 +305,7 @@ export default function Dashboard() {
                     </div>
                     {diff !== 0 && (
                       <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                        기초 대비 {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                        {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
                       </div>
                     )}
                   </div>
@@ -304,6 +315,61 @@ export default function Dashboard() {
           </div>
         )
       })}
+
+      {/* 카드 미납 현황 */}
+      {(() => {
+        const { cards } = data
+        const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
+        const paidBillingMonths = new Set(
+          transactions.filter(t => t.billingMonth && isCardPayCat(t.categoryId)).map(t => t.billingMonth!)
+        )
+        const cardBalances = cards.map(card => {
+          const byMonth: Record<string, number> = {}
+          transactions
+            .filter(t => t.paymentMethod === 'card' && t.cardId === card.id && (t.type === 'expense' || t.type === 'refund'))
+            .forEach(t => {
+              const m = t.date.slice(0, 7)
+              byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
+            })
+          let unpaid = 0; let paid = 0
+          Object.entries(byMonth).forEach(([m, v]) => {
+            if (paidBillingMonths.has(m)) paid += Math.max(0, v)
+            else unpaid += Math.max(0, v)
+          })
+          return { card, unpaid, paid, hasAny: Object.keys(byMonth).length > 0 }
+        }).filter(c => c.hasAny)
+        if (cardBalances.length === 0) return null
+        return (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">💳</span>
+                <span className="text-xs font-bold text-gray-500">카드 사용 현황</span>
+              </div>
+              <Link href="/transactions" className="text-xs text-blue-600">자세히 →</Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {cardBalances.map(({ card, unpaid, paid }) => (
+                <div key={card.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${card.color}` }}>
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{card.bank}</div>
+                  <div className="text-xs text-gray-700 font-medium mb-2">{card.name}</div>
+                  {unpaid > 0 ? (
+                    <>
+                      <div className="text-xl font-bold text-red-500 tabular-nums">-{fmtKRW(unpaid)}</div>
+                      <div className="text-xs text-gray-400 mt-1">미납 잔액</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-xl font-bold text-gray-300 tabular-nums">0원</div>
+                      <div className="text-xs text-emerald-600 mt-1 font-medium">✓ 납부완료</div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 적금·예금 요약 */}
       {savingsSummary.count > 0 && (
