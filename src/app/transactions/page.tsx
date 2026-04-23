@@ -796,20 +796,13 @@ export default function TransactionsPage() {
               <div className="text-xs text-blue-400 mb-0.5">적금 (저축)</div>
               <div className="text-sm font-bold text-blue-600">-{fmtKRW(savingExpense)}</div>
             </div>
-          </div>
-          {cardPayExpense > 0 && (
-            <>
-              <div className="text-xs text-gray-400 mb-2">카드대금 납부 <span className="text-gray-300">({fmtKRW(cardPayExpense)})</span></div>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {cardPayByCard.filter(c => c.amount > 0).map(card => (
-                  <div key={card.id} className="bg-amber-50 rounded-xl p-3">
-                    <div className="text-xs text-amber-500 mb-0.5 truncate">{card.name}</div>
-                    <div className="text-sm font-bold text-amber-700">-{fmtKRW(card.amount)}</div>
-                  </div>
-                ))}
+            {cardPayByCard.filter(c => c.amount > 0).map(card => (
+              <div key={card.id} className="bg-amber-50 rounded-xl p-3">
+                <div className="text-xs text-amber-500 mb-0.5 truncate">💳 {card.name}</div>
+                <div className="text-sm font-bold text-amber-700">-{fmtKRW(card.amount)}</div>
               </div>
-            </>
-          )}
+            ))}
+          </div>
           <div className="bg-gray-50 rounded-xl p-3">
             <div className="flex justify-between items-center">
               <div className="text-xs text-gray-400">합계 (총 지출)</div>
