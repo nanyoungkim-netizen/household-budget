@@ -311,6 +311,24 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState('')
 
+  // 파일 처리 공통
+  const [fileError, setFileError]     = useState('')
+  const [fileLoading, setFileLoading] = useState(false)
+
+  // Excel 암호
+  const [xlsxPasswordNeeded, setXlsxPasswordNeeded] = useState(false)
+  const [xlsxPassword, setXlsxPassword]             = useState('')
+  const [xlsxPasswordError, setXlsxPasswordError]   = useState('')
+  const [pendingExcelFile, setPendingExcelFile]       = useState<File | null>(null)
+
+  // 시트 / 헤더 행 선택
+  const [storedWorkbook, setStoredWorkbook]   = useState<ReturnType<typeof XLSX.read> | null>(null)
+  const [sheetNames, setSheetNames]           = useState<string[]>([])
+  const [selectedSheet, setSelectedSheet]     = useState('')
+  const [headerRowIndex, setHeaderRowIndex]   = useState(0)   // 0-based
+  const [sheetPreview, setSheetPreview]       = useState<unknown[][]>([])
+  const [fileReady, setFileReady]             = useState(false)
+
   // PDF 관련
   const [isPDF, setIsPDF] = useState(false)
   const [pdfPassword, setPdfPassword] = useState('')
@@ -391,31 +409,33 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setImportSourceType(type)
   }
 
-  // ── 파일 파싱 ──────────────────────────────────────────────────────────────
-  async function handleFile(file: File) {
-    setFileName(file.name)
+  // ── 워크북 공통 처리 ───────────────────────────────────────────────────────
+  function getSheetPreviewRows(wb: ReturnType<typeof XLSX.read>, sheetName: string): unknown[][] {
+    const ws = wb.Sheets[sheetName]
+    if (!ws) return []
+    const all = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+    return all.slice(0, 12)
+  }
 
-    if (file.name.toLowerCase().endsWith('.pdf')) {
-      setIsPDF(true)
-      setPendingFile(file)
-      setPdfPassword('')
-      setPdfError('')
-      return  // PDF는 업로드 화면에서 비밀번호 입력 후 처리
-    }
+  function processWorkbook(wb: ReturnType<typeof XLSX.read>) {
+    const names = wb.SheetNames
+    setStoredWorkbook(wb)
+    setSheetNames(names)
+    setSelectedSheet(names[0])
+    setHeaderRowIndex(0)
+    setSheetPreview(getSheetPreviewRows(wb, names[0]))
+    setFileReady(true)
+  }
 
-    setIsPDF(false)
-    const buf = await file.arrayBuffer()
-    const wb  = XLSX.read(buf, { type: 'array', cellDates: false })
-    const ws  = wb.Sheets[wb.SheetNames[0]]
-    const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
-    if (data.length < 2) return alert('데이터가 없습니다.')
-
-    const headers = (data[0] as unknown[]).map(h => String(h || ''))
-    const body    = data.slice(1) as unknown[][]
-
+  function applySheetConfig(wb: ReturnType<typeof XLSX.read>, sheet: string, hdrIdx: number) {
+    const ws = wb.Sheets[sheet]
+    if (!ws) return
+    const allData = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+    if (allData.length <= hdrIdx) { setFileError('헤더 행이 데이터 범위를 벗어납니다.'); return }
+    const headers = (allData[hdrIdx] as unknown[]).map(h => String(h || ''))
+    const body    = allData.slice(hdrIdx + 1) as unknown[][]
     setRawHeaders(headers)
     setRawRows(body)
-
     const detected = detectColumns(headers)
     setColDate(detected.date ?? -1)
     setColDesc(detected.desc ?? -1)
@@ -423,8 +443,63 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setColWithdrawal(detected.withdrawal ?? -1)
     setColDeposit(detected.deposit ?? -1)
     setColAmount(detected.amount ?? -1)
-
     setStep('map')
+  }
+
+  // ── 파일 파싱 ──────────────────────────────────────────────────────────────
+  async function handleFile(file: File) {
+    setFileName(file.name)
+    setFileError('')
+    setFileReady(false)
+    setXlsxPasswordNeeded(false)
+    setXlsxPassword('')
+    setXlsxPasswordError('')
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      setIsPDF(true)
+      setPendingFile(file)
+      setPdfPassword('')
+      setPdfError('')
+      return
+    }
+
+    setIsPDF(false)
+    setFileLoading(true)
+    try {
+      const buf = await file.arrayBuffer()
+      const wb  = XLSX.read(buf, { type: 'array', cellDates: false })
+      processWorkbook(wb)
+    } catch (err: unknown) {
+      const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+      if (msg.includes('password') || msg.includes('encrypted') || msg.includes('cfb')) {
+        setPendingExcelFile(file)
+        setXlsxPasswordNeeded(true)
+      } else {
+        setFileError('파일을 읽을 수 없습니다. 지원 형식: .xlsx, .xls, .csv')
+      }
+    }
+    setFileLoading(false)
+  }
+
+  // ── Excel 암호 해제 ────────────────────────────────────────────────────────
+  async function handleExcelWithPassword() {
+    if (!pendingExcelFile) return
+    setXlsxPasswordError('')
+    setFileLoading(true)
+    try {
+      const buf = await pendingExcelFile.arrayBuffer()
+      const wb  = XLSX.read(buf, { type: 'array', cellDates: false, password: xlsxPassword })
+      setXlsxPasswordNeeded(false)
+      processWorkbook(wb)
+    } catch (err: unknown) {
+      const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+      if (msg.includes('password') || msg.includes('incorrect') || msg.includes('encrypted')) {
+        setXlsxPasswordError('비밀번호가 틀렸습니다. 다시 확인해주세요.')
+      } else {
+        setXlsxPasswordError('파일 처리 중 오류가 발생했습니다.')
+      }
+    }
+    setFileLoading(false)
   }
 
   // ── PDF 파싱 실행 ──────────────────────────────────────────────────────────
@@ -709,30 +784,11 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
         {/* ── Step 1: 업로드 ── */}
         {step === 'upload' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
-            {/* 파일 드롭존 */}
-            {!isPDF ? (
-              <>
-                <div
-                  className={`w-full max-w-md border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
-                  onDragOver={e => { e.preventDefault(); setDragging(true) }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={onDrop}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <div className="text-5xl mb-4">📊</div>
-                  <div className="text-sm font-semibold text-gray-700 mb-1">거래내역 파일을 드래그하거나 클릭해서 선택</div>
-                  <div className="text-xs text-gray-400">.xlsx, .xls, .csv, .pdf 지원</div>
-                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.pdf" className="hidden" onChange={onFileChange} />
-                </div>
-                <div className="text-xs text-gray-400 text-center space-y-1">
-                  <p>💡 토스뱅크(엑셀) · KB국민은행(PDF) 등 지원</p>
-                  <p>PDF는 비밀번호 보호 파일도 가능합니다</p>
-                </div>
-              </>
-            ) : (
-              /* PDF 감지됨 → 계좌 선택 + 비밀번호 입력 */
-              <div className="w-full max-w-md">
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+
+            {/* ── PDF 처리 ── */}
+            {isPDF && (
+              <div className="max-w-md mx-auto w-full">
                 <div className="bg-red-50 border border-red-100 rounded-2xl p-5 mb-4 flex items-start gap-3">
                   <span className="text-2xl">📄</span>
                   <div>
@@ -740,81 +796,174 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                     <div className="text-xs text-gray-500 mt-0.5">PDF 거래내역 파일이 감지됐습니다</div>
                   </div>
                 </div>
-
                 <div className="space-y-3">
-                  {/* 계좌 선택 */}
                   <div>
-                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">
-                      🏦 이 파일은 어느 계좌/카드 내역인가요?
-                    </label>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">🏦 어느 계좌/카드 내역인가요?</label>
                     <div className="flex flex-wrap gap-2">
                       {accounts.map(acc => (
-                        <button key={acc.id}
-                          onClick={() => selectImportSource(acc.id, 'account')}
-                          className={`px-3 py-2 rounded-xl text-sm border transition-all ${
-                            importSourceType === 'account' && importSourceId === acc.id
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-                          }`}>
+                        <button key={acc.id} onClick={() => selectImportSource(acc.id, 'account')}
+                          className={`px-3 py-2 rounded-xl text-sm border transition-all ${importSourceType === 'account' && importSourceId === acc.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}>
                           🏦 {acc.name}
                         </button>
                       ))}
                       {cards.map(card => (
-                        <button key={card.id}
-                          onClick={() => selectImportSource(card.id, 'card')}
-                          className={`px-3 py-2 rounded-xl text-sm border transition-all ${
-                            importSourceType === 'card' && importSourceId === card.id
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
-                          }`}>
+                        <button key={card.id} onClick={() => selectImportSource(card.id, 'card')}
+                          className={`px-3 py-2 rounded-xl text-sm border transition-all ${importSourceType === 'card' && importSourceId === card.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>
                           💳 {card.name}
                         </button>
                       ))}
                     </div>
                   </div>
-
                   <div>
-                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">
-                      🔒 비밀번호 <span className="font-normal text-gray-400">(없으면 비워두세요)</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={pdfPassword}
-                      onChange={e => { setPdfPassword(e.target.value); setPdfError('') }}
+                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">🔒 비밀번호 <span className="font-normal text-gray-400">(없으면 비워두세요)</span></label>
+                    <input type="password" value={pdfPassword} onChange={e => { setPdfPassword(e.target.value); setPdfError('') }}
                       onKeyDown={e => e.key === 'Enter' && handlePDFParse()}
                       placeholder="예: 생년월일 8자리 (19980915)"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      autoFocus
-                    />
-                    {pdfError && (
-                      <p className="text-xs text-red-500 mt-1.5">⚠️ {pdfError}</p>
-                    )}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
+                    {pdfError && <p className="text-xs text-red-500 mt-1.5">⚠️ {pdfError}</p>}
                   </div>
-
                   <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-600 space-y-0.5">
                     <p>• KB국민은행: 생년월일 8자리 (예: 19980915)</p>
                     <p>• 비밀번호 없는 PDF는 그냥 확인 버튼을 누르세요</p>
                   </div>
-
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => { setIsPDF(false); setFileName('') }}
-                      className="px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
-                    >
-                      ← 다시 선택
-                    </button>
-                    <button
-                      onClick={handlePDFParse}
-                      disabled={pdfLoading}
-                      className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {pdfLoading ? (
-                        <><span className="animate-spin">⏳</span> 분석 중...</>
-                      ) : (
-                        '확인 → 내역 분석'
-                      )}
+                    <button onClick={() => { setIsPDF(false); setFileName('') }} className="px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">← 다시 선택</button>
+                    <button onClick={handlePDFParse} disabled={pdfLoading}
+                      className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                      {pdfLoading ? <><span className="animate-spin">⏳</span> 분석 중...</> : '확인 → 내역 분석'}
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Excel: 파일 미선택 ── */}
+            {!isPDF && !fileReady && !xlsxPasswordNeeded && (
+              <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full">
+                <div
+                  className={`w-full border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
+                  onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={onDrop}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <div className="text-5xl mb-4">{fileLoading ? '⏳' : '📊'}</div>
+                  <div className="text-sm font-semibold text-gray-700 mb-1">
+                    {fileLoading ? '파일 분석 중...' : '거래내역 파일을 드래그하거나 클릭해서 선택'}
+                  </div>
+                  <div className="text-xs text-gray-400">.xlsx, .xls, .csv, .pdf 지원</div>
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.pdf" className="hidden" onChange={onFileChange} />
+                </div>
+                {fileError && <p className="text-xs text-red-500 text-center">⚠️ {fileError}</p>}
+                <div className="text-xs text-gray-400 text-center space-y-0.5">
+                  <p>💡 토스뱅크(엑셀) · KB국민은행(PDF) 등 지원</p>
+                  <p>암호 걸린 파일도 가능합니다 (Excel·PDF 모두)</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Excel: 암호 입력 ── */}
+            {!isPDF && xlsxPasswordNeeded && (
+              <div className="max-w-md mx-auto w-full space-y-4">
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-start gap-3">
+                  <span className="text-2xl">🔒</span>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">{fileName}</div>
+                    <div className="text-xs text-amber-700 mt-0.5">암호로 보호된 Excel 파일입니다</div>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1.5">Excel 파일 비밀번호</label>
+                  <input type="password" value={xlsxPassword}
+                    onChange={e => { setXlsxPassword(e.target.value); setXlsxPasswordError('') }}
+                    onKeyDown={e => e.key === 'Enter' && handleExcelWithPassword()}
+                    placeholder="비밀번호 입력"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus />
+                  {xlsxPasswordError && <p className="text-xs text-red-500 mt-1.5">⚠️ {xlsxPasswordError}</p>}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setXlsxPasswordNeeded(false); setFileName(''); fileRef.current && (fileRef.current.value = '') }}
+                    className="px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">← 다시 선택</button>
+                  <button onClick={handleExcelWithPassword} disabled={fileLoading || !xlsxPassword}
+                    className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    {fileLoading ? <><span className="animate-spin">⏳</span> 분석 중...</> : '🔓 파일 열기'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Excel: 시트·헤더 행 설정 ── */}
+            {!isPDF && fileReady && storedWorkbook && (
+              <div className="max-w-2xl mx-auto w-full space-y-4">
+                {/* 파일명 + 다시선택 */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📊</span>
+                    <span className="text-sm font-semibold text-gray-800 truncate max-w-xs">{fileName}</span>
+                  </div>
+                  <button onClick={() => { setFileReady(false); setFileName(''); fileRef.current && (fileRef.current.value = '') }}
+                    className="text-xs text-gray-400 hover:text-gray-600 underline">다시 선택</button>
+                </div>
+
+                {/* 시트(탭) 선택 */}
+                {sheetNames.length > 1 && (
+                  <div>
+                    <div className="text-xs font-semibold text-gray-600 mb-2">📑 시트(탭) 선택 — <span className="font-normal text-gray-400">{sheetNames.length}개 시트 감지됨</span></div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sheetNames.map(name => (
+                        <button key={name}
+                          onClick={() => {
+                            setSelectedSheet(name)
+                            setHeaderRowIndex(0)
+                            setSheetPreview(getSheetPreviewRows(storedWorkbook, name))
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${selectedSheet === name ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 헤더 행 선택 */}
+                <div className="flex items-center gap-3 bg-blue-50 rounded-xl px-4 py-3">
+                  <span className="text-xs font-semibold text-blue-700 whitespace-nowrap">컬럼명 있는 행:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setHeaderRowIndex(i => Math.max(0, i - 1))}
+                      className="w-7 h-7 rounded-lg bg-white border border-blue-200 text-blue-600 font-bold hover:bg-blue-100 transition-colors">−</button>
+                    <span className="text-sm font-bold text-blue-800 w-6 text-center">{headerRowIndex + 1}</span>
+                    <button onClick={() => setHeaderRowIndex(i => Math.min(sheetPreview.length - 1, i + 1))}
+                      className="w-7 h-7 rounded-lg bg-white border border-blue-200 text-blue-600 font-bold hover:bg-blue-100 transition-colors">+</button>
+                  </div>
+                  <span className="text-xs text-blue-500">행 (아래 표에서 파란 줄이 컬럼명 행입니다)</span>
+                </div>
+
+                {/* 시트 미리보기 */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 mb-1.5">시트 미리보기</div>
+                  <div className="overflow-x-auto rounded-xl border border-gray-100 max-h-56">
+                    <table className="text-xs w-full">
+                      <tbody>
+                        {sheetPreview.map((row, i) => (
+                          <tr key={i} className={i === headerRowIndex ? 'bg-blue-100 font-semibold' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <td className={`px-2 py-1.5 text-center w-8 border-r border-gray-100 font-mono ${i === headerRowIndex ? 'text-blue-600' : 'text-gray-300'}`}>{i + 1}</td>
+                            {(row as unknown[]).slice(0, 8).map((cell, j) => (
+                              <td key={j} className="px-2 py-1.5 text-gray-700 whitespace-nowrap max-w-[120px] truncate border-r border-gray-50 last:border-0">{String(cell || '')}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => applySheetConfig(storedWorkbook, selectedSheet, headerRowIndex)}
+                    className="px-6 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
+                    다음 → 컬럼 설정
+                  </button>
                 </div>
               </div>
             )}
