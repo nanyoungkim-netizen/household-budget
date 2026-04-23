@@ -96,31 +96,33 @@ export default function BudgetPage() {
   const { cards } = data
   const prev = prevMonth(month)
 
-  // 이달 카드 사용 (→ 다음달 청구 예정)
+  // 이달 카드 사용 (→ 다음달 청구 예정) — 환급 차감
   const cardBreakdown = cards
-    .map(card => ({
-      ...card,
-      amount: allMonthExpense
+    .map(card => {
+      const charged = allMonthExpense
         .filter(t => t.paymentMethod === 'card' && t.cardId === card.id)
-        .reduce((s, t) => s + t.amount, 0),
-    }))
+        .reduce((s, t) => s + t.amount, 0)
+      const refunded = transactions
+        .filter(t => t.date.startsWith(month) && t.type === 'refund' && t.paymentMethod === 'card' && t.cardId === card.id)
+        .reduce((s, t) => s + t.amount, 0)
+      return { ...card, amount: Math.max(0, charged - refunded) }
+    })
     .filter(c => c.amount > 0)
 
-  // 전달 카드 사용액 → 이달 납부 예정
-  const prevMonthCardTxs = transactions.filter(t =>
-    t.date.startsWith(prev) && t.type === 'expense' && t.paymentMethod === 'card'
-  )
+  // 전달 카드 사용액 → 이달 납부 예정 — 환급 차감
   const prevCardBreakdown = cards
     .map(card => {
-      const charged = prevMonthCardTxs
-        .filter(t => t.cardId === card.id)
+      const charged = transactions
+        .filter(t => t.date.startsWith(prev) && t.type === 'expense' && t.paymentMethod === 'card' && t.cardId === card.id)
         .reduce((s, t) => s + t.amount, 0)
-      // 이달에 해당 청구월로 납부한 거래
-      const paidTxs = transactions.filter(t =>
-        t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev
-      )
-      const paid = paidTxs.reduce((s, t) => s + t.amount, 0)
-      return { ...card, charged, paid, isPaid: paid >= charged && charged > 0 }
+      const refunded = transactions
+        .filter(t => t.date.startsWith(prev) && t.type === 'refund' && t.paymentMethod === 'card' && t.cardId === card.id)
+        .reduce((s, t) => s + t.amount, 0)
+      const netCharged = Math.max(0, charged - refunded)
+      const paid = transactions
+        .filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev)
+        .reduce((s, t) => s + t.amount, 0)
+      return { ...card, charged: netCharged, paid, isPaid: paid >= netCharged && netCharged > 0 }
     })
     .filter(c => c.charged > 0)
 
