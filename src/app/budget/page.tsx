@@ -41,6 +41,13 @@ export default function BudgetPage() {
     const cat = categories.find(c => c.id === categoryId)
     return cat?.role === 'card_payment'
   }
+  function isExcludedFromReal(categoryId: string): boolean {
+    const cat = categories.find(c => c.id === categoryId)
+    if (!cat) return false
+    if (cat.role === 'card_payment' || cat.role === 'savings') return true
+    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+    return parent?.role === 'savings' || parent?.role === 'card_payment' || false
+  }
   const [month, setMonth] = useState(currentMonth)
   const router = useRouter()
 
@@ -69,7 +76,7 @@ export default function BudgetPage() {
   // 지출 + 통장환급(차감)만 포함 — 카드 환급 제외, 카드대금 제외 (카드 사용과 이중 계산 방지)
   const monthTx = transactions.filter(t =>
     t.date.startsWith(month) &&
-    !isCardPaymentCat(t.categoryId) &&
+    !isExcludedFromReal(t.categoryId) &&
     (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
 
