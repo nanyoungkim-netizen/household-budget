@@ -350,56 +350,79 @@ export default function Dashboard() {
         )
       })}
 
-      {/* 카드 미납 현황 */}
+      {/* 카드 사용 현황 — 월별 */}
       {(() => {
-        const { cards } = data
         const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
-        const paidBillingMonths = new Set(
-          transactions.filter(t => t.billingMonth && isCardPayCat(t.categoryId)).map(t => t.billingMonth!)
-        )
-        const cardBalances = cards.map(card => {
-          const byMonth: Record<string, number> = {}
+
+        // 납부된 청구월 Set
+        // billingMonth가 없으면 납부일 기준 전달로 자동 추정 (일반적인 카드 결제 주기)
+        const paidBillingMonths = new Set<string>(
           transactions
-            .filter(t => t.paymentMethod === 'card' && t.cardId === card.id && (t.type === 'expense' || t.type === 'refund'))
-            .forEach(t => {
-              const m = t.date.slice(0, 7)
-              byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
+            .filter(t => isCardPayCat(t.categoryId))
+            .map(t => {
+              if (t.billingMonth) return t.billingMonth
+              const [y, m] = t.date.slice(0, 7).split('-').map(Number)
+              const d = new Date(y, m - 2, 1)
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
             })
-          let unpaid = 0; let paid = 0
-          Object.entries(byMonth).forEach(([m, v]) => {
-            if (paidBillingMonths.has(m)) paid += Math.max(0, v)
-            else unpaid += Math.max(0, v)
+        )
+
+        // 월별 카드 사용액 집계 (전체 카드 합산)
+        const byMonth: Record<string, number> = {}
+        transactions
+          .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
+          .forEach(t => {
+            const m = t.date.slice(0, 7)
+            byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
           })
-          return { card, unpaid, paid, hasAny: Object.keys(byMonth).length > 0 }
-        }).filter(c => c.hasAny)
-        if (cardBalances.length === 0) return null
-        const totalUnpaid = cardBalances.reduce((s, c) => s + c.unpaid, 0)
-        const allPaid     = cardBalances.every(c => c.unpaid === 0)
+
+        const monthRows = Object.entries(byMonth)
+          .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: paidBillingMonths.has(m) }))
+          .filter(r => r.total > 0)
+          .sort((a, b) => b.month.localeCompare(a.month))
+          .slice(0, 6)
+
+        if (monthRows.length === 0) return null
+
+        const totalUnpaid = monthRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
+
         return (
           <div className="mb-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
                   <span className="text-base">💳</span>
-                  <div>
-                    <div className="text-xs font-bold text-gray-700">카드 사용 현황</div>
-                    <div className="text-[11px] text-gray-400">{cardBalances.length}개 카드</div>
-                  </div>
+                  <span className="text-sm font-bold text-gray-700">카드 사용 현황</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  {allPaid ? (
-                    <div className="text-right">
-                      <div className="text-base font-bold text-gray-300 tabular-nums">0원</div>
-                      <div className="text-xs text-emerald-600 font-medium">✓ 전체 납부완료</div>
+                <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
+              </div>
+
+              <div className="space-y-2">
+                {monthRows.map(row => {
+                  const mo = parseInt(row.month.split('-')[1])
+                  return (
+                    <div key={row.month} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 w-7 font-medium">{mo}월</span>
+                        {row.isPaid
+                          ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">✓ 납부완료</span>
+                          : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">미납</span>
+                        }
+                      </div>
+                      <span className={`text-sm font-semibold tabular-nums ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
+                        {fmtKRW(row.total)}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="text-right">
-                      <div className="text-base font-bold text-red-500 tabular-nums">-{fmtKRW(totalUnpaid)}</div>
-                      <div className="text-xs text-gray-400">미납 합계</div>
-                    </div>
-                  )}
-                  <Link href="/transactions" className="text-xs text-blue-600 whitespace-nowrap">자세히 →</Link>
-                </div>
+                  )
+                })}
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-xs text-gray-500 font-medium">미납 합계</span>
+                {totalUnpaid > 0
+                  ? <span className="text-base font-bold text-red-500 tabular-nums">-{fmtKRW(totalUnpaid)}</span>
+                  : <span className="text-sm font-bold text-emerald-600">✓ 전체 납부완료</span>
+                }
               </div>
             </div>
           </div>
