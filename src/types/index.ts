@@ -82,16 +82,17 @@ export interface Saving {
   id: string
   name: string
   bank: string
-  type: 'saving' | 'deposit'
+  type: 'saving' | 'deposit' | 'subscription'
   monthlyAmount: number
   interestRate: number
   startDate: string
   maturityDate: string
   currentAmount: number
   expectedAmount: number
-  interestType?: 'simple' | 'compound'   // FR-008: 단리/복리
-  manualInterest?: boolean               // FR-008: 직접 입력 여부
-  taxType?: 'general' | 'exempt'         // FR-011: 과세 유형
+  interestType?: 'simple' | 'compound'          // FR-008: 단리/복리
+  manualInterest?: boolean                       // FR-008: 직접 입력 여부
+  taxType?: 'general' | 'low_tax' | 'exempt'    // FR-011: 과세 유형 (일반 15.4% / 저율 9.9% / 비과세)
+  accountNumber?: string                         // 계좌번호 (선택)
 }
 
 // FR-009: 카드 청구·납부 관리
