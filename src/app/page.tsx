@@ -88,9 +88,12 @@ export default function Dashboard() {
   }
 
   // ── 기간 필터링 ───────────────────────────────────────────────────────────
-  const prefix      = viewMode === 'day' ? selectedDay : selectedMonth
-  const periodTxs   = transactions.filter(t => t.date.startsWith(prefix))
-  const stats       = calcStats(periodTxs)
+  const prefix    = viewMode === 'day' ? selectedDay : selectedMonth
+  const periodTxs = transactions.filter(t => t.date.startsWith(prefix))
+  // 카드대금 납부 거래는 이중계산이므로 요약에서 제외
+  const isCardPayment = (t: Transaction) => categories.find(c => c.id === t.categoryId)?.role === 'card_payment'
+  const periodTxsForStats = periodTxs.filter(t => !isCardPayment(t))
+  const stats       = calcStats(periodTxsForStats)
   const catExpenses = getCategoryExpenses(transactions, viewMode === 'day' ? selectedDay : selectedMonth)
 
   // 거래 목록 (최신순, 최대 8개)
