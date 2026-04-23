@@ -870,9 +870,12 @@ export default function TransactionsPage() {
                         {consumptionType === 'savings_transfer' && (
                           <span className="text-xs bg-teal-100 text-teal-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">저축이체</span>
                         )}
-                        {consumptionType === 'card_payment' && (
-                          <span className="text-xs bg-gray-100 text-gray-500 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">카드대금</span>
-                        )}
+                        {consumptionType === 'card_payment' && (() => {
+                          const paidCard = usedCard ?? (t.cardId ? cards.find(c => c.id === t.cardId) : null)
+                          return paidCard
+                            ? <span className="text-xs font-bold px-2 py-0.5 rounded-md flex-shrink-0 text-white" style={{ backgroundColor: paidCard.color }}>💳 {paidCard.name} 납부</span>
+                            : <span className="text-xs bg-gray-800 text-white font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">💳 카드대금</span>
+                        })()}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {isTransfer ? (

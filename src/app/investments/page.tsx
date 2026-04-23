@@ -51,6 +51,7 @@ export default function InvestmentsPage() {
   const [showInvestmentModal, setShowInvestmentModal] = useState(false)
   const [showTradeModal, setShowTradeModal] = useState(false)
   const [editInvestmentId, setEditInvestmentId] = useState<string | null>(null)
+  const [editTradeId, setEditTradeId] = useState<string | null>(null)
   const [tradeInvestmentId, setTradeInvestmentId] = useState<string | null>(null)
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
   const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
@@ -143,13 +144,15 @@ export default function InvestmentsPage() {
     if (editInvestmentId) {
       setInvestments(investments.map(i => i.id === editInvestmentId ? newInv : i))
     } else {
-      setInvestments([...investments, newInv])
-      // 첫 매수 정보 입력된 경우 거래 이력에도 추가
+      let finalInv = newInv
+      // 첫 매수 정보 입력된 경우 거래 이력에도 추가, 현재가를 매수 단가로 자동 설정
       if (initialBuy && initialBuy.quantity && initialBuy.price) {
         const qty = parseAmt(initialBuy.quantity)
         const price = parseAmt(initialBuy.price)
         const fee = parseAmt(initialBuy.fee)
         if (qty > 0 && price > 0) {
+          // 현재가 자동 = 매수 단가
+          finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
           const trade: InvestmentTrade = {
             id: `tr${Date.now()}`,
             investmentId: invId,
@@ -163,6 +166,7 @@ export default function InvestmentsPage() {
           setInvestmentTrades([...investmentTrades, trade])
         }
       }
+      setInvestments([...investments, finalInv])
     }
     setShowInvestmentModal(false)
     setEditInvestmentId(null)
@@ -186,19 +190,28 @@ export default function InvestmentsPage() {
   // ── 거래 등록 ──────────────────────────────────────────────────────────────
   function openAddTrade(investmentId: string) {
     setTradeInvestmentId(investmentId)
+    setEditTradeId(null)
     setTradeForm({ ...EMPTY_TRADE, currency: investments.find(i => i.id === investmentId)?.currency ?? 'KRW' })
+    setShowTradeModal(true)
+  }
+
+  function openEditTrade(trade: InvestmentTrade) {
+    setTradeInvestmentId(trade.investmentId)
+    setEditTradeId(trade.id)
+    setTradeForm({ type: trade.type, date: trade.date, quantity: trade.quantity, price: trade.price, currency: trade.currency, exchangeRate: trade.exchangeRate, fee: trade.fee, note: trade.note })
     setShowTradeModal(true)
   }
 
   function handleSaveTrade() {
     if (!tradeInvestmentId || !tradeForm.quantity || !tradeForm.price) return
-    const newTrade: InvestmentTrade = {
-      id: `tr${Date.now()}`,
-      investmentId: tradeInvestmentId,
-      ...tradeForm,
+    if (editTradeId) {
+      setInvestmentTrades(investmentTrades.map(t => t.id === editTradeId ? { ...t, ...tradeForm } : t))
+    } else {
+      const newTrade: InvestmentTrade = { id: `tr${Date.now()}`, investmentId: tradeInvestmentId, ...tradeForm }
+      setInvestmentTrades([...investmentTrades, newTrade])
     }
-    setInvestmentTrades([...investmentTrades, newTrade])
     setShowTradeModal(false)
+    setEditTradeId(null)
   }
 
   function handleDeleteTrade(id: string) {
@@ -444,7 +457,10 @@ export default function InvestmentsPage() {
                     </div>
                     {trade.fee ? <div className="text-xs text-gray-400">수수료 {fmtKRW(trade.fee)}</div> : null}
                   </div>
-                  <button onClick={() => setDeleteTradeId(trade.id)} className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors">🗑️</button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => openEditTrade(trade)} className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors">✏️</button>
+                    <button onClick={() => setDeleteTradeId(trade.id)} className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors">🗑️</button>
+                  </div>
                 </div>
               )
             })}
@@ -558,8 +574,8 @@ export default function InvestmentsPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">거래 등록</h2>
-              <button onClick={() => setShowTradeModal(false)} className="text-gray-400 text-xl">×</button>
+              <h2 className="text-base font-bold">{editTradeId ? '거래 수정' : '거래 등록'}</h2>
+              <button onClick={() => { setShowTradeModal(false); setEditTradeId(null) }} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
               {/* 매수/매도 */}
@@ -613,7 +629,7 @@ export default function InvestmentsPage() {
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <button onClick={handleSaveTrade}
                 className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">
-                거래 등록
+                {editTradeId ? '수정 완료' : '거래 등록'}
               </button>
             </div>
           </div>
