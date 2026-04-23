@@ -285,7 +285,7 @@ interface ImportRow {
   description: string
   txType: string       // 원본 거래유형 (표시용)
   amount: number
-  type: 'income' | 'expense' | 'transfer'
+  type: 'income' | 'expense' | 'transfer' | 'refund'
   categoryId: string
   accountId: string
   toAccountId: string  // 이체 시 입금계좌
@@ -350,11 +350,11 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   // 일괄 변경용 선택 상태
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
-  const [bulkType, setBulkType]         = useState<'income' | 'expense' | 'transfer'>('expense')
+  const [bulkType, setBulkType]         = useState<'income' | 'expense' | 'transfer' | 'refund'>('expense')
   const [bulkCatId, setBulkCatId]       = useState('')
 
   // FR-06: 헤더 일괄 적용 상태
-  const [headerType,    setHeaderType]    = useState<'income' | 'expense' | 'transfer' | ''>('')
+  const [headerType,    setHeaderType]    = useState<'income' | 'expense' | 'transfer' | 'refund' | ''>('')
   const [headerCatId,   setHeaderCatId]   = useState('')
   const [headerAccId,   setHeaderAccId]   = useState('')
 
@@ -690,7 +690,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   }
 
   // FR-06: 헤더 일괄 적용
-  function applyHeaderType(t: 'income' | 'expense' | 'transfer') {
+  function applyHeaderType(t: 'income' | 'expense' | 'transfer' | 'refund') {
     setHeaderType(t)
     setRows(prev => prev.map(r => {
       if (t === 'transfer') return { ...r, type: 'transfer', categoryId: 'transfer', autoSuggested: false }
@@ -1122,12 +1122,13 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   <span className="text-xs font-semibold text-indigo-700">{bulkSelected.size}개 선택됨</span>
                   <select
                     value={bulkType}
-                    onChange={e => { setBulkType(e.target.value as 'income' | 'expense' | 'transfer'); setBulkCatId('') }}
+                    onChange={e => { setBulkType(e.target.value as 'income' | 'expense' | 'transfer' | 'refund'); setBulkCatId('') }}
                     className="border border-indigo-200 rounded-lg px-2 py-1 text-xs text-indigo-700 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   >
                     <option value="expense">지출</option>
                     <option value="income">수입</option>
                     <option value="transfer">이체</option>
+                    <option value="refund">환급</option>
                   </select>
                   {bulkType !== 'transfer' && (
                     <select
@@ -1204,12 +1205,13 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                       {/* 유형 전체 적용 */}
                       <td className="px-3 py-1 text-center">
                         <select value={headerType}
-                          onChange={e => applyHeaderType(e.target.value as 'income' | 'expense' | 'transfer')}
+                          onChange={e => applyHeaderType(e.target.value as 'income' | 'expense' | 'transfer' | 'refund')}
                           className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 text-indigo-700">
                           <option value="">—</option>
                           <option value="expense">전체 지출</option>
                           <option value="income">전체 수입</option>
                           <option value="transfer">전체 이체</option>
+                          <option value="refund">전체 환급</option>
                         </select>
                       </td>
                       {/* 카테고리 전체 적용 */}
@@ -1295,7 +1297,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                           <td className="px-3 py-2 text-center">
                             <select value={row.type}
                               onChange={e => {
-                                const t = e.target.value as 'income' | 'expense' | 'transfer'
+                                const t = e.target.value as 'income' | 'expense' | 'transfer' | 'refund'
                                 if (t === 'transfer') {
                                   updateRow(row._key, { type: t, categoryId: 'transfer', autoSuggested: false })
                                 } else {
@@ -1306,12 +1308,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                               className={`border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                                 row.type === 'income'   ? 'border-emerald-200 text-emerald-700 bg-emerald-50' :
                                 row.type === 'transfer' ? 'border-blue-200 text-blue-600 bg-blue-50' :
+                                row.type === 'refund'   ? 'border-purple-200 text-purple-600 bg-purple-50' :
                                                          'border-red-200 text-red-600 bg-red-50'
                               }`}
                             >
                               <option value="income">수입</option>
                               <option value="expense">지출</option>
                               <option value="transfer">이체</option>
+                              <option value="refund">환급</option>
                             </select>
                           </td>
                           {/* 카테고리 or 이체 입금계좌 */}

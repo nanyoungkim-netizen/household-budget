@@ -72,6 +72,7 @@ export default function TransactionsPage() {
   const [catChipSearch, setCatChipSearch] = useState('')
   const [catParentFilter, setCatParentFilter] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
+  const [accountChipSearch, setAccountChipSearch] = useState('')
 
   // URL 파라미터로 초기 상태 복원 (FR-002, FR-003)
   useEffect(() => {
@@ -240,6 +241,7 @@ export default function TransactionsPage() {
     setEditingId(null)
     setSavingLinks([])
     setSavingSearch('')
+    setAccountSearch('')
   }
 
   // ── 적금 빠른 추가 ──────────────────────────────────────────────────────────
@@ -390,6 +392,8 @@ export default function TransactionsPage() {
 
   // FR-004: 카테고리 드롭다운 검색
   const [catSearch, setCatSearch] = useState('')
+  // 계좌 선택 검색 (모달)
+  const [accountSearch, setAccountSearch] = useState('')
   const searchedCats = catSearch.trim()
     ? filteredCats.filter(c => c.name.toLowerCase().includes(catSearch.trim().toLowerCase()))
     : filteredCats
@@ -437,31 +441,53 @@ export default function TransactionsPage() {
 
       {/* 통장 탭: 계좌 칩 (실시간 잔액) */}
       {paymentTab === 'account' && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => setFilterAccount('all')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
-              filterAccount === 'all'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-            }`}>
-            전체
-          </button>
-          {accountBalances.map(({ acc, balance }) => (
+        <div className="mb-4">
+          {/* 은행/계좌 검색 */}
+          <div className="relative mb-2">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+            <input
+              type="text"
+              value={accountChipSearch}
+              onChange={e => setAccountChipSearch(e.target.value)}
+              placeholder="은행·계좌 검색..."
+              className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {accountChipSearch && (
+              <button onClick={() => setAccountChipSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs">×</button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
-              key={acc.id}
-              onClick={() => setFilterAccount(acc.id)}
+              onClick={() => setFilterAccount('all')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
-                filterAccount === acc.id
+                filterAccount === 'all'
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
               }`}>
-              <span>{acc.name}</span>
-              <span className={`text-xs font-normal ${filterAccount === acc.id ? 'text-blue-100' : 'text-gray-400'}`}>
-                {balance >= 0 ? '' : '-'}{Math.abs(balance).toLocaleString('ko-KR')}원
-              </span>
+              전체
             </button>
-          ))}
+            {accountBalances
+              .filter(({ acc }) =>
+                !accountChipSearch.trim() ||
+                acc.name.toLowerCase().includes(accountChipSearch.trim().toLowerCase()) ||
+                acc.bank.toLowerCase().includes(accountChipSearch.trim().toLowerCase())
+              )
+              .map(({ acc, balance }) => (
+                <button
+                  key={acc.id}
+                  onClick={() => setFilterAccount(acc.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+                    filterAccount === acc.id
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                  }`}>
+                  <span>{acc.name}</span>
+                  <span className={`text-xs font-normal ${filterAccount === acc.id ? 'text-blue-100' : 'text-gray-400'}`}>
+                    {balance >= 0 ? '' : '-'}{Math.abs(balance).toLocaleString('ko-KR')}원
+                  </span>
+                </button>
+              ))}
+          </div>
         </div>
       )}
 
@@ -801,7 +827,7 @@ export default function TransactionsPage() {
             </div>
             <div className="space-y-3">
 
-              {/* 유형 탭 — 수정 모드에서는 변경 불가 */}
+              {/* 유형 탭 */}
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                 {([
                   ['expense', '지출',   'bg-red-500'],
@@ -810,10 +836,10 @@ export default function TransactionsPage() {
                   ['refund',  '환급',   'bg-purple-500'],
                 ] as const).map(([type, label, activeColor]) => (
                   <button key={type}
-                    onClick={() => !isEditing && switchFormType(type)}
+                    onClick={() => switchFormType(type)}
                     className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                      formType === type ? `${activeColor} text-white` : 'text-gray-500'
-                    } ${isEditing ? 'cursor-default' : ''}`}
+                      formType === type ? `${activeColor} text-white` : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
                     {label}
                   </button>
@@ -911,13 +937,38 @@ export default function TransactionsPage() {
                     onChange={e => setForm(f => ({ ...f, amount: fmtInput(e.target.value) }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   {/* 카드 결제는 계좌 불필요 — 통장일 때만 표시 */}
-                  {form.paymentMethod === 'account' && (
-                    <select value={form.accountId}
-                      onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                  )}
+                  {form.paymentMethod === 'account' && (() => {
+                    const filteredAccs = accountSearch.trim()
+                      ? accounts.filter(a =>
+                          a.name.toLowerCase().includes(accountSearch.trim().toLowerCase()) ||
+                          a.bank.toLowerCase().includes(accountSearch.trim().toLowerCase())
+                        )
+                      : accounts
+                    return (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="flex items-center px-3 py-2 border-b border-gray-100 bg-gray-50">
+                          <span className="text-gray-400 text-xs mr-2">🔍</span>
+                          <input
+                            type="text"
+                            value={accountSearch}
+                            onChange={e => setAccountSearch(e.target.value)}
+                            placeholder="계좌·은행 검색..."
+                            className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                          />
+                          {accountSearch && <button onClick={() => setAccountSearch('')} className="text-gray-300 hover:text-gray-500 text-xs">×</button>}
+                        </div>
+                        <select value={form.accountId}
+                          onChange={e => { setForm(f => ({ ...f, accountId: e.target.value })); setAccountSearch('') }}
+                          size={Math.min(filteredAccs.length || 1, 4)}
+                          className="w-full px-3 py-1 text-sm focus:outline-none bg-white">
+                          {filteredAccs.length === 0
+                            ? <option disabled>일치하는 계좌 없음</option>
+                            : filteredAccs.map(a => <option key={a.id} value={a.id}>{a.name} · {a.bank}</option>)
+                          }
+                        </select>
+                      </div>
+                    )
+                  })()}
                   {form.paymentMethod === 'card' && (
                     <>
                       <select value={form.cardId}
