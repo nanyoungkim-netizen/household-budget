@@ -65,6 +65,8 @@ export interface Card {
   bank: string
   billingDate: number
   color: string
+  annualFeeAmount?: number  // 연회비 금액 (원)
+  annualFeeDate?: string    // 연회비 납부일 "MM-DD" 형식
 }
 
 export interface Installment {

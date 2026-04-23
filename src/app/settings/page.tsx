@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
 import { Account, Card, Category, CategoryRole, MappingRule } from '@/types'
 
@@ -67,7 +67,11 @@ export default function SettingsPage() {
 
   // ── 카드 상태 ──────────────────────────────────────────────────────────────
   const [showCardModal, setShowCardModal] = useState(false)
-  const [cardForm, setCardForm] = useState({ name: '', bank: '', billingDate: '15', color: '#0065CC' })
+  const [editCardId, setEditCardId] = useState<string | null>(null)
+  const [cardForm, setCardForm] = useState({
+    name: '', bank: '', billingDate: '15', color: '#0065CC',
+    annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '',
+  })
 
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState<'child' | 'parent' | 'edit' | null>(null)
@@ -155,18 +159,58 @@ export default function SettingsPage() {
   }
 
   // ── 카드 함수 ──────────────────────────────────────────────────────────────
-  function addCard() {
+  function openAddCard() {
+    setEditCardId(null)
+    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC', annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '' })
+    setShowCardModal(true)
+  }
+
+  function openEditCard(card: Card) {
+    setEditCardId(card.id)
+    const [mm = '', dd = ''] = card.annualFeeDate ? card.annualFeeDate.split('-') : []
+    setCardForm({
+      name: card.name,
+      bank: card.bank,
+      billingDate: String(card.billingDate),
+      color: card.color,
+      annualFeeAmount: card.annualFeeAmount ? fmtInput(String(card.annualFeeAmount)) : '',
+      annualFeeMonth: mm ? String(parseInt(mm)) : '',
+      annualFeeDay:   dd ? String(parseInt(dd)) : '',
+    })
+    setShowCardModal(true)
+  }
+
+  function saveCard() {
     if (!cardForm.name) return
-    const newCard: Card = {
-      id: `card_${Date.now()}`,
-      name: cardForm.name,
-      bank: cardForm.bank || cardForm.name,
-      billingDate: Number(cardForm.billingDate) || 15,
-      color: cardForm.color,
+    const annualFeeDate = (cardForm.annualFeeMonth && cardForm.annualFeeDay)
+      ? `${String(cardForm.annualFeeMonth).padStart(2, '0')}-${String(cardForm.annualFeeDay).padStart(2, '0')}`
+      : undefined
+    const feeAmt = parseAmt(cardForm.annualFeeAmount) || undefined
+    if (editCardId) {
+      setCards(cards.map(c => c.id === editCardId ? {
+        ...c,
+        name: cardForm.name,
+        bank: cardForm.bank || cardForm.name,
+        billingDate: Number(cardForm.billingDate) || 15,
+        color: cardForm.color,
+        annualFeeAmount: feeAmt,
+        annualFeeDate,
+      } : c))
+    } else {
+      const newCard: Card = {
+        id: `card_${Date.now()}`,
+        name: cardForm.name,
+        bank: cardForm.bank || cardForm.name,
+        billingDate: Number(cardForm.billingDate) || 15,
+        color: cardForm.color,
+        annualFeeAmount: feeAmt,
+        annualFeeDate,
+      }
+      setCards([...cards, newCard])
     }
-    setCards([...cards, newCard])
     setShowCardModal(false)
-    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC' })
+    setEditCardId(null)
+    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC', annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '' })
   }
 
   function deleteCard(id: string) {
@@ -423,34 +467,66 @@ export default function SettingsPage() {
       {/* ── 카드 탭 ──────────────────────────────────────────────────────── */}
       {tab === '카드' && (
         <div className="space-y-3">
-          {cards.map(card => (
-            <div key={card.id} className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: card.color }}>
-                    {/* FR-13: 은행명 약칭 표시 */}
-                    {(card.bank || card.name).slice(0, 2)}
+          {cards.map(card => {
+            // 연회비 D-day 계산
+            let annualFeeBadge: React.ReactNode = null
+            if (card.annualFeeAmount && card.annualFeeDate) {
+              const now = new Date()
+              const [mm, dd] = card.annualFeeDate.split('-').map(Number)
+              const thisYear = new Date(now.getFullYear(), mm - 1, dd)
+              const nextYear = new Date(now.getFullYear() + 1, mm - 1, dd)
+              const feeDate = thisYear >= now ? thisYear : nextYear
+              const daysUntil = Math.ceil((feeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+              if (daysUntil <= 60) {
+                const color = daysUntil <= 14 ? 'bg-red-100 text-red-600' : daysUntil <= 30 ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'
+                annualFeeBadge = (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${color}`}>
+                    D-{daysUntil}
+                  </span>
+                )
+              }
+            }
+            return (
+              <div key={card.id} className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: card.color }}>
+                      {(card.bank || card.name).slice(0, 2)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-gray-900">{card.name}</span>
+                        {annualFeeBadge}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {card.bank || card.name} · 매월 {card.billingDate}일 결제
+                        {card.annualFeeAmount && card.annualFeeDate && (
+                          <span className="ml-1.5">
+                            · 연회비 {fmtKRW(card.annualFeeAmount)}
+                            ({parseInt(card.annualFeeDate.slice(0, 2))}월 {parseInt(card.annualFeeDate.slice(3))}일)
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-semibold text-gray-900">{card.name}</div>
-                    <div className="text-xs text-gray-400">{card.bank || card.name} · 매월 {card.billingDate}일 결제</div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button onClick={() => moveCard(card.id, -1)} disabled={cards.indexOf(card) === 0}
+                        className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▲</button>
+                      <button onClick={() => moveCard(card.id, 1)} disabled={cards.indexOf(card) === cards.length - 1}
+                        className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
+                    </div>
+                    <button onClick={() => openEditCard(card)}
+                      className="text-xs text-blue-400 hover:text-blue-600 transition-colors font-medium">수정</button>
+                    <button onClick={() => deleteCard(card.id)}
+                      className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => moveCard(card.id, -1)} disabled={cards.indexOf(card) === 0}
-                      className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▲</button>
-                    <button onClick={() => moveCard(card.id, 1)} disabled={cards.indexOf(card) === cards.length - 1}
-                      className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
-                  </div>
-                  <button onClick={() => deleteCard(card.id)}
-                    className="text-xs text-gray-300 hover:text-red-400 transition-colors">삭제</button>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
-          <button onClick={() => setShowCardModal(true)}
+          <button onClick={openAddCard}
             className="w-full bg-white rounded-2xl shadow-sm py-4 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">
             <span className="text-xl">+</span> 카드 추가
           </button>
@@ -702,29 +778,64 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── 카드 추가 모달 ─────────────────────────────────────────────── */}
+      {/* ── 카드 추가/수정 모달 ─────────────────────────────────────────── */}
       {showCardModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">카드 추가</h2>
-              <button onClick={() => setShowCardModal(false)} className="text-gray-400 text-xl leading-none">×</button>
+              <h2 className="text-base font-bold">{editCardId ? '카드 수정' : '카드 추가'}</h2>
+              <button onClick={() => { setShowCardModal(false); setEditCardId(null) }} className="text-gray-400 text-xl leading-none">×</button>
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <input type="text" placeholder="카드 이름" value={cardForm.name}
                   onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
-                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
                 <input type="text" placeholder="은행명 (예: 신한)" value={cardForm.bank}
                   onChange={e => setCardForm(f => ({ ...f, bank: e.target.value }))}
                   className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-0.5">결제일</label>
+                <label className="text-xs text-gray-400 block mb-0.5">결제일 (매월)</label>
                 <input type="number" min="1" max="31" placeholder="15" value={cardForm.billingDate}
                   onChange={e => setCardForm(f => ({ ...f, billingDate: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+
+              {/* 연회비 */}
+              <div className="border border-amber-100 rounded-xl p-3 bg-amber-50/40 space-y-2">
+                <div className="text-xs font-semibold text-amber-700">💳 연회비 <span className="font-normal text-gray-400">(선택사항)</span></div>
+                <input type="text" inputMode="numeric" placeholder="연회비 금액 (원)"
+                  value={cardForm.annualFeeAmount}
+                  onChange={e => setCardForm(f => ({ ...f, annualFeeAmount: fmtInput(e.target.value) }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white" />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-gray-400 block mb-0.5">납부 월</label>
+                    <select value={cardForm.annualFeeMonth}
+                      onChange={e => setCardForm(f => ({ ...f, annualFeeMonth: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white">
+                      <option value="">-- 월</option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                        <option key={m} value={String(m)}>{m}월</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] text-gray-400 block mb-0.5">납부 일</label>
+                    <input type="number" min="1" max="31" placeholder="일"
+                      value={cardForm.annualFeeDay}
+                      onChange={e => setCardForm(f => ({ ...f, annualFeeDay: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white" />
+                  </div>
+                </div>
+                {cardForm.annualFeeAmount && cardForm.annualFeeMonth && cardForm.annualFeeDay && (
+                  <div className="text-xs text-amber-700 bg-amber-100 rounded-lg px-2.5 py-1.5">
+                    📅 매년 {cardForm.annualFeeMonth}월 {cardForm.annualFeeDay}일 · {cardForm.annualFeeAmount}원 청구 예정
+                  </div>
+                )}
+              </div>
+
               <div>
                 <div className="text-xs text-gray-400 mb-1.5">색상</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -735,8 +846,10 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
-              <button onClick={addCard}
-                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">추가하기</button>
+              <button onClick={saveCard}
+                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">
+                {editCardId ? '저장하기' : '추가하기'}
+              </button>
             </div>
           </div>
         </div>

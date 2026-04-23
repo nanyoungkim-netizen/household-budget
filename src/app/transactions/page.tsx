@@ -73,6 +73,7 @@ export default function TransactionsPage() {
   const [catParentFilter, setCatParentFilter] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
   const [accountChipSearch, setAccountChipSearch] = useState('')
+  const [cardChipSearch, setCardChipSearch] = useState('')
 
   // URL 파라미터로 초기 상태 복원 (FR-002, FR-003)
   useEffect(() => {
@@ -509,36 +510,58 @@ export default function TransactionsPage() {
 
       {/* 카드 탭: 카드 칩 (월별 누적) */}
       {paymentTab === 'card' && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => setFilterCard('all')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
-              filterCard === 'all'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-            }`}>
-            전체 카드
-          </button>
-          {cardMonthlyTotals.map(({ card, total }) => (
+        <div className="mb-4">
+          {/* 카드 검색 */}
+          <div className="relative mb-2">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+            <input
+              type="text"
+              value={cardChipSearch}
+              onChange={e => setCardChipSearch(e.target.value)}
+              placeholder="카드 검색..."
+              className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {cardChipSearch && (
+              <button onClick={() => setCardChipSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs">×</button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
-              key={card.id}
-              onClick={() => setFilterCard(filterCard === card.id ? 'all' : card.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
-                filterCard === card.id
-                  ? 'text-white border-transparent'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-              style={filterCard === card.id ? { backgroundColor: card.color, borderColor: card.color } : {}}>
-              <span
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${filterCard === card.id ? 'bg-white/60' : ''}`}
-                style={filterCard !== card.id ? { backgroundColor: card.color } : {}}
-              />
-              <span>{card.name}</span>
-              <span className={`text-xs font-normal ${filterCard === card.id ? 'text-white/80' : 'text-red-400'}`}>
-                {total > 0 ? `${total.toLocaleString('ko-KR')}원` : '0원'}
-              </span>
+              onClick={() => setFilterCard('all')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+                filterCard === 'all'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              }`}>
+              전체 카드
             </button>
-          ))}
+            {cardMonthlyTotals
+              .filter(({ card }) =>
+                !cardChipSearch.trim() ||
+                card.name.toLowerCase().includes(cardChipSearch.trim().toLowerCase()) ||
+                card.bank.toLowerCase().includes(cardChipSearch.trim().toLowerCase())
+              )
+              .map(({ card, total }) => (
+                <button
+                  key={card.id}
+                  onClick={() => setFilterCard(filterCard === card.id ? 'all' : card.id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
+                    filterCard === card.id
+                      ? 'text-white border-transparent'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+                  style={filterCard === card.id ? { backgroundColor: card.color, borderColor: card.color } : {}}>
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${filterCard === card.id ? 'bg-white/60' : ''}`}
+                    style={filterCard !== card.id ? { backgroundColor: card.color } : {}}
+                  />
+                  <span>{card.name}</span>
+                  <span className={`text-xs font-normal ${filterCard === card.id ? 'text-white/80' : 'text-red-400'}`}>
+                    {total > 0 ? `${total.toLocaleString('ko-KR')}원` : '0원'}
+                  </span>
+                </button>
+              ))}
+          </div>
         </div>
       )}
 

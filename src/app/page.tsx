@@ -61,7 +61,7 @@ function calcStats(txs: Transaction[]) {
 export default function Dashboard() {
   const { data, categories } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, lastModified, isSetupComplete } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -167,6 +167,23 @@ export default function Dashboard() {
     return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
   }, [savings, transactions])
 
+  // ── 연회비 알림 (60일 이내) ─────────────────────────────────────────────────
+  const upcomingAnnualFees = useMemo(() => {
+    const now = new Date()
+    return cards
+      .filter(c => c.annualFeeAmount && c.annualFeeDate)
+      .map(c => {
+        const [mm, dd] = c.annualFeeDate!.split('-').map(Number)
+        const thisYear = new Date(now.getFullYear(), mm - 1, dd)
+        const nextYear = new Date(now.getFullYear() + 1, mm - 1, dd)
+        const feeDate  = thisYear >= now ? thisYear : nextYear
+        const daysUntil = Math.ceil((feeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        return { card: c, feeDate, daysUntil }
+      })
+      .filter(x => x.daysUntil <= 60)
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+  }, [cards])
+
   // ── 라벨 ─────────────────────────────────────────────────────────────────
   const periodLabel = viewMode === 'day' ? dayLabel(selectedDay) : monthLabel(selectedMonth)
   const isNow       = viewMode === 'day' ? isToday : isThisMonth
@@ -187,6 +204,36 @@ export default function Dashboard() {
           + 거래 추가
         </Link>
       </div>
+
+      {/* 연회비 알림 배너 */}
+      {upcomingAnnualFees.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {upcomingAnnualFees.map(({ card, feeDate, daysUntil }) => {
+            const isUrgent  = daysUntil <= 14
+            const isWarning = daysUntil <= 30
+            const bg   = isUrgent  ? 'bg-red-50 border-red-200'    : isWarning ? 'bg-amber-50 border-amber-200'    : 'bg-blue-50 border-blue-200'
+            const txt  = isUrgent  ? 'text-red-700'                 : isWarning ? 'text-amber-700'                  : 'text-blue-700'
+            const badge = isUrgent ? 'bg-red-100 text-red-600'      : isWarning ? 'bg-amber-100 text-amber-700'     : 'bg-blue-100 text-blue-600'
+            return (
+              <div key={card.id} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${bg}`}>
+                <div className="w-10 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{ backgroundColor: card.color }}>
+                  {(card.bank || card.name).slice(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm font-semibold ${txt}`}>{card.name} 연회비 납부 예정</div>
+                  <div className={`text-xs mt-0.5 ${txt} opacity-80`}>
+                    {feeDate.getFullYear()}년 {feeDate.getMonth() + 1}월 {feeDate.getDate()}일 · {fmtKRW(card.annualFeeAmount!)}
+                  </div>
+                </div>
+                <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${badge}`}>
+                  D-{daysUntil}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* 일/월 토글 + 네비게이터 */}
       <div className="bg-white rounded-2xl shadow-sm p-3 mb-4 flex items-center gap-3">
