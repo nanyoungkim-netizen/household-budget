@@ -356,6 +356,29 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* PRD 2.1: 이달 비소비 항목 별도 카드 */}
+      {viewMode === 'month' && (savingAmt > 0 || cardPayAmt > 0) && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+          <div className="text-xs font-semibold text-gray-500 mb-3">이달 비소비 항목 합계</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-teal-50 rounded-xl p-3">
+              <div className="text-xs text-teal-600 mb-0.5">적금·예금 이체</div>
+              <div className="text-base font-bold text-teal-700">{fmtKRW(savingAmt)}</div>
+              <div className="text-xs text-teal-400 mt-0.5">저축성 지출 (실소비 제외)</div>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3">
+              <div className="text-xs text-amber-600 mb-0.5">카드대금 결제</div>
+              <div className="text-base font-bold text-amber-700">{fmtKRW(cardPayAmt)}</div>
+              <div className="text-xs text-amber-400 mt-0.5">이중계산 방지 제외</div>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-xs text-gray-400">이달 실소비</span>
+            <span className="text-sm font-bold text-red-600">{fmtKRW(realConsumption)}</span>
+          </div>
+        </div>
+      )}
+
       {/* FR-01: 자산 유형별 섹션으로 계좌 표시 */}
       {ASSET_SECTIONS.map(section => {
         const sectionAccounts = accountBalances.filter(a => (a.assetType ?? 'cash') === section.value)

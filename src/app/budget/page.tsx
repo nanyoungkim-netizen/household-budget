@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/AppContext'
 import { Budget, Category } from '@/types'
+import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 // FR-007
@@ -59,6 +60,9 @@ export default function BudgetPage() {
 
   // 이월 확인 모달
   const [showCarryOver, setShowCarryOver] = useState(false)
+
+  // 삭제 확인 모달
+  const [deleteCatId, setDeleteCatId] = useState<string | null>(null)
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
@@ -435,8 +439,8 @@ export default function BudgetPage() {
                     onClick={e => { e.stopPropagation(); toggleCollapse(parent.id) }}
                     className={`text-xs text-gray-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}>▲</button>
                   <button
-                    onClick={e => { e.stopPropagation(); deleteCategory(parent.id) }}
-                    className="text-gray-300 hover:text-red-400 text-xs">✕</button>
+                    onClick={e => { e.stopPropagation(); setDeleteCatId(parent.id) }}
+                    className="text-red-400 hover:text-red-600 text-xs">✕</button>
                 </div>
               </div>
 
@@ -487,8 +491,8 @@ export default function BudgetPage() {
                                 className="text-gray-300 hover:text-blue-400 text-xs"
                                 title="이름 수정">✏️</button>
                               <button
-                                onClick={() => deleteCategory(cat.id)}
-                                className="text-gray-200 hover:text-red-400 text-xs">✕</button>
+                                onClick={() => setDeleteCatId(cat.id)}
+                                className="text-red-400 hover:text-red-600 text-xs">✕</button>
                             </div>
                           </div>
                           {/* 예산 (클릭 편집) */}
@@ -700,6 +704,14 @@ export default function BudgetPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {deleteCatId && (
+        <DeleteConfirmModal
+          message="카테고리를 삭제하면 하위 항목과 예산도 함께 삭제됩니다."
+          onConfirm={() => { deleteCategory(deleteCatId); setDeleteCatId(null) }}
+          onCancel={() => setDeleteCatId(null)}
+        />
       )}
     </div>
   )

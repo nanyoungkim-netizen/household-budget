@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { useApp, computeAccountBalance } from '@/lib/AppContext'
-import { Transaction, PaymentMethod, Saving } from '@/types'
+import { useApp, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
+import { Transaction, PaymentMethod, Saving, ConsumptionType } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
+import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 // FR-007: 금액 입력 포맷 헬퍼
@@ -28,6 +29,7 @@ interface FormState {
   cardId: string
   installmentMonths: string   // '1' = 일시불, '2'~ = 할부
   billingMonth: string        // 카드대금 납부 시 청구 월 (YYYY-MM)
+  consumptionType: ConsumptionType | undefined
 }
 
 function prevMonthStr(): string {
@@ -105,6 +107,8 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [formType, setFormType] = useState<TxFormType>('expense')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [realConsumptionFilter, setRealConsumptionFilter] = useState(false)
 
   // 적금·예금 상품 연동 상태
   const [savingLinks, setSavingLinks] = useState<{ savingId: string; amount: string }[]>([])
@@ -126,6 +130,7 @@ export default function TransactionsPage() {
     cardId: cards[0]?.id || '',
     installmentMonths: '1',
     billingMonth: '',
+    consumptionType: undefined,
   }), [accounts, cards, categories])
 
   const [form, setForm] = useState<FormState>(defaultForm)
@@ -149,6 +154,7 @@ export default function TransactionsPage() {
       String(t.amount).includes(searchQuery.trim())
     )
     .filter(t => filterCategories.length === 0 || filterCategories.includes(t.categoryId))
+    .filter(t => !realConsumptionFilter || getConsumptionType(t, categories) === 'normal')
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
   const income    = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
@@ -248,6 +254,7 @@ export default function TransactionsPage() {
       cardId: t.cardId || cards[0]?.id || '',
       installmentMonths: '1',
       billingMonth: t.billingMonth || '',
+      consumptionType: t.consumptionType,
     })
     setSavingLinks((t.savingLinks || []).map(l => ({ savingId: l.savingId, amount: fmtInput(String(l.amount)) })))
     setSavingSearch('')
@@ -364,6 +371,7 @@ export default function TransactionsPage() {
         cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
         savingLinks: resolvedSavingLinks,
         billingMonth: isCardPaymentCat(form.categoryId) && form.billingMonth ? form.billingMonth : undefined,
+        consumptionType: formType === 'expense' ? form.consumptionType : undefined,
       }
     }
 
@@ -684,6 +692,20 @@ export default function TransactionsPage() {
 
       {/* 필터 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
+        {/* PRD 2.1: 실소비만 보기 토글 */}
+        <div className="w-full flex items-center gap-2 pb-2 border-b border-gray-100 mb-1">
+          <button
+            type="button"
+            onClick={() => setRealConsumptionFilter(v => !v)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${realConsumptionFilter ? 'bg-blue-600' : 'bg-gray-200'}`}
+            role="switch"
+            aria-checked={realConsumptionFilter}
+          >
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${realConsumptionFilter ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+          <span className="text-sm text-gray-700 font-medium">실소비만 보기</span>
+          {realConsumptionFilter && <span className="text-xs text-blue-500">저축이체·카드대금 제외</span>}
+        </div>
         <input type="month" value={month} onChange={e => setMonth(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
@@ -801,6 +823,7 @@ export default function TransactionsPage() {
               const runningBalance = runningBalanceMap.get(t.id)
 
               const isSavingTx = t.type === 'expense' && isSavingCat(t.categoryId)
+              const consumptionType = getConsumptionType(t, categories)
               return (
                 <div key={t.id}
                   className={`flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer ${isSavingTx ? 'bg-blue-50/40' : ''}`}
@@ -823,6 +846,12 @@ export default function TransactionsPage() {
                           <span className="text-xs bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap">
                             할부 {t.installmentCurrent}/{t.installmentMonths}
                           </span>
+                        )}
+                        {consumptionType === 'savings_transfer' && (
+                          <span className="text-xs bg-teal-100 text-teal-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">저축이체</span>
+                        )}
+                        {consumptionType === 'card_payment' && (
+                          <span className="text-xs bg-gray-100 text-gray-500 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">카드대금</span>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -868,8 +897,8 @@ export default function TransactionsPage() {
                         className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
                       >수정</button>
                       <button
-                        onClick={e => { e.stopPropagation(); deleteTransaction(t.id) }}
-                        className="text-xs text-gray-300 hover:text-red-400 px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                        onClick={e => { e.stopPropagation(); setDeleteConfirmId(t.id) }}
+                        className="text-xs text-red-600 hover:bg-red-50 px-1.5 py-1 rounded-lg transition-colors"
                       >삭제</button>
                     </div>
                   </div>
@@ -1213,6 +1242,38 @@ export default function TransactionsPage() {
                     </div>
                   )}
 
+                  {/* ── PRD 2.1: 거래 유형 선택 (지출 전용) ── */}
+                  {formType === 'expense' && (
+                    <div className="border border-gray-200 rounded-xl p-3">
+                      <label className="text-xs font-semibold text-gray-600 block mb-2">거래 유형</label>
+                      <div className="flex gap-1.5">
+                        {([
+                          ['normal',            '일반 지출'],
+                          ['savings_transfer',  '적금·예금 이체'],
+                          ['card_payment',      '카드대금 결제'],
+                        ] as const).map(([val, label]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, consumptionType: f.consumptionType === val ? undefined : val }))}
+                            className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                              form.consumptionType === val
+                                ? val === 'savings_transfer'
+                                  ? 'bg-teal-500 text-white border-teal-500'
+                                  : val === 'card_payment'
+                                  ? 'bg-gray-500 text-white border-gray-500'
+                                  : 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1.5">미선택 시 카테고리 역할로 자동 감지됩니다.</p>
+                    </div>
+                  )}
+
                   {/* ── 적금·예금 상품 연동 섹션 ── */}
                   {formType === 'expense' && isSavingCat(form.categoryId) && (
                     <div className="border border-blue-100 rounded-xl bg-blue-50/40 p-3 space-y-2.5">
@@ -1348,8 +1409,8 @@ export default function TransactionsPage() {
               <div className="flex gap-2 pt-1">
                 {isEditing && (
                   <button
-                    onClick={() => { deleteTransaction(editingId!); closeModal() }}
-                    className="px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-50 transition-colors border border-red-100">
+                    onClick={() => setDeleteConfirmId(editingId!)}
+                    className="px-4 py-3 rounded-xl text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">
                     삭제
                   </button>
                 )}
@@ -1431,6 +1492,18 @@ export default function TransactionsPage() {
 
       {showImport && (
         <TransactionImport onClose={() => setShowImport(false)} />
+      )}
+
+      {/* PRD 2.3: 삭제 확인 모달 */}
+      {deleteConfirmId !== null && (
+        <DeleteConfirmModal
+          onConfirm={() => {
+            deleteTransaction(deleteConfirmId)
+            setDeleteConfirmId(null)
+            closeModal()
+          }}
+          onCancel={() => setDeleteConfirmId(null)}
+        />
       )}
     </div>
   )

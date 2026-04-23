@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, SavingPayment, ConsumptionType } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -79,8 +79,11 @@ interface AppData {
   installments: Installment[]
   savings: Saving[]
   goals: Goal[]
-  cardBillings: CardBilling[]   // FR-009
-  mappingRules: MappingRule[]   // FR-08: 가맹점-카테고리 매핑 규칙
+  cardBillings: CardBilling[]
+  mappingRules: MappingRule[]
+  investments: Investment[]        // PRD 2.6
+  investmentTrades: InvestmentTrade[]  // PRD 2.6
+  savingPayments: SavingPayment[]  // PRD 2.2
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -96,6 +99,9 @@ const INITIAL_DATA: AppData = {
   goals: [],
   cardBillings: [],
   mappingRules: [],
+  investments: [],
+  investmentTrades: [],
+  savingPayments: [],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -129,12 +135,17 @@ interface AppContextType {
   setSavings: (savings: Saving[]) => void
   // 목표
   setGoals: (goals: Goal[]) => void
-  // 카드 청구 (FR-009)
+  // 카드 청구
   setCardBillings: (billings: CardBilling[]) => void
   // 카테고리
   setCategories: (categories: Category[]) => void
-  // 자동 분류 규칙 (FR-08)
+  // 자동 분류 규칙
   setMappingRules: (rules: MappingRule[]) => void
+  // PRD 2.6: 투자
+  setInvestments: (investments: Investment[]) => void
+  setInvestmentTrades: (trades: InvestmentTrade[]) => void
+  // PRD 2.2: 납입 이력
+  setSavingPayments: (payments: SavingPayment[]) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -189,29 +200,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return localTime >= remoteTime ? localData : remoteData
   }
 
+  function hydrateData(raw: Partial<AppData>): AppData {
+    const rawCats = (raw.categories && raw.categories.length > 0) ? raw.categories : DEFAULT_CATEGORIES
+    return {
+      ...INITIAL_DATA,
+      ...raw,
+      categories: migrateCategories(rawCats),
+      investments: raw.investments ?? [],
+      investmentTrades: raw.investmentTrades ?? [],
+      savingPayments: raw.savingPayments ?? [],
+    }
+  }
+
   // ── 최초 초기화 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cleanupFn: (() => void) | undefined
 
     async function init() {
-      // 1. localStorage 먼저 읽기
       let localData: AppData | null = null
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-          const parsed = JSON.parse(stored) as Partial<AppData>
-          const rawCats = (parsed.categories && parsed.categories.length > 0)
-            ? parsed.categories
-            : DEFAULT_CATEGORIES
-          localData = {
-            ...INITIAL_DATA,
-            ...parsed,
-            categories: migrateCategories(rawCats),
-          }
-        }
+        if (stored) localData = hydrateData(JSON.parse(stored) as Partial<AppData>)
       } catch { /* ignore */ }
 
-      // 2. Supabase auth 확인
       if (supabase) {
         try {
           const { data: { session } } = await supabase.auth.getSession()
@@ -226,21 +237,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               .single()
 
             let remoteData: AppData | null = null
-            if (remoteRow?.data) {
-              remoteData = {
-                ...INITIAL_DATA,
-                ...remoteRow.data,
-                categories: migrateCategories(
-                  remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES
-                ),
-              }
-            }
+            if (remoteRow?.data) remoteData = hydrateData(remoteRow.data as Partial<AppData>)
 
-            // ✅ 더 최신 데이터를 사용 (새로고침해도 로컬 데이터 보존)
             const winner = mergeData(localData, remoteData)
             setData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-            // Supabase에 없거나 로컬이 더 새로우면 Supabase에 즉시 동기화
             if (!remoteData || (localData && winner === localData)) {
               await syncToSupabase(session.user.id, winner)
             }
@@ -248,7 +249,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (localData) setData(localData)
           }
 
-          // auth 상태 변화 구독
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             setUser(session?.user ?? null)
             userRef.current = session?.user ?? null
@@ -257,7 +257,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               setData(INITIAL_DATA)
               localStorage.removeItem(STORAGE_KEY)
             }
-            // TOKEN_REFRESHED는 데이터를 덮어쓰지 않음 (세션만 갱신)
             if (event === 'SIGNED_IN' && session?.user) {
               const { data: remoteRow } = await supabase!
                 .from('user_data')
@@ -266,21 +265,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 .single()
 
               let remoteData: AppData | null = null
-              if (remoteRow?.data) {
-                remoteData = {
-                  ...INITIAL_DATA,
-                  ...remoteRow.data,
-                  categories: migrateCategories(
-                    remoteRow.data.categories?.length > 0 ? remoteRow.data.categories : DEFAULT_CATEGORIES
-                  ),
-                }
-              }
+              if (remoteRow?.data) remoteData = hydrateData(remoteRow.data as Partial<AppData>)
 
-              // 현재 로컬 데이터와 비교해서 더 새로운 것 사용
               let currentLocal: AppData | null = null
               try {
                 const stored = localStorage.getItem(STORAGE_KEY)
-                if (stored) currentLocal = { ...INITIAL_DATA, ...JSON.parse(stored) }
+                if (stored) currentLocal = hydrateData(JSON.parse(stored) as Partial<AppData>)
               } catch { /* ignore */ }
 
               const winner = mergeData(currentLocal, remoteData)
@@ -297,7 +287,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           cleanupFn = () => subscription.unsubscribe()
         } catch { /* ignore */ }
       } else {
-        // Supabase 미설정: localStorage만 사용
         if (localData) setData(localData)
       }
 
@@ -310,7 +299,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false)
     })
 
-    // pagehide: 탭 닫거나 새로고침할 때 pending 타이머를 즉시 실행
     const handlePageHide = () => {
       if (syncTimerRef.current) {
         clearTimeout(syncTimerRef.current)
@@ -318,8 +306,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           const stored = localStorage.getItem(STORAGE_KEY)
           if (stored && userRef.current) {
-            const data = JSON.parse(stored) as AppData
-            syncToSupabase(userRef.current.id, data)
+            const d = JSON.parse(stored) as AppData
+            syncToSupabase(userRef.current.id, d)
           }
         } catch { /* ignore */ }
       }
@@ -419,6 +407,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, mappingRules, lastModified: now() }))
   }, [update])
 
+  const setInvestments = useCallback((investments: Investment[]) => {
+    update(d => ({ ...d, investments, lastModified: now() }))
+  }, [update])
+
+  const setInvestmentTrades = useCallback((investmentTrades: InvestmentTrade[]) => {
+    update(d => ({ ...d, investmentTrades, lastModified: now() }))
+  }, [update])
+
+  const setSavingPayments = useCallback((savingPayments: SavingPayment[]) => {
+    update(d => ({ ...d, savingPayments, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -454,6 +454,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCardBillings,
       setCategories,
       setMappingRules,
+      setInvestments,
+      setInvestmentTrades,
+      setSavingPayments,
       completeSetup,
       resetAll,
     }}>
@@ -468,42 +471,47 @@ export function useApp() {
   return ctx
 }
 
+// ── PRD 2.1: 실소비 필터링 헬퍼 ────────────────────────────────────────────────
+export function getConsumptionType(tx: Transaction, categories: Category[]): 'normal' | 'savings_transfer' | 'card_payment' {
+  // 명시적으로 지정된 경우 우선
+  if (tx.consumptionType) return tx.consumptionType
+  const cat = categories.find(c => c.id === tx.categoryId)
+  if (!cat) return 'normal'
+  if (cat.role === 'card_payment') return 'card_payment'
+  if (cat.role === 'savings') return 'savings_transfer'
+  const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+  if (parent?.role === 'savings') return 'savings_transfer'
+  if (cat.savingId) return 'savings_transfer'
+  return 'normal'
+}
+
+export function isRealConsumption(tx: Transaction, categories: Category[]): boolean {
+  if (tx.type !== 'expense') return false
+  return getConsumptionType(tx, categories) === 'normal'
+}
+
 // 편의 함수
 export function getMonthlyStats(transactions: Transaction[], month: string) {
   const txs = transactions.filter(t => t.date.startsWith(month))
   const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  // 카드 환급은 예산에 반영 안 함 (통장 환급만 차감)
   const refund  = txs.filter(t => t.type === 'refund' && t.paymentMethod !== 'card').reduce((s, t) => s + t.amount, 0)
   const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  const netExpense = Math.max(0, expense - refund)   // 환급 차감 후 실지출
+  const netExpense = Math.max(0, expense - refund)
   return { income, expense: netExpense, refund, balance: income - netExpense }
 }
 
-/**
- * 계좌의 실시간 잔액을 계산합니다.
- * 기초잔액 (account.balance) + 수입 - 통장결제 지출 + 이체 수신 - 이체 송신
- *
- * account.balance 는 사용자가 수동으로 설정한 기준일 잔액이며,
- * 기록된 모든 거래가 자동으로 반영됩니다.
- */
 export function computeAccountBalance(
   accountId: string,
   baseBalance: number,
   transactions: Transaction[]
 ): number {
   return transactions.reduce((bal, tx) => {
-    if (tx.type === 'income' && tx.accountId === accountId) {
-      return bal + tx.amount
-    }
-    if (tx.type === 'refund' && tx.paymentMethod !== 'card' && tx.accountId === accountId) {
-      return bal + tx.amount   // 통장 환급 = 통장 입금 (카드 환급은 잔액 미반영)
-    }
-    if (tx.type === 'expense' && tx.accountId === accountId && tx.paymentMethod === 'account') {
-      return bal - tx.amount
-    }
+    if (tx.type === 'income' && tx.accountId === accountId) return bal + tx.amount
+    if (tx.type === 'refund' && tx.paymentMethod !== 'card' && tx.accountId === accountId) return bal + tx.amount
+    if (tx.type === 'expense' && tx.accountId === accountId && tx.paymentMethod === 'account') return bal - tx.amount
     if (tx.type === 'transfer') {
-      if (tx.accountId === accountId)   return bal - tx.amount   // 보낸 계좌
-      if (tx.toAccountId === accountId) return bal + tx.amount   // 받은 계좌
+      if (tx.accountId === accountId)   return bal - tx.amount
+      if (tx.toAccountId === accountId) return bal + tx.amount
     }
     return bal
   }, baseBalance)
@@ -511,13 +519,20 @@ export function computeAccountBalance(
 
 export function getCategoryExpenses(transactions: Transaction[], month: string) {
   const map: Record<string, number> = {}
-  // 카드 환급은 카테고리 차감 안 함 (통장 환급만 차감)
   transactions.filter(t => t.date.startsWith(month) && (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card')))
     .forEach(t => {
       const delta = t.type === 'refund' ? -t.amount : t.amount
       map[t.categoryId] = (map[t.categoryId] || 0) + delta
     })
-  // 음수 방지
   Object.keys(map).forEach(k => { if (map[k] < 0) map[k] = 0 })
+  return map
+}
+
+// PRD 2.1: 실소비만 집계하는 카테고리 지출 (카드대금·적금이체 제외)
+export function getRealCategoryExpenses(transactions: Transaction[], categories: Category[], month: string) {
+  const map: Record<string, number> = {}
+  transactions
+    .filter(t => t.date.startsWith(month) && t.type === 'expense' && isRealConsumption(t, categories))
+    .forEach(t => { map[t.categoryId] = (map[t.categoryId] || 0) + t.amount })
   return map
 }

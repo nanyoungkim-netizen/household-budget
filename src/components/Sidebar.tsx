@@ -11,6 +11,7 @@ const navItems = [
   { href: '/statistics', icon: '📈', label: '통계 & 차트' },
   { href: '/savings', icon: '💰', label: '적금·예금' },
   { href: '/goals', icon: '🎯', label: '재무 목표' },
+  { href: '/investments', icon: '📈', label: '투자 내역' },
   { href: '/history', icon: '📚', label: '이전 가계부' },
   { href: '/settings', icon: '⚙️', label: '기초 설정' },
 ]

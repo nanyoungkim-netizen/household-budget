@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { useApp } from '@/lib/AppContext'
-import { Saving } from '@/types'
+import { Saving, SavingPaymentCycle } from '@/types'
+import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
@@ -78,6 +79,13 @@ const EMPTY_FORM = {
   monthlyAmount: '', interestRate: '', startDate: '', maturityDate: '', currentAmount: '',
   interestType: 'simple' as 'simple' | 'compound',
   taxType: 'general' as TaxType,
+  // PRD 2.2: 납입 주기
+  paymentCycle: 'monthly' as SavingPaymentCycle,
+  paymentDay: 25,
+  paymentWeekday: 1,
+  paymentAmount: '',
+  targetAmount: '',
+  skipWeekends: false,
 }
 
 function isFormEmpty(form: typeof EMPTY_FORM) {
@@ -102,6 +110,7 @@ export default function SavingsPage() {
   const [form, setForm]     = useState(EMPTY_FORM)
   const [pendingTab, setPendingTab] = useState<SavingFormType | null>(null)
   const [expandedSavingId, setExpandedSavingId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   // ── D-day ──────────────────────────────────────────────────────────────────
   function getDday(d: string) {
@@ -155,6 +164,12 @@ export default function SavingsPage() {
       currentAmount: s.currentAmount ? fmtInput(String(s.currentAmount)) : '',
       interestType:  s.interestType ?? 'simple',
       taxType:       (s.taxType as TaxType) ?? 'general',
+      paymentCycle:  s.paymentCycle ?? 'monthly',
+      paymentDay:    s.paymentDay ?? 25,
+      paymentWeekday: s.paymentWeekday ?? 1,
+      paymentAmount:  s.paymentAmount ? fmtInput(String(s.paymentAmount)) : '',
+      targetAmount:   s.targetAmount ? fmtInput(String(s.targetAmount)) : '',
+      skipWeekends:   s.skipWeekends ?? false,
     })
     setShowModal(true)
   }
@@ -178,13 +193,24 @@ export default function SavingsPage() {
       interestType:   form.interestType,
       taxType:        form.taxType,
       accountNumber:  form.accountNumber || undefined,
+      // PRD 2.2: 납입 주기
+      paymentCycle:   form.paymentCycle,
+      paymentDay:     form.paymentCycle === 'monthly' ? form.paymentDay : undefined,
+      paymentWeekday: form.paymentCycle === 'weekly'  ? form.paymentWeekday : undefined,
+      paymentAmount:  parseAmt(form.paymentAmount) || undefined,
+      targetAmount:   parseAmt(form.targetAmount) || undefined,
+      skipWeekends:   form.paymentCycle === 'daily' ? form.skipWeekends : undefined,
     }
     if (editId) setSavings(savings.map(s => s.id === editId ? saving : s))
     else        setSavings([...savings, saving])
     setShowModal(false); setEditId(null); setForm(EMPTY_FORM)
   }
 
-  function handleDelete(id: string) { setSavings(savings.filter(s => s.id !== id)) }
+  function handleDelete(id: string) {
+    setSavings(savings.filter(s => s.id !== id))
+    setDeleteConfirmId(null)
+    setShowModal(false)
+  }
 
   function moveItem(id: string, dir: -1 | 1) {
     const idx = savings.findIndex(s => s.id === id)
@@ -369,7 +395,7 @@ export default function SavingsPage() {
                           className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
                       </div>
                       <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600 ml-1">수정</button>
-                      <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                      <button onClick={() => setDeleteConfirmId(s.id)} className="text-xs text-red-500 hover:text-red-700 ml-1">삭제</button>
                     </div>
                   </div>
 
@@ -525,7 +551,7 @@ export default function SavingsPage() {
                           className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
                       </div>
                       <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600 ml-1">수정</button>
-                      <button onClick={() => handleDelete(s.id)} className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                      <button onClick={() => setDeleteConfirmId(s.id)} className="text-xs text-red-500 hover:text-red-700 ml-1">삭제</button>
                     </div>
                   </div>
 
@@ -709,6 +735,62 @@ export default function SavingsPage() {
                 </div>
               )}
 
+              {/* PRD 2.2: 납입 주기 관리 (적금만) */}
+              {form.type === 'saving' && (
+                <div className="border border-blue-100 rounded-xl bg-blue-50/40 p-3 space-y-2.5">
+                  <div className="text-xs font-semibold text-blue-700">🗓️ 납입 주기 설정</div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {([['daily','일납'],['weekly','주납'],['monthly','월납'],['free','자유납입']] as const).map(([cycle, label]) => (
+                      <button key={cycle} type="button"
+                        onClick={() => setForm(f => ({ ...f, paymentCycle: cycle }))}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${form.paymentCycle === cycle ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {form.paymentCycle === 'monthly' && (
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">매월 납입일 (1~31일)</label>
+                      <input type="number" min={1} max={31} value={form.paymentDay}
+                        onChange={e => setForm(f => ({ ...f, paymentDay: Number(e.target.value) }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <p className="text-xs text-gray-400 mt-1">해당 월에 날짜가 없으면 말일로 자동 처리됩니다.</p>
+                    </div>
+                  )}
+                  {form.paymentCycle === 'weekly' && (
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">매주 납입 요일</label>
+                      <div className="flex gap-1.5">
+                        {['일','월','화','수','목','금','토'].map((d, i) => (
+                          <button key={i} type="button"
+                            onClick={() => setForm(f => ({ ...f, paymentWeekday: i }))}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${form.paymentWeekday === i ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {form.paymentCycle === 'daily' && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={form.skipWeekends}
+                        onChange={e => setForm(f => ({ ...f, skipWeekends: e.target.checked }))}
+                        className="w-4 h-4 rounded" />
+                      <span className="text-xs text-gray-600">주말 납입 제외</span>
+                    </label>
+                  )}
+                  {form.paymentCycle !== 'free' && (
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">회차당 납입 금액</label>
+                      <input type="text" inputMode="numeric" placeholder="0원"
+                        value={form.paymentAmount}
+                        onChange={e => setForm(f => ({ ...f, paymentAmount: fmtInput(e.target.value) }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* 실시간 계산 결과 */}
               {calcResult && (
                 <div className="bg-blue-50 rounded-xl p-4 space-y-2">
@@ -741,13 +823,28 @@ export default function SavingsPage() {
                 </div>
               )}
 
-              <button onClick={handleSave}
-                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">
-                {editId ? '저장하기' : '추가하기'}
-              </button>
+              <div className="flex gap-2">
+                {editId && (
+                  <button onClick={() => setDeleteConfirmId(editId)}
+                    className="px-4 py-3 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors">
+                    삭제
+                  </button>
+                )}
+                <button onClick={handleSave}
+                  className="flex-1 bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">
+                  {editId ? '저장하기' : '추가하기'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {deleteConfirmId && (
+        <DeleteConfirmModal
+          onConfirm={() => handleDelete(deleteConfirmId)}
+          onCancel={() => setDeleteConfirmId(null)}
+        />
       )}
     </div>
   )
