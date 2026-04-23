@@ -242,6 +242,8 @@ export default function TransactionsPage() {
     setSavingLinks([])
     setSavingSearch('')
     setAccountSearch('')
+    setCatSearch('')
+    setCatModalParent('')
   }
 
   // ── 적금 빠른 추가 ──────────────────────────────────────────────────────────
@@ -357,8 +359,9 @@ export default function TransactionsPage() {
 
   function switchFormType(t: TxFormType) {
     setFormType(t)
+    setCatSearch('')
+    setCatModalParent('')
     if (t === 'refund') {
-      // 환급은 지출 카테고리를 사용
       setForm(f => ({
         ...f,
         categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || ''
@@ -390,13 +393,26 @@ export default function TransactionsPage() {
     : categories.filter(c => c.type === formType && c.parentId !== null)
   const isEditing = !!editingId
 
-  // FR-004: 카테고리 드롭다운 검색
+  // 카테고리 선택 (모달)
   const [catSearch, setCatSearch] = useState('')
+  const [catModalParent, setCatModalParent] = useState('')
   // 계좌 선택 검색 (모달)
   const [accountSearch, setAccountSearch] = useState('')
-  const searchedCats = catSearch.trim()
-    ? filteredCats.filter(c => c.name.toLowerCase().includes(catSearch.trim().toLowerCase()))
-    : filteredCats
+
+  // 모달용 카테고리 필터링
+  const catParentList = (() => {
+    const type = formType === 'refund' ? 'expense' : formType
+    return categories.filter(c => c.parentId === null && c.type === type)
+  })()
+  const searchedCats = (() => {
+    if (catSearch.trim()) {
+      return filteredCats.filter(c => c.name.toLowerCase().includes(catSearch.trim().toLowerCase()))
+    }
+    if (catModalParent) {
+      return filteredCats.filter(c => c.parentId === catModalParent)
+    }
+    return filteredCats
+  })()
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -1006,56 +1022,120 @@ export default function TransactionsPage() {
                     </>
                   )}
                   {/* 카드 환급은 카테고리 불필요 (내역에만 표시) */}
-                  {!(formType === 'refund' && form.paymentMethod === 'card') && (
-                    <>
-                      {formType === 'refund' && (
-                        <label className="text-xs text-gray-500 -mb-1 block">차감할 지출 항목 선택</label>
-                      )}
-                      {/* FR-004: 검색 가능한 카테고리 선택 */}
-                      <div className={`border rounded-xl overflow-hidden ${formType === 'refund' ? 'border-purple-200' : 'border-gray-200'}`}>
-                        <div className="flex items-center px-3 py-2 border-b border-gray-100 bg-gray-50">
-                          <span className="text-gray-400 text-xs mr-2">🔍</span>
+                  {!(formType === 'refund' && form.paymentMethod === 'card') && (() => {
+                    const accentColor = formType === 'refund' ? 'purple' : formType === 'income' ? 'emerald' : 'blue'
+                    const borderCls   = formType === 'refund' ? 'border-purple-200' : 'border-gray-200'
+                    const selectedCat = categories.find(c => c.id === form.categoryId)
+
+                    function selectCat(newCatId: string) {
+                      setForm(f => ({
+                        ...f,
+                        categoryId: newCatId,
+                        billingMonth: isCardPaymentCat(newCatId) && !f.billingMonth ? prevMonthStr() : f.billingMonth,
+                      }))
+                      setCatSearch('')
+                      if (!isSavingCat(newCatId)) {
+                        setSavingLinks([])
+                      } else {
+                        const cat = categories.find(c => c.id === newCatId)
+                        if (cat?.savingId && !savingLinks.some(l => l.savingId === cat.savingId)) {
+                          const s = data.savings.find(sv => sv.id === cat.savingId)
+                          if (s) setSavingLinks([{ savingId: s.id, amount: s.monthlyAmount ? fmtInput(String(s.monthlyAmount)) : '' }])
+                        }
+                      }
+                    }
+
+                    return (
+                      <div className={`border ${borderCls} rounded-xl overflow-hidden`}>
+                        {formType === 'refund' && (
+                          <div className="px-3 pt-2.5 pb-0 text-xs text-purple-600 font-medium">차감할 지출 항목 선택</div>
+                        )}
+
+                        {/* 선택된 카테고리 표시 */}
+                        {selectedCat && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                            <span className="text-xs text-gray-400">선택됨</span>
+                            <span
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-white"
+                              style={{ backgroundColor: selectedCat.color || '#4B5563' }}
+                            >
+                              {selectedCat.icon} {selectedCat.name}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 검색 */}
+                        <div className="flex items-center px-3 py-2 border-b border-gray-100 bg-white gap-2">
+                          <span className="text-gray-400 text-xs">🔍</span>
                           <input
                             type="text"
                             value={catSearch}
-                            onChange={e => setCatSearch(e.target.value)}
+                            onChange={e => { setCatSearch(e.target.value); if (e.target.value) setCatModalParent('') }}
                             placeholder="카테고리 검색..."
-                            className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                            className="flex-1 text-xs outline-none text-gray-700 placeholder-gray-400"
                           />
-                          {catSearch && <button onClick={() => setCatSearch('')} className="text-gray-300 hover:text-gray-500 text-xs">×</button>}
-                        </div>
-                        <select value={form.categoryId}
-                          onChange={e => {
-                            const newCatId = e.target.value
-                            setForm(f => ({
-                              ...f,
-                              categoryId: newCatId,
-                              billingMonth: isCardPaymentCat(newCatId) && !f.billingMonth ? prevMonthStr() : f.billingMonth,
-                            }))
-                            setCatSearch('')
-                            if (!isSavingCat(newCatId)) {
-                              setSavingLinks([])
-                            } else {
-                              // 카테고리에 연동 상품이 설정돼 있으면 자동 선택
-                              const cat = categories.find(c => c.id === newCatId)
-                              if (cat?.savingId && !savingLinks.some(l => l.savingId === cat.savingId)) {
-                                const s = data.savings.find(sv => sv.id === cat.savingId)
-                                if (s) setSavingLinks([{ savingId: s.id, amount: s.monthlyAmount ? fmtInput(String(s.monthlyAmount)) : '' }])
-                              }
-                            }
-                          }}
-                          size={Math.min(searchedCats.length || 1, 5)}
-                          className={`w-full px-3 py-1 text-sm focus:outline-none bg-white ${
-                            formType === 'refund' ? 'focus:ring-purple-400' : 'focus:ring-blue-500'
-                          }`}>
-                          {searchedCats.length === 0
-                            ? <option disabled>일치하는 카테고리가 없습니다.</option>
-                            : searchedCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)
+                          {catSearch
+                            ? <button onClick={() => setCatSearch('')} className="text-gray-300 hover:text-gray-500 text-xs leading-none">×</button>
+                            : <span className="text-[10px] text-gray-300">입력하면 전체 검색</span>
                           }
-                        </select>
+                        </div>
+
+                        {/* 대분류 탭 (검색 중이 아닐 때) */}
+                        {!catSearch && catParentList.length > 0 && (
+                          <div className="overflow-x-auto border-b border-gray-100 bg-white">
+                            <div className="flex gap-1 px-2 py-1.5" style={{ minWidth: 'max-content' }}>
+                              <button
+                                onClick={() => setCatModalParent('')}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0 ${
+                                  !catModalParent ? `bg-${accentColor}-600 text-white` : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                                style={!catModalParent ? { backgroundColor: accentColor === 'emerald' ? '#059669' : accentColor === 'purple' ? '#9333ea' : '#2563eb' } : {}}
+                              >
+                                전체
+                              </button>
+                              {catParentList.map(p => (
+                                <button key={p.id}
+                                  onClick={() => setCatModalParent(prev => prev === p.id ? '' : p.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0 whitespace-nowrap ${
+                                    catModalParent === p.id ? 'text-white' : 'text-gray-600 hover:bg-gray-100'
+                                  }`}
+                                  style={catModalParent === p.id ? { backgroundColor: p.color || '#4B5563' } : {}}
+                                >
+                                  {p.icon} {p.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 소분류 칩 그리드 */}
+                        <div className="p-2 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto bg-white">
+                          {searchedCats.length === 0 ? (
+                            <span className="text-xs text-gray-400 py-2 px-1">일치하는 카테고리가 없습니다</span>
+                          ) : searchedCats.map(c => {
+                            const isSelected = form.categoryId === c.id
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => selectCat(c.id)}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                                  isSelected
+                                    ? 'text-white border-transparent shadow-sm ring-2 ring-offset-1'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                                }`}
+                                style={isSelected
+                                  ? { backgroundColor: c.color || '#4B5563' }
+                                  : {}}
+                              >
+                                {c.icon} {c.name}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </>
-                  )}
+                    )
+                  })()}
 
                   {/* ── 카드대금 청구 월 선택 ── */}
                   {isCardPaymentCat(form.categoryId) && (
