@@ -236,7 +236,15 @@ export default function BudgetPage() {
     setNewParent({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' })
   }
 
-  function deleteCategory(id: string) {
+  function deleteMonthBudget(id: string) {
+    // 이번 달 예산만 삭제 — 카테고리·다른달 예산은 유지
+    const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
+    const toDelete = new Set([id, ...childIds])
+    setBudgets(budgets.filter(b => !(toDelete.has(b.categoryId) && b.month === month)))
+  }
+
+  function deleteCategoryGlobal(id: string) {
+    // 카테고리 자체 + 모든 달 예산 완전 삭제
     const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
     const toDelete = new Set([id, ...childIds])
     setCategories(categories.filter(c => !toDelete.has(c.id)))
@@ -707,11 +715,35 @@ export default function BudgetPage() {
       )}
 
       {deleteCatId && (
-        <DeleteConfirmModal
-          message="카테고리를 삭제하면 하위 항목과 예산도 함께 삭제됩니다."
-          onConfirm={() => { deleteCategory(deleteCatId); setDeleteCatId(null) }}
-          onCancel={() => setDeleteCatId(null)}
-        />
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteCatId(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-base font-semibold text-gray-900 mb-2">카테고리 삭제</div>
+            <p className="text-sm text-gray-500 mb-5">
+              이번 달 예산만 삭제할 수 있습니다.<br />
+              카테고리 자체를 완전히 삭제하면 <span className="text-red-600 font-medium">모든 달의 예산과 거래 내역 분류</span>가 사라집니다.
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => { deleteMonthBudget(deleteCatId); setDeleteCatId(null) }}
+                className="w-full py-2.5 rounded-xl bg-blue-50 text-blue-600 font-medium text-sm hover:bg-blue-100 transition-colors"
+              >
+                이번 달 예산만 삭제
+              </button>
+              <button
+                onClick={() => { deleteCategoryGlobal(deleteCatId); setDeleteCatId(null) }}
+                className="w-full py-2.5 rounded-xl bg-red-50 text-red-600 font-medium text-sm hover:bg-red-100 transition-colors"
+              >
+                카테고리 완전 삭제 (전체 달 적용)
+              </button>
+              <button
+                onClick={() => setDeleteCatId(null)}
+                className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-500 font-medium text-sm hover:bg-gray-200 transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
