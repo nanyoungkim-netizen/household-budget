@@ -92,8 +92,20 @@ export default function Dashboard() {
   const periodTxs = transactions.filter(t => t.date.startsWith(prefix))
   // 카드대금 납부 거래는 이중계산이므로 요약에서 제외
   const isCardPayment = (t: Transaction) => categories.find(c => c.id === t.categoryId)?.role === 'card_payment'
+  const isSavingTx = (t: Transaction) => {
+    const cat = categories.find(c => c.id === t.categoryId)
+    if (!cat) return false
+    if (cat.role === 'savings') return true
+    if ((cat as { savingId?: string }).savingId) return true
+    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+    return parent?.role === 'savings' === true
+  }
   const periodTxsForStats = periodTxs.filter(t => !isCardPayment(t))
   const stats       = calcStats(periodTxsForStats)
+  // 지출 구성 분리
+  const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && isSavingTx(t)).reduce((s, t) => s + t.amount, 0)
+  const cardPayAmt  = periodTxs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
+  const realConsumption = Math.max(0, stats.expense - savingAmt)
   const catExpenses = getCategoryExpenses(transactions, viewMode === 'day' ? selectedDay : selectedMonth)
 
   // 거래 목록 (최신순, 최대 8개)
@@ -265,6 +277,25 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* 지출 구성: 실소비 / 저축 / 카드대금 */}
+        {(savingAmt > 0 || cardPayAmt > 0) && (
+          <div className="mt-3 pt-3 border-t border-white/20">
+            <div className="text-[10px] opacity-60 mb-2">지출 구성</div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: '실소비',  value: realConsumption, color: 'bg-red-300/30' },
+                { label: '저축',    value: savingAmt,       color: 'bg-blue-300/30' },
+                { label: '카드대금', value: cardPayAmt,     color: 'bg-amber-300/30' },
+              ].map(item => (
+                <div key={item.label} className={`${item.color} rounded-xl p-2 text-center`}>
+                  <div className="text-[10px] opacity-70 mb-0.5">{item.label}</div>
+                  <div className="text-xs font-bold tabular-nums leading-tight">{fmtShort(item.value)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* FR-015: 총 자산 라벨 — 날짜 선택 시 "[선택날짜] 기준 자산" */}
         <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between">
           <div className="text-xs opacity-70">
@@ -342,33 +373,34 @@ export default function Dashboard() {
           return { card, unpaid, paid, hasAny: Object.keys(byMonth).length > 0 }
         }).filter(c => c.hasAny)
         if (cardBalances.length === 0) return null
+        const totalUnpaid = cardBalances.reduce((s, c) => s + c.unpaid, 0)
+        const allPaid     = cardBalances.every(c => c.unpaid === 0)
         return (
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm">💳</span>
-                <span className="text-xs font-bold text-gray-500">카드 사용 현황</span>
-              </div>
-              <Link href="/transactions" className="text-xs text-blue-600">자세히 →</Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {cardBalances.map(({ card, unpaid, paid }) => (
-                <div key={card.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${card.color}` }}>
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{card.bank}</div>
-                  <div className="text-xs text-gray-700 font-medium mb-2">{card.name}</div>
-                  {unpaid > 0 ? (
-                    <>
-                      <div className="text-xl font-bold text-red-500 tabular-nums">-{fmtKRW(unpaid)}</div>
-                      <div className="text-xs text-gray-400 mt-1">미납 잔액</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-xl font-bold text-gray-300 tabular-nums">0원</div>
-                      <div className="text-xs text-emerald-600 mt-1 font-medium">✓ 납부완료</div>
-                    </>
-                  )}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">💳</span>
+                  <div>
+                    <div className="text-xs font-bold text-gray-700">카드 사용 현황</div>
+                    <div className="text-[11px] text-gray-400">{cardBalances.length}개 카드</div>
+                  </div>
                 </div>
-              ))}
+                <div className="flex items-center gap-3">
+                  {allPaid ? (
+                    <div className="text-right">
+                      <div className="text-base font-bold text-gray-300 tabular-nums">0원</div>
+                      <div className="text-xs text-emerald-600 font-medium">✓ 전체 납부완료</div>
+                    </div>
+                  ) : (
+                    <div className="text-right">
+                      <div className="text-base font-bold text-red-500 tabular-nums">-{fmtKRW(totalUnpaid)}</div>
+                      <div className="text-xs text-gray-400">미납 합계</div>
+                    </div>
+                  )}
+                  <Link href="/transactions" className="text-xs text-blue-600 whitespace-nowrap">자세히 →</Link>
+                </div>
+              </div>
             </div>
           </div>
         )

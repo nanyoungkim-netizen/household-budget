@@ -95,11 +95,12 @@ export default function StatisticsPage() {
     const refund  = txs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
     // 카드대금 납부는 이중계산이므로 지출에서 제외
     const expense = txs.filter(t => t.type === 'expense' && !isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
-    const savingAmt = txs.filter(t => t.type === 'expense' && !isCardPayment(t) && isSaving(t)).reduce((s, t) => s + t.amount, 0)
+    const savingAmt  = txs.filter(t => t.type === 'expense' && !isCardPayment(t) && isSaving(t)).reduce((s, t) => s + t.amount, 0)
+    const cardPayAmt = txs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
     const realConsumption = Math.max(0, expense - savingAmt - refund)
     const savingRate      = income > 0 ? (savingAmt / income) * 100 : 0
     const netIncome       = income - realConsumption - savingAmt
-    return { income, expense, savingAmt, realConsumption, savingRate, netIncome, refund }
+    return { income, expense, savingAmt, cardPayAmt, realConsumption, savingRate, netIncome, refund }
   }, [transactions, isCardPayment, isSaving])
 
   // ── KPI (이번달·전월) ───────────────────────────────────────────────────
@@ -109,6 +110,12 @@ export default function StatisticsPage() {
   const consumptionDiff = thisStats.realConsumption - lastStats.realConsumption
   const savingRateDiff  = thisStats.savingRate - lastStats.savingRate
 
+  // 이달 지출 구성 비율
+  const totalOutflow = thisStats.realConsumption + thisStats.savingAmt + thisStats.cardPayAmt
+  const consumptionPct = totalOutflow > 0 ? (thisStats.realConsumption / totalOutflow) * 100 : 0
+  const savingPct      = totalOutflow > 0 ? (thisStats.savingAmt / totalOutflow) * 100 : 0
+  const cardPayPct     = totalOutflow > 0 ? (thisStats.cardPayAmt / totalOutflow) * 100 : 0
+
   // ── 추이 탭: 최근 6개월 ─────────────────────────────────────────────────
   const trendData = useMemo(() => Array.from({ length: 6 }, (_, i) => {
     const m = addMonths(currentMonth, i - 5)
@@ -116,7 +123,7 @@ export default function StatisticsPage() {
     const mo = parseInt(m.split('-')[1])
     return {
       label: `${mo}월`, 수입: s.income, 실소비: s.realConsumption,
-      저축: s.savingAmt, 순수입: s.netIncome,
+      저축: s.savingAmt, 카드대금: s.cardPayAmt, 순수입: s.netIncome,
       저축률: Math.round(s.savingRate),
     }
   }), [getMonthStats])
@@ -230,7 +237,7 @@ export default function StatisticsPage() {
     const s = getMonthStats(m)
     return {
       label: `${i + 1}월`, 수입: s.income, 실소비: s.realConsumption,
-      저축: s.savingAmt, 저축률: Math.round(s.savingRate),
+      저축: s.savingAmt, 카드대금: s.cardPayAmt, 저축률: Math.round(s.savingRate),
     }
   }), [getMonthStats, targetYear])
 
@@ -325,20 +332,51 @@ export default function StatisticsPage() {
       {/* ══ 추이 탭 ════════════════════════════════════════════════════════ */}
       {hasData && tab === 'trend' && (
         <div className="space-y-4">
-          {/* 수입/실소비/저축 */}
+          {/* 이달 지출 구성 */}
+          {totalOutflow > 0 && (
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="font-semibold text-sm text-gray-900 mb-1">이달 지출 구성</div>
+              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 저축 · 카드대금으로 분리</div>
+              {/* 스택 바 */}
+              <div className="flex h-5 rounded-full overflow-hidden mb-3">
+                {consumptionPct > 0 && <div style={{ width: `${consumptionPct}%`, backgroundColor: '#FF6B6B' }} />}
+                {savingPct > 0      && <div style={{ width: `${savingPct}%`,      backgroundColor: '#0064FF' }} />}
+                {cardPayPct > 0     && <div style={{ width: `${cardPayPct}%`,     backgroundColor: '#F59E0B' }} />}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: '실소비', color: '#FF6B6B', value: thisStats.realConsumption, pct: consumptionPct },
+                  { label: '저축',   color: '#0064FF', value: thisStats.savingAmt,       pct: savingPct },
+                  { label: '카드대금', color: '#F59E0B', value: thisStats.cardPayAmt,    pct: cardPayPct },
+                ].map(item => (
+                  <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: item.color + '14' }}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-xs text-gray-500">{item.label}</span>
+                    </div>
+                    <div className="text-sm font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(item.value)}</div>
+                    <div className="text-xs mt-0.5" style={{ color: item.color }}>{item.pct.toFixed(1)}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 수입/실소비/저축/카드대금 */}
           <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="font-semibold text-sm text-gray-900 mb-0.5">최근 6개월 수입 · 실소비 · 저축</div>
-            <div className="text-xs text-gray-400 mb-4">카드대금 납부는 이중계산으로 지출에서 제외됩니다</div>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={trendData} barGap={3} barCategoryGap="30%">
+            <div className="font-semibold text-sm text-gray-900 mb-0.5">최근 6개월 수입 · 실소비 · 저축 · 카드대금</div>
+            <div className="text-xs text-gray-400 mb-4">카드대금은 지출과 별도로 분리해서 표시합니다</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={trendData} barGap={2} barCategoryGap="28%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<KRWTooltip />} />
                 <Legend />
-                <Bar dataKey="수입"   fill="#00B493" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="실소비" fill="#FF6B6B" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="저축"   fill="#0064FF" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="수입"    fill="#00B493" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="실소비"  fill="#FF6B6B" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="저축"    fill="#0064FF" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="카드대금" fill="#F59E0B" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -624,17 +662,18 @@ export default function StatisticsPage() {
 
           {/* 연간 수입/실소비/저축 */}
           <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="font-semibold text-sm text-gray-900 mb-4">{targetYear}년 월별 수입 · 실소비 · 저축</div>
+            <div className="font-semibold text-sm text-gray-900 mb-4">{targetYear}년 월별 수입 · 실소비 · 저축 · 카드대금</div>
             <ResponsiveContainer width="100%" height={270}>
-              <BarChart data={annualData} barGap={3} barCategoryGap="25%">
+              <BarChart data={annualData} barGap={2} barCategoryGap="22%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<KRWTooltip />} />
                 <Legend />
-                <Bar dataKey="수입"   fill="#00B493" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="실소비" fill="#FF6B6B" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="저축"   fill="#0064FF" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="수입"    fill="#00B493" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="실소비"  fill="#FF6B6B" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="저축"    fill="#0064FF" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="카드대금" fill="#F59E0B" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
