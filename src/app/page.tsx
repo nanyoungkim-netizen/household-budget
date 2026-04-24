@@ -236,6 +236,7 @@ export default function Dashboard() {
 
     // 적금·예금 만기 알림 (30일 이내)
     savings.forEach(s => {
+      if (s.type === 'subscription') return  // 청약은 만기 없음
       const maturity = new Date(s.maturityDate + 'T00:00:00')
       const daysUntil = Math.ceil((maturity.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       if (daysUntil < 0 || daysUntil > 30) return
