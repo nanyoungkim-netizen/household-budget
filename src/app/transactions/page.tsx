@@ -71,7 +71,6 @@ export default function TransactionsPage() {
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
-  const [catChipSearch, setCatChipSearch] = useState('')
   const [catParentFilter, setCatParentFilter] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
   const [accountChipSearch, setAccountChipSearch] = useState('')
@@ -595,100 +594,58 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* 카테고리 필터 (대분류 탭 + 소분류 칩) */}
+      {/* 카테고리 필터 */}
       {(() => {
-        const leafCats = categories.filter(c => c.parentId != null)
-        if (leafCats.length === 0) return null
         const parentCats = categories.filter(c => c.parentId === null)
-        const preFiltered = catParentFilter
-          ? leafCats.filter(c => c.parentId === catParentFilter)
-          : leafCats
-        const visibleCats = catChipSearch.trim()
-          ? preFiltered.filter(c => c.name.toLowerCase().includes(catChipSearch.trim().toLowerCase()))
-          : preFiltered
+        const leafCats   = categories.filter(c => c.parentId != null)
+        if (leafCats.length === 0) return null
+        const subCats = catParentFilter ? leafCats.filter(c => c.parentId === catParentFilter) : []
+        const hasFilter = filterCategories.length > 0 || !!catParentFilter
         return (
-          <div className="mb-3 bg-white rounded-2xl shadow-sm p-3">
-            {/* 대분류 탭 */}
-            <div className="overflow-x-auto mb-2">
-              <div className="flex gap-1.5 pb-0.5" style={{ minWidth: 'max-content' }}>
+          <div className="mb-3 bg-white rounded-2xl shadow-sm overflow-hidden">
+            {/* 대분류 행 */}
+            <div className="overflow-x-auto">
+              <div className="flex gap-1 p-2" style={{ minWidth: 'max-content' }}>
                 <button
-                  onClick={() => { setCatParentFilter(''); setCatChipSearch('') }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex-shrink-0 transition-all ${
-                    !catParentFilter ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                  onClick={() => { setCatParentFilter(''); setFilterCategories([]) }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${
+                    !hasFilter ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
                   }`}>
                   전체
                 </button>
-                {parentCats.map(p => (
-                  <button key={p.id}
-                    onClick={() => { setCatParentFilter(prev => prev === p.id ? '' : p.id); setCatChipSearch('') }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex-shrink-0 transition-all ${
-                      catParentFilter === p.id ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-                    }`}
-                    style={catParentFilter === p.id ? { backgroundColor: p.color || '#4B5563', borderColor: p.color || '#4B5563' } : {}}>
-                    {p.icon} {p.name}
-                    <span className="ml-1 opacity-50 text-[10px]">{leafCats.filter(c => c.parentId === p.id).length}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* 소분류 검색 */}
-            <div className="relative mb-2">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
-              <input
-                type="text"
-                value={catChipSearch}
-                onChange={e => setCatChipSearch(e.target.value)}
-                placeholder="소분류 검색..."
-                className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {catChipSearch && (
-                <button onClick={() => setCatChipSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs">×</button>
-              )}
-            </div>
-            {/* 소분류 칩 */}
-            <div className="overflow-x-auto">
-              <div className="flex gap-1.5 pb-0.5" style={{ minWidth: 'max-content' }}>
-                {!catChipSearch.trim() && !catParentFilter && (
-                  <button
-                    onClick={() => setFilterCategories([])}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
-                      filterCategories.length === 0 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'
-                    }`}>
-                    전체
-                  </button>
-                )}
-                {visibleCats.length === 0 && (
-                  <span className="text-xs text-gray-400 py-1.5 px-2">일치하는 카테고리 없음</span>
-                )}
-                {visibleCats.map(cat => (
-                  <button key={cat.id}
-                    onClick={() => { setFilterCategories(prev =>
-                      prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
-                    ); setCatChipSearch('') }}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs border transition-all flex-shrink-0 ${
-                      filterCategories.includes(cat.id) ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-                    }`}
-                    style={filterCategories.includes(cat.id) ? { backgroundColor: cat.color || '#4B5563' } : {}}>
-                    {cat.icon} {cat.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* 선택된 카테고리 */}
-            {filterCategories.length > 0 && !catChipSearch && (
-              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs text-gray-400">선택:</span>
-                {filterCategories.map(id => {
-                  const cat = categories.find(c => c.id === id)
-                  return cat ? (
-                    <span key={id} className="text-xs text-white px-2 py-0.5 rounded-lg font-medium flex items-center gap-1"
-                      style={{ backgroundColor: cat.color || '#4B5563' }}>
-                      {cat.icon} {cat.name}
-                      <button onClick={() => setFilterCategories(prev => prev.filter(c => c !== id))} className="opacity-70 hover:opacity-100 leading-none">×</button>
-                    </span>
-                  ) : null
+                {parentCats.map(p => {
+                  const isActive = catParentFilter === p.id
+                  return (
+                    <button key={p.id}
+                      onClick={() => { setCatParentFilter(prev => prev === p.id ? '' : p.id); setFilterCategories([]) }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                      style={isActive ? { backgroundColor: p.color || '#4B5563' } : {}}>
+                      {p.icon} {p.name}
+                    </button>
+                  )
                 })}
-                <button onClick={() => setFilterCategories([])} className="text-xs text-gray-400 hover:text-gray-600 underline ml-1">전체 해제</button>
+              </div>
+            </div>
+            {/* 소분류 행 — 대분류 선택 시만 표시 */}
+            {catParentFilter && subCats.length > 0 && (
+              <div className="overflow-x-auto border-t border-gray-100">
+                <div className="flex gap-1 p-2" style={{ minWidth: 'max-content' }}>
+                  {subCats.map(cat => {
+                    const isSelected = filterCategories.includes(cat.id)
+                    return (
+                      <button key={cat.id}
+                        onClick={() => setFilterCategories(prev =>
+                          prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
+                        )}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 border ${
+                          isSelected ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                        }`}
+                        style={isSelected ? { backgroundColor: cat.color || '#4B5563' } : {}}>
+                        {cat.icon} {cat.name}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>
