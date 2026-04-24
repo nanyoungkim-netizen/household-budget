@@ -135,8 +135,31 @@ export default function StatisticsPage() {
     }
   }), [getMonthStats])
 
+  // ── 분석 기간 계산 ──────────────────────────────────────────────────────
+  const analysisMonths = useMemo(() => {
+    if (periodMode === 'single') return [statMonth]
+    const months: string[] = []
+    let m = rangeStart
+    while (m <= rangeEnd) { months.push(m); m = addMonths(m, 1) }
+    return months
+  }, [periodMode, statMonth, rangeStart, rangeEnd])
+
+  const inAnalysis = useCallback((dateStr: string) =>
+    analysisMonths.some(m => dateStr.startsWith(m))
+  , [analysisMonths])
+
+  const periodLabel = useMemo(() => {
+    if (periodMode === 'single') {
+      const [y, mo] = statMonth.split('-')
+      return `${y}년 ${parseInt(mo)}월`
+    }
+    const [sy, smo] = rangeStart.split('-')
+    const [ey, emo] = rangeEnd.split('-')
+    return `${sy}년 ${parseInt(smo)}월 ~ ${ey}년 ${parseInt(emo)}월`
+  }, [periodMode, statMonth, rangeStart, rangeEnd])
+
   // ── 카테고리 탭 ─────────────────────────────────────────────────────────
-  const prevCatMonth = addMonths(statMonth, -1)
+  const prevCatMonth = addMonths(analysisMonths[0], -1)
 
   const catItems = useMemo(() =>
     categories
@@ -145,7 +168,7 @@ export default function StatisticsPage() {
       .map(c => ({
         id: c.id, name: c.name, icon: c.icon, color: c.color,
         value: Math.max(0, transactions
-          .filter(t => t.date.startsWith(statMonth) && t.categoryId === c.id)
+          .filter(t => inAnalysis(t.date) && t.categoryId === c.id)
           .reduce((s, t) => {
             if (t.type === 'expense' && catTab === 'expense') return s + t.amount
             if (t.type === 'refund'  && catTab === 'expense') return s - t.amount
@@ -155,7 +178,7 @@ export default function StatisticsPage() {
       }))
       .filter(c => c.value > 0)
       .sort((a, b) => b.value - a.value)
-  , [transactions, categories, catTab, statMonth])
+  , [transactions, categories, catTab, inAnalysis])
 
   const totalCatAmt = catItems.reduce((s, c) => s + c.value, 0)
 
@@ -173,7 +196,8 @@ export default function StatisticsPage() {
   const top5cats = catItems.slice(0, 5)
 
   const catTrendData = useMemo(() => Array.from({ length: 6 }, (_, i) => {
-    const m  = addMonths(statMonth, i - 5)
+    const base = periodMode === 'single' ? statMonth : rangeEnd
+    const m  = addMonths(base, i - 5)
     const mo = parseInt(m.split('-')[1])
     const entry: Record<string, string | number> = { label: `${mo}월` }
     top5cats.forEach(cat => {
@@ -182,10 +206,11 @@ export default function StatisticsPage() {
         .reduce((s, t) => s + t.amount, 0)
     })
     return entry
-  }), [transactions, top5cats, statMonth, catTab])
+  }), [transactions, top5cats, statMonth, rangeEnd, periodMode, catTab])
 
   // ── 지출분석 탭 ─────────────────────────────────────────────────────────
-  const analysisMonth = statMonth
+  // 지출분석(일별/요일별)은 단일 월 기준 — range 선택 시 마지막 달 기준
+  const analysisMonth = periodMode === 'single' ? statMonth : rangeEnd
 
   const dailyData = useMemo(() => {
     const daysInMonth = new Date(
@@ -271,16 +296,20 @@ export default function StatisticsPage() {
         {/* 월 네비게이터 */}
         <div className="flex items-center justify-between mb-3">
           <button
-            onClick={() => { setStatMonth(addMonths(statMonth, -1)); setPeriodMode('single'); setShowCustomRange(false) }}
+            onClick={() => {
+              if (periodMode === 'single') { setStatMonth(addMonths(statMonth, -1)); setShowCustomRange(false) }
+              else { setRangeStart(addMonths(rangeStart, -1)); setRangeEnd(addMonths(rangeEnd, -1)) }
+            }}
             className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-500 text-lg transition-colors">
             ‹
           </button>
-          <span className="text-sm font-bold text-gray-900">
-            {statMonth.split('-')[0]}년 {parseInt(statMonth.split('-')[1])}월
-          </span>
+          <span className="text-sm font-bold text-gray-900">{periodLabel}</span>
           <button
-            onClick={() => { setStatMonth(addMonths(statMonth, 1)); setPeriodMode('single'); setShowCustomRange(false) }}
-            disabled={statMonth >= currentMonth}
+            onClick={() => {
+              if (periodMode === 'single') { if (statMonth < currentMonth) setStatMonth(addMonths(statMonth, 1)); setShowCustomRange(false) }
+              else { if (rangeEnd < currentMonth) { setRangeStart(addMonths(rangeStart, 1)); setRangeEnd(addMonths(rangeEnd, 1)) } }
+            }}
+            disabled={periodMode === 'single' ? statMonth >= currentMonth : rangeEnd >= currentMonth}
             className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-500 text-lg transition-colors disabled:opacity-25">
             ›
           </button>
@@ -599,7 +628,7 @@ export default function StatisticsPage() {
               </>
             ) : (
               <div className="text-center py-10 text-gray-400 text-sm">
-                {statMonth} {catTab === 'expense' ? '지출' : '수입'} 내역이 없습니다
+                {periodLabel} {catTab === 'expense' ? '지출' : '수입'} 내역이 없습니다
               </div>
             )}
           </div>
@@ -634,8 +663,8 @@ export default function StatisticsPage() {
           {/* 기간 선택 */}
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500 font-medium">분석 기간</span>
-            <input type="month" value={statMonth} onChange={e => setStatMonth(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <span className="text-sm font-medium text-gray-700">{analysisMonth.split('-')[0]}년 {parseInt(analysisMonth.split('-')[1])}월</span>
+            {periodMode === 'range' && <span className="text-xs text-gray-400">(범위 선택 시 마지막 달 기준)</span>}
           </div>
 
           {/* 일별 소비 + 누적 */}
