@@ -588,6 +588,7 @@ export default function Dashboard() {
                               <div className="mb-2">
                                 {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
                                 <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                                {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
                               </div>
                               <div className="text-xl font-bold text-gray-900 tabular-nums">
                                 {acc.computed.toLocaleString('ko-KR')}원
@@ -625,10 +626,10 @@ export default function Dashboard() {
                 const diff = acc.computed - prevBal
                 return (
                   <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
-                    {/* FR-03: 은행명 + 계좌명 동시 표시 */}
                     <div className="mb-2">
                       {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
                       <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                      {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
                     </div>
                     <div className="text-xl font-bold text-gray-900 tabular-nums">
                       {acc.computed.toLocaleString('ko-KR')}원

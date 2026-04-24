@@ -63,6 +63,7 @@ export default function SettingsPage() {
     name: '', bank: '', color: '#0064FF', balance: '',
     assetType: 'cash' as AssetType,
     investmentSubType: '' as InvestmentSubType | '',
+    memo: '',
   })
 
   // FR-006: 잔액 검증
@@ -124,7 +125,7 @@ export default function SettingsPage() {
 
   function openAddAccount() {
     setEditAccountId(null)
-    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', assetType: 'cash', investmentSubType: '' })
+    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', assetType: 'cash', investmentSubType: '', memo: '' })
     setShowAccountModal(true)
   }
 
@@ -135,6 +136,7 @@ export default function SettingsPage() {
       balance: acc.balance === 0 ? '' : fmtInput(String(acc.balance)),
       assetType: acc.assetType ?? 'cash',
       investmentSubType: acc.investmentSubType ?? '',
+      memo: acc.memo ?? '',
     })
     setShowAccountModal(true)
   }
@@ -147,7 +149,7 @@ export default function SettingsPage() {
     if (editAccountId) {
       // 수정
       setAccounts(accounts.map(a => a.id === editAccountId
-        ? { ...a, name: accountForm.name, bank: accountForm.bank, color: accountForm.color, balance: parseAmt(accountForm.balance), assetType: accountForm.assetType, investmentSubType: invSub }
+        ? { ...a, name: accountForm.name, bank: accountForm.bank, color: accountForm.color, balance: parseAmt(accountForm.balance), assetType: accountForm.assetType, investmentSubType: invSub, memo: accountForm.memo || undefined }
         : a
       ))
     } else {
@@ -160,12 +162,13 @@ export default function SettingsPage() {
         color: accountForm.color,
         assetType: accountForm.assetType,
         investmentSubType: invSub,
+        memo: accountForm.memo || undefined,
       }
       setAccounts([...accounts, newAcc])
     }
     setShowAccountModal(false)
     setEditAccountId(null)
-    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', assetType: 'cash', investmentSubType: '' })
+    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', assetType: 'cash', investmentSubType: '', memo: '' })
   }
 
   function deleteAccount(id: string) {
@@ -819,6 +822,10 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+
+              <input type="text" placeholder="메모 (대시보드에 작게 표시)" value={accountForm.memo}
+                onChange={e => setAccountForm(f => ({ ...f, memo: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
 
               <div>
                 <div className="text-xs text-gray-400 mb-1.5">색상</div>
