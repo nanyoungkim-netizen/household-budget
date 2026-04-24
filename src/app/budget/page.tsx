@@ -331,18 +331,18 @@ export default function BudgetPage() {
       )}
 
       {/* 총계 카드 */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">총 예산</div>
-          <div className="text-base font-bold text-gray-900">{fmtKRW(totalBudget)}</div>
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-gray-500 mb-0.5">총 예산</div>
+          <div className="text-sm font-bold text-gray-900">{fmtKRW(totalBudget)}</div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">실제 지출 <span className="text-gray-300">(카드대금 제외)</span></div>
-          <div className={`text-base font-bold ${totalActual > totalBudget && totalBudget > 0 ? 'text-red-500' : 'text-gray-900'}`}>{fmtKRW(totalActual)}</div>
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-gray-500 mb-0.5">실제 지출</div>
+          <div className={`text-sm font-bold ${totalActual > totalBudget && totalBudget > 0 ? 'text-red-500' : 'text-gray-900'}`}>{fmtKRW(totalActual)}</div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">절약 가능</div>
-          <div className={`text-base font-bold ${totalBudget - totalActual >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-gray-500 mb-0.5">절약 가능</div>
+          <div className={`text-sm font-bold ${totalBudget - totalActual >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
             {totalBudget > 0 ? fmtKRW(Math.abs(totalBudget - totalActual)) : '-'}
           </div>
         </div>
@@ -350,34 +350,34 @@ export default function BudgetPage() {
 
       {/* 전체 진행바 */}
       {totalBudget > 0 && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm mb-5">
-          <div className="flex justify-between text-xs text-gray-500 mb-2">
+        <div className="bg-white rounded-xl px-4 py-2.5 shadow-sm mb-3">
+          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
             <span>전체 예산 사용률</span>
             <span>{Math.min(totalActual / totalBudget * 100, 100).toFixed(1)}%</span>
           </div>
-          <div className="bg-gray-100 rounded-full h-3">
-            <div className={`h-3 rounded-full transition-all ${totalActual > totalBudget ? 'bg-red-500' : 'bg-blue-500'}`}
+          <div className="bg-gray-100 rounded-full h-2">
+            <div className={`h-2 rounded-full transition-all ${totalActual > totalBudget ? 'bg-red-500' : 'bg-blue-500'}`}
               style={{ width: `${Math.min(totalActual / totalBudget * 100, 100)}%` }} />
           </div>
         </div>
       )}
 
       {/* 지출 방식 분석 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm mb-5">
-        <div className="text-xs font-semibold text-gray-500 mb-3">이달 지출 분석</div>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="bg-blue-50 rounded-xl p-3">
+      <div className="bg-white rounded-xl p-3 shadow-sm mb-3">
+        <div className="text-xs font-semibold text-gray-500 mb-2">이달 지출 분석</div>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="bg-blue-50 rounded-lg p-2">
             <div className="text-xs text-blue-500 mb-0.5">통장 직접 결제</div>
             <div className="text-sm font-bold text-blue-700">{fmtKRW(accountExpense)}</div>
           </div>
-          <div className="bg-purple-50 rounded-xl p-3">
+          <div className="bg-purple-50 rounded-lg p-2">
             <div className="text-xs text-purple-500 mb-0.5">카드 사용</div>
             <div className="text-sm font-bold text-purple-700">{fmtKRW(cardExpense)}</div>
           </div>
         </div>
         {/* 이달 납부 예정 (전달 카드 사용분) */}
-        <div className="border-t border-gray-100 pt-3 mb-3">
-          <div className="flex items-center justify-between mb-2">
+        <div className="border-t border-gray-100 pt-2 mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-gray-700">
               {fmtMonthLabel(prev)} 카드대금 납부 예정
             </span>
@@ -414,8 +414,8 @@ export default function BudgetPage() {
         </div>
 
         {/* 이달 카드 사용 → 다음달 청구 예정 */}
-        <div className="border-t border-gray-100 pt-3">
-          <div className="flex items-center justify-between mb-2">
+        <div className="border-t border-gray-100 pt-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-gray-500">이달 카드 사용 <span className="text-gray-300 font-normal">(다음달 청구 예정)</span></span>
           </div>
           {cardBreakdown.length > 0 ? (
@@ -441,7 +441,7 @@ export default function BudgetPage() {
       </div>
 
       {/* 대분류별 테이블 */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {expenseParents.filter(p => !isHiddenThisMonth(p.id)).map(parent => {
           const children = getChildren(parent.id).filter(c => !isHiddenThisMonth(c.id))
           const { budget: grpBudget, actual: grpActual } = groupTotal(parent.id)
@@ -450,11 +450,11 @@ export default function BudgetPage() {
           const grpOver = grpBudget > 0 && grpActual > grpBudget
 
           return (
-            <div key={parent.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div key={parent.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
               {/* 대분류 헤더 */}
               <div
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-                style={{ borderLeft: `4px solid ${parent.color}` }}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
+                style={{ borderLeft: `3px solid ${parent.color}` }}
               >
                 <button onClick={() => toggleCollapse(parent.id)} className="flex items-center gap-2 flex-1 text-left">
                   <span className="text-base">{parent.icon}</span>
@@ -499,7 +499,7 @@ export default function BudgetPage() {
               {!isCollapsed && (
                 <div>
                   {/* 컬럼 헤더 */}
-                  <div className="grid grid-cols-4 px-4 py-1.5 bg-gray-50 border-t border-b border-gray-100 text-xs font-semibold text-gray-400">
+                  <div className="grid grid-cols-4 px-3 py-1 bg-gray-50 border-t border-b border-gray-100 text-xs font-semibold text-gray-400">
                     <span>소분류</span>
                     <span className="text-right">예산</span>
                     <span className="text-right">실제</span>
@@ -519,7 +519,7 @@ export default function BudgetPage() {
 
                     return (
                       <div key={cat.id} className="border-b border-gray-50 last:border-0 group">
-                        <div className="grid grid-cols-4 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors">
+                        <div className="grid grid-cols-4 px-3 py-1.5 items-center hover:bg-gray-50 transition-colors">
                           {/* 소분류명 */}
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="text-sm flex-shrink-0">{cat.icon}</span>
@@ -585,9 +585,9 @@ export default function BudgetPage() {
                         </div>
                         {/* 진행바 */}
                         {budgetAmt > 0 && (
-                          <div className="px-4 pb-2">
-                            <div className="bg-gray-100 rounded-full h-1">
-                              <div className={`h-1 rounded-full transition-all ${isOver ? 'bg-red-500' : pct > 80 ? 'bg-amber-400' : 'bg-blue-500'}`}
+                          <div className="px-3 pb-1">
+                            <div className="bg-gray-100 rounded-full h-0.5">
+                              <div className={`h-0.5 rounded-full transition-all ${isOver ? 'bg-red-500' : pct > 80 ? 'bg-amber-400' : 'bg-blue-500'}`}
                                 style={{ width: `${pct}%` }} />
                             </div>
                           </div>
@@ -598,7 +598,7 @@ export default function BudgetPage() {
 
                   {/* 합계 행 */}
                   {children.length > 0 && (
-                    <div className="grid grid-cols-4 px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 border-t border-gray-100">
+                    <div className="grid grid-cols-4 px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-500 border-t border-gray-100">
                       <span>소계</span>
                       <span className="text-right">{grpBudget > 0 ? fmtKRW(grpBudget) : '-'}</span>
                       <span className="text-right">{grpActual > 0 ? fmtKRW(grpActual) : '-'}</span>
@@ -612,8 +612,8 @@ export default function BudgetPage() {
                   {!isPastMonth && (
                     <button
                       onClick={() => { setModalParentId(parent.id); setModal('addChild') }}
-                      className="w-full px-4 py-2.5 text-xs text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 border-t border-gray-50">
-                      <span className="text-base leading-none">+</span> 소분류 추가
+                      className="w-full px-3 py-1.5 text-xs text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1 border-t border-gray-50">
+                      <span className="text-sm leading-none">+</span> 소분류 추가
                     </button>
                   )}
                 </div>
@@ -627,8 +627,8 @@ export default function BudgetPage() {
       {!isPastMonth && (
         <button
           onClick={() => setModal('addParent')}
-          className="mt-4 w-full bg-white rounded-2xl shadow-sm py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">
-          <span className="text-lg">+</span> 대분류 추가
+          className="mt-3 w-full bg-white rounded-xl shadow-sm py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-1.5">
+          <span className="text-base">+</span> 대분류 추가
         </button>
       )}
 
