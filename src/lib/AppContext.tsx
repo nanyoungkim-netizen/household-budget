@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, SavingPayment, ConsumptionType } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, SavingPayment, ConsumptionType } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -81,8 +81,9 @@ interface AppData {
   goals: Goal[]
   cardBillings: CardBilling[]
   mappingRules: MappingRule[]
-  investments: Investment[]        // PRD 2.6
+  investments: Investment[]            // PRD 2.6
   investmentTrades: InvestmentTrade[]  // PRD 2.6
+  investmentAccounts: InvestmentAccount[]  // PRD 2.6 계좌
   savingPayments: SavingPayment[]  // PRD 2.2
   categoryHiddenMonths: Record<string, string[]>  // 월별 카테고리 숨김
   lastModified: string | null
@@ -102,6 +103,7 @@ const INITIAL_DATA: AppData = {
   mappingRules: [],
   investments: [],
   investmentTrades: [],
+  investmentAccounts: [],
   savingPayments: [],
   categoryHiddenMonths: {},
   lastModified: null,
@@ -146,6 +148,7 @@ interface AppContextType {
   // PRD 2.6: 투자
   setInvestments: (investments: Investment[]) => void
   setInvestmentTrades: (trades: InvestmentTrade[]) => void
+  setInvestmentAccounts: (accounts: InvestmentAccount[]) => void
   // PRD 2.2: 납입 이력
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
@@ -212,6 +215,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       categories: migrateCategories(rawCats),
       investments: raw.investments ?? [],
       investmentTrades: raw.investmentTrades ?? [],
+      investmentAccounts: raw.investmentAccounts ?? [],
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
     }
@@ -420,6 +424,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, investmentTrades, lastModified: now() }))
   }, [update])
 
+  const setInvestmentAccounts = useCallback((investmentAccounts: InvestmentAccount[]) => {
+    update(d => ({ ...d, investmentAccounts, lastModified: now() }))
+  }, [update])
+
   const setSavingPayments = useCallback((savingPayments: SavingPayment[]) => {
     update(d => ({ ...d, savingPayments, lastModified: now() }))
   }, [update])
@@ -465,6 +473,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMappingRules,
       setInvestments,
       setInvestmentTrades,
+      setInvestmentAccounts,
       setSavingPayments,
       setCategoryHiddenMonths,
       completeSetup,

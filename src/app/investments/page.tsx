@@ -2,13 +2,15 @@
 
 import { useState, useMemo } from 'react'
 import { useApp } from '@/lib/AppContext'
-import { Investment, InvestmentTrade, InvestmentAssetType, InvestmentCurrency } from '@/types'
+import {
+  Investment, InvestmentTrade, InvestmentAccount,
+  InvestmentAssetType, InvestmentCurrency, InvestmentSubType, INVESTMENT_SUB_LABELS,
+} from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function fmtPct(n: number) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%' }
 function parseAmt(s: string) { return parseFloat(s.replace(/[^0-9.]/g, '')) || 0 }
-function fmtInput(s: string) { const n = parseAmt(s); return n === 0 ? '' : n.toLocaleString('ko-KR') }
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -21,6 +23,8 @@ const ASSET_TYPE_META: Record<InvestmentAssetType, { label: string; icon: string
 
 const CURRENCIES: InvestmentCurrency[] = ['KRW', 'USD', 'USDT', 'other']
 
+const ACCOUNT_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6']
+
 type PageTab = 'dashboard' | 'holdings' | 'trades'
 
 const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
@@ -30,6 +34,7 @@ const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
   exchange: '',
   currency: 'KRW',
   currentPrice: undefined,
+  accountId: undefined,
 }
 
 const EMPTY_TRADE: Omit<InvestmentTrade, 'id' | 'investmentId'> = {
@@ -43,24 +48,40 @@ const EMPTY_TRADE: Omit<InvestmentTrade, 'id' | 'investmentId'> = {
   note: '',
 }
 
+const EMPTY_ACCOUNT: Omit<InvestmentAccount, 'id'> = {
+  name: '',
+  bank: '',
+  type: 'general_investment',
+  color: ACCOUNT_COLORS[0],
+}
+
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades } = useApp()
-  const { investments, investmentTrades } = data
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts } = useApp()
+  const { investments, investmentTrades, investmentAccounts } = data
 
   const [pageTab, setPageTab] = useState<PageTab>('dashboard')
+
+  // 종목 모달
   const [showInvestmentModal, setShowInvestmentModal] = useState(false)
-  const [showTradeModal, setShowTradeModal] = useState(false)
   const [editInvestmentId, setEditInvestmentId] = useState<string | null>(null)
+  const [investmentForm, setInvestmentForm] = useState<Omit<Investment, 'id'>>(EMPTY_INVESTMENT)
+  const [initialBuy, setInitialBuy] = useState<{ date: string; quantity: string; price: string; fee: string } | null>(null)
+  const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
+  const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
+
+  // 거래 모달
+  const [showTradeModal, setShowTradeModal] = useState(false)
   const [editTradeId, setEditTradeId] = useState<string | null>(null)
   const [tradeInvestmentId, setTradeInvestmentId] = useState<string | null>(null)
-  const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
-  const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
-  const [deleteTradeId, setDeleteTradeId] = useState<string | null>(null)
-
-  const [investmentForm, setInvestmentForm] = useState<Omit<Investment, 'id'>>(EMPTY_INVESTMENT)
   const [tradeForm, setTradeForm] = useState<Omit<InvestmentTrade, 'id' | 'investmentId'>>(EMPTY_TRADE)
-  const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
-  const [initialBuy, setInitialBuy] = useState<{ date: string; quantity: string; price: string; fee: string } | null>(null)
+  const [deleteTradeId, setDeleteTradeId] = useState<string | null>(null)
+  const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
+
+  // 계좌 모달
+  const [showAccountModal, setShowAccountModal] = useState(false)
+  const [editAccountId, setEditAccountId] = useState<string | null>(null)
+  const [accountForm, setAccountForm] = useState<Omit<InvestmentAccount, 'id'>>(EMPTY_ACCOUNT)
+  const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null)
 
   // ── 보유 종목별 계산 ────────────────────────────────────────────────────────
   const holdingsMap = useMemo(() => {
@@ -106,6 +127,7 @@ export default function InvestmentsPage() {
   const portfolio = useMemo(() => {
     let totalBuy = 0, totalEval = 0, totalRealized = 0
     const byType: Record<string, number> = {}
+    const byAccount: Record<string, { buy: number; eval: number }> = {}
 
     holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, realizedPnl }) => {
       const currentPrice = investment.currentPrice ?? 0
@@ -115,24 +137,62 @@ export default function InvestmentsPage() {
       totalRealized += realizedPnl
       const type = investment.assetType
       byType[type] = (byType[type] || 0) + evalAmt
+      const aId = investment.accountId ?? '__none__'
+      if (!byAccount[aId]) byAccount[aId] = { buy: 0, eval: 0 }
+      byAccount[aId].buy += totalBuyAmt
+      byAccount[aId].eval += evalAmt
     })
 
     const unrealizedPnl = totalEval - totalBuy
     const returnRate = totalBuy > 0 ? (unrealizedPnl / totalBuy) * 100 : 0
-    return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, byType }
+    return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, byType, byAccount }
   }, [holdingsMap])
 
-  // ── 종목 등록/수정 ─────────────────────────────────────────────────────────
-  function openAddInvestment() {
+  // ── 계좌 CRUD ──────────────────────────────────────────────────────────────
+  function openAddAccount(defaultType?: InvestmentSubType) {
+    setEditAccountId(null)
+    setAccountForm({ ...EMPTY_ACCOUNT, type: defaultType ?? 'general_investment', color: ACCOUNT_COLORS[investmentAccounts.length % ACCOUNT_COLORS.length] })
+    setShowAccountModal(true)
+  }
+
+  function openEditAccount(acc: InvestmentAccount) {
+    setEditAccountId(acc.id)
+    setAccountForm({ name: acc.name, bank: acc.bank, type: acc.type, color: acc.color })
+    setShowAccountModal(true)
+  }
+
+  function handleSaveAccount() {
+    if (!accountForm.name) return
+    if (editAccountId) {
+      setInvestmentAccounts(investmentAccounts.map(a => a.id === editAccountId ? { id: editAccountId, ...accountForm } : a))
+    } else {
+      setInvestmentAccounts([...investmentAccounts, { id: `ia${Date.now()}`, ...accountForm }])
+    }
+    setShowAccountModal(false)
+    setEditAccountId(null)
+  }
+
+  function handleDeleteAccount(id: string) {
+    // 계좌 삭제 시 해당 계좌의 종목들은 accountId를 제거 (미분류로 이동)
+    setInvestments(investments.map(inv => inv.accountId === id ? { ...inv, accountId: undefined } : inv))
+    setInvestmentAccounts(investmentAccounts.filter(a => a.id !== id))
+    setDeleteAccountId(null)
+  }
+
+  // ── 종목 CRUD ──────────────────────────────────────────────────────────────
+  function openAddInvestment(presetAccountId?: string) {
     setEditInvestmentId(null)
-    setInvestmentForm(EMPTY_INVESTMENT)
+    setInvestmentForm({ ...EMPTY_INVESTMENT, accountId: presetAccountId })
     setInitialBuy({ date: today, quantity: '', price: '', fee: '' })
     setShowInvestmentModal(true)
   }
 
   function openEditInvestment(inv: Investment) {
     setEditInvestmentId(inv.id)
-    setInvestmentForm({ assetType: inv.assetType, name: inv.name, ticker: inv.ticker, exchange: inv.exchange, currency: inv.currency, currentPrice: inv.currentPrice })
+    setInvestmentForm({
+      assetType: inv.assetType, name: inv.name, ticker: inv.ticker, exchange: inv.exchange,
+      currency: inv.currency, currentPrice: inv.currentPrice, accountId: inv.accountId,
+    })
     setInitialBuy(null)
     setShowInvestmentModal(true)
   }
@@ -145,13 +205,11 @@ export default function InvestmentsPage() {
       setInvestments(investments.map(i => i.id === editInvestmentId ? newInv : i))
     } else {
       let finalInv = newInv
-      // 첫 매수 정보 입력된 경우 거래 이력에도 추가, 현재가를 매수 단가로 자동 설정
       if (initialBuy && initialBuy.quantity && initialBuy.price) {
         const qty = parseAmt(initialBuy.quantity)
         const price = parseAmt(initialBuy.price)
         const fee = parseAmt(initialBuy.fee)
         if (qty > 0 && price > 0) {
-          // 현재가 자동 = 매수 단가
           finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
           const trade: InvestmentTrade = {
             id: `tr${Date.now()}`,
@@ -187,7 +245,7 @@ export default function InvestmentsPage() {
     setCurrentPriceInput(prev => ({ ...prev, [invId]: '' }))
   }
 
-  // ── 거래 등록 ──────────────────────────────────────────────────────────────
+  // ── 거래 CRUD ──────────────────────────────────────────────────────────────
   function openAddTrade(investmentId: string) {
     setTradeInvestmentId(investmentId)
     setEditTradeId(null)
@@ -219,21 +277,124 @@ export default function InvestmentsPage() {
     setDeleteTradeId(null)
   }
 
-  // ── 보유 종목 목록 ─────────────────────────────────────────────────────────
-  const holdingsList = Array.from(holdingsMap.values()).filter(h => h.holdingQty > 0)
+  // ── 그룹: 계좌별 종목 목록 ───────────────────────────────────────────────
+  const investmentsByAccount = useMemo(() => {
+    const map = new Map<string, Investment[]>()
+    investments.forEach(inv => {
+      const key = inv.accountId ?? '__none__'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(inv)
+    })
+    return map
+  }, [investments])
 
-  // 선택된 종목의 거래 이력
+  // 거래 이력 필터
   const selectedTrades = selectedInvestmentId
     ? investmentTrades.filter(t => t.investmentId === selectedInvestmentId).sort((a, b) => b.date.localeCompare(a.date))
     : investmentTrades.sort((a, b) => b.date.localeCompare(a.date))
+
+  // ── 종목 카드 렌더 헬퍼 ──────────────────────────────────────────────────
+  function renderInvestmentCard(inv: Investment) {
+    const h = holdingsMap.get(inv.id)
+    const meta = ASSET_TYPE_META[inv.assetType]
+    const currentPrice = inv.currentPrice ?? 0
+    const evalAmt = (h?.holdingQty ?? 0) * currentPrice
+    const evalPnl = evalAmt - (h?.totalBuyAmt ?? 0)
+    const evalRate = h?.totalBuyAmt ? (evalPnl / h.totalBuyAmt) * 100 : 0
+    const isProfit = evalPnl >= 0
+
+    return (
+      <div key={inv.id} className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: meta.color + '20' }}>
+              {meta.icon}
+            </div>
+            <div>
+              <div className="font-semibold text-gray-900">{inv.name}</div>
+              <div className="text-xs text-gray-400">
+                {meta.label} {inv.ticker ? `· ${inv.ticker}` : ''} {inv.currency !== 'KRW' ? `· ${inv.currency}` : ''}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => openAddTrade(inv.id)} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">+ 거래</button>
+            <button onClick={() => openEditInvestment(inv)} className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">수정</button>
+            <button onClick={() => setDeleteInvestmentId(inv.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">삭제</button>
+          </div>
+        </div>
+
+        {h && h.holdingQty > 0 && (
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="bg-gray-50 rounded-xl p-2.5">
+              <div className="text-xs text-gray-400 mb-0.5">보유수량</div>
+              <div className="text-sm font-semibold text-gray-900">{h.holdingQty.toLocaleString()}주</div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-2.5">
+              <div className="text-xs text-gray-400 mb-0.5">총 매수금액</div>
+              <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(h.totalBuyAmt))}</div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-2.5">
+              <div className="text-xs text-gray-400 mb-0.5">평균매수단가</div>
+              <div className="text-sm font-semibold text-gray-900">{h.avgPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-2.5">
+              <div className="text-xs text-gray-400 mb-0.5">현재가</div>
+              {currentPrice > 0 ? (() => {
+                const priceDiff = currentPrice - h.avgPrice
+                const priceRate = h.avgPrice > 0 ? (priceDiff / h.avgPrice) * 100 : 0
+                return (
+                  <>
+                    <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
+                    <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ({fmtPct(priceRate)})
+                    </div>
+                  </>
+                )
+              })() : <div className="text-sm font-semibold text-gray-400">미입력</div>}
+            </div>
+            <div className={`col-span-2 rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익 (총 평가금액)</div>
+              <div className="flex items-baseline justify-between">
+                <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+                </div>
+                <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input type="text" inputMode="numeric"
+            placeholder="현재가 입력"
+            value={currentPriceInput[inv.id] ?? ''}
+            onChange={e => setCurrentPriceInput(prev => ({ ...prev, [inv.id]: e.target.value }))}
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button onClick={() => handleUpdateCurrentPrice(inv.id)}
+            className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors">
+            업데이트
+          </button>
+          <button onClick={() => { setSelectedInvestmentId(prev => prev === inv.id ? null : inv.id); setPageTab('trades') }}
+            className="px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
+            이력 보기
+          </button>
+        </div>
+        {inv.currentPriceUpdatedAt && (
+          <div className="text-xs text-gray-400 mt-1">현재가 기준: {new Date(inv.currentPriceUpdatedAt).toLocaleString('ko-KR')}</div>
+        )}
+        <div className="text-xs text-gray-400 mt-1.5">💡 매수·매도 내역 수정은 <button onClick={() => { setSelectedInvestmentId(inv.id); setPageTab('trades') }} className="text-blue-500 underline">거래 이력 탭</button>에서 가능합니다</div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">투자 내역 관리</h1>
-        <button onClick={openAddInvestment}
-          className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">
-          + 종목 추가
+        <button onClick={() => openAddAccount()}
+          className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
+          + 계좌 추가
         </button>
       </div>
 
@@ -276,6 +437,44 @@ export default function InvestmentsPage() {
             </div>
           </div>
 
+          {/* 계좌별 요약 */}
+          {investmentAccounts.length > 0 && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-semibold text-gray-700 mb-3">계좌별 현황</div>
+              <div className="space-y-3">
+                {investmentAccounts.map(acc => {
+                  const sub = INVESTMENT_SUB_LABELS[acc.type]
+                  const stats = portfolio.byAccount[acc.id]
+                  if (!stats) return (
+                    <div key={acc.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style={{ backgroundColor: acc.color + '20', color: acc.color }}>{sub.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900">{acc.name}</div>
+                        <div className="text-xs text-gray-400">{acc.bank} · {sub.label}</div>
+                      </div>
+                      <div className="text-xs text-gray-400">종목 없음</div>
+                    </div>
+                  )
+                  const pnl = stats.eval - stats.buy
+                  const rate = stats.buy > 0 ? (pnl / stats.buy) * 100 : 0
+                  return (
+                    <div key={acc.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style={{ backgroundColor: acc.color + '20', color: acc.color }}>{sub.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900">{acc.name}</div>
+                        <div className="text-xs text-gray-400">{acc.bank} · {sub.label}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(stats.eval))}</div>
+                        <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))} ({fmtPct(rate)})</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 자산 유형별 비중 */}
           {Object.keys(portfolio.byType).length > 0 && (
             <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -300,11 +499,11 @@ export default function InvestmentsPage() {
             </div>
           )}
 
-          {investments.length === 0 && (
+          {investments.length === 0 && investmentAccounts.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <div className="text-4xl mb-2">📈</div>
-              <div className="text-sm">종목을 추가하고 투자를 기록해보세요!</div>
-              <button onClick={openAddInvestment} className="mt-4 bg-blue-600 text-white text-sm px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors">+ 종목 추가</button>
+              <div className="text-sm">투자 계좌를 추가하고 종목을 기록해보세요!</div>
+              <button onClick={() => openAddAccount()} className="mt-4 bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">+ 계좌 추가</button>
             </div>
           )}
         </div>
@@ -312,109 +511,96 @@ export default function InvestmentsPage() {
 
       {/* ══ 보유 종목 탭 ══════════════════════════════════════════════════════ */}
       {pageTab === 'holdings' && (
-        <div className="space-y-3">
-          {holdingsList.length === 0 && investments.length === 0 && (
+        <div className="space-y-5">
+          {/* 계좌 없는 경우 안내 */}
+          {investmentAccounts.length === 0 && investments.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <div className="text-4xl mb-2">💼</div>
-              <div className="text-sm">보유 중인 종목이 없습니다</div>
-              <button onClick={openAddInvestment} className="mt-4 bg-blue-600 text-white text-sm px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors">+ 종목 추가</button>
+              <div className="text-sm mb-1">먼저 투자 계좌를 추가해보세요</div>
+              <div className="text-xs text-gray-400 mb-4">계좌별로 종목을 관리할 수 있습니다</div>
+              <button onClick={() => openAddAccount()} className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">+ 계좌 추가</button>
             </div>
           )}
-          {/* 미보유 종목 포함 전체 목록 */}
-          {investments.map(inv => {
-            const h = holdingsMap.get(inv.id)
-            const meta = ASSET_TYPE_META[inv.assetType]
-            const currentPrice = inv.currentPrice ?? 0
-            const evalAmt = (h?.holdingQty ?? 0) * currentPrice
-            const evalPnl = evalAmt - (h?.totalBuyAmt ?? 0)
-            const evalRate = h?.totalBuyAmt ? (evalPnl / h.totalBuyAmt) * 100 : 0
-            const isProfit = evalPnl >= 0
 
+          {/* 계좌별 섹션 */}
+          {investmentAccounts.map(acc => {
+            const sub = INVESTMENT_SUB_LABELS[acc.type]
+            const accInvestments = investmentsByAccount.get(acc.id) ?? []
+            const stats = portfolio.byAccount[acc.id]
             return (
-              <div key={inv.id} className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: meta.color + '20' }}>
-                      {meta.icon}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900">{inv.name}</div>
-                      <div className="text-xs text-gray-400">
-                        {meta.label} {inv.ticker ? `· ${inv.ticker}` : ''} {inv.currency !== 'KRW' ? `· ${inv.currency}` : ''}
+              <div key={acc.id}>
+                {/* 계좌 헤더 */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
+                    {sub.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-gray-900">{acc.name}</div>
+                    <div className="text-xs text-gray-400">{acc.bank} · {sub.label}</div>
+                  </div>
+                  {stats && (
+                    <div className="text-right mr-1">
+                      <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(stats.eval))}</div>
+                      <div className={`text-xs ${stats.eval - stats.buy >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {stats.eval - stats.buy >= 0 ? '+' : ''}{fmtKRW(Math.round(stats.eval - stats.buy))}
                       </div>
                     </div>
-                  </div>
+                  )}
                   <div className="flex items-center gap-1">
-                    <button onClick={() => openAddTrade(inv.id)} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">+ 거래</button>
-                    <button onClick={() => openEditInvestment(inv)} className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">수정</button>
-                    <button onClick={() => setDeleteInvestmentId(inv.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">삭제</button>
+                    <button onClick={() => openAddInvestment(acc.id)}
+                      className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
+                      + 종목
+                    </button>
+                    <button onClick={() => openEditAccount(acc)}
+                      className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+                      ✏️
+                    </button>
+                    <button onClick={() => setDeleteAccountId(acc.id)}
+                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+                      🗑️
+                    </button>
                   </div>
                 </div>
 
-                {h && h.holdingQty > 0 && (
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="bg-gray-50 rounded-xl p-2.5">
-                      <div className="text-xs text-gray-400 mb-0.5">보유수량</div>
-                      <div className="text-sm font-semibold text-gray-900">{h.holdingQty.toLocaleString()}주</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-2.5">
-                      <div className="text-xs text-gray-400 mb-0.5">총 매수금액</div>
-                      <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(h.totalBuyAmt))}</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-2.5">
-                      <div className="text-xs text-gray-400 mb-0.5">평균매수단가</div>
-                      <div className="text-sm font-semibold text-gray-900">{h.avgPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-2.5">
-                      <div className="text-xs text-gray-400 mb-0.5">현재가</div>
-                      {currentPrice > 0 ? (() => {
-                        const priceDiff = currentPrice - h.avgPrice
-                        const priceRate = h.avgPrice > 0 ? (priceDiff / h.avgPrice) * 100 : 0
-                        return (
-                          <>
-                            <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
-                            <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ({fmtPct(priceRate)})
-                            </div>
-                          </>
-                        )
-                      })() : <div className="text-sm font-semibold text-gray-400">미입력</div>}
-                    </div>
-                    <div className={`col-span-2 rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                      <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익 (총 평가금액)</div>
-                      <div className="flex items-baseline justify-between">
-                        <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                          {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
-                        </div>
-                        <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
-                      </div>
-                    </div>
+                {/* 계좌 내 종목 목록 */}
+                {accInvestments.length === 0 ? (
+                  <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border-2 border-dashed border-gray-200">
+                    <div className="text-2xl mb-1">📭</div>
+                    <div className="text-xs">등록된 종목이 없습니다</div>
+                    <button onClick={() => openAddInvestment(acc.id)} className="mt-2 text-xs text-blue-500 underline">+ 종목 추가</button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pl-1 border-l-2" style={{ borderColor: acc.color + '60' }}>
+                    {accInvestments.map(inv => renderInvestmentCard(inv))}
                   </div>
                 )}
-
-                {/* 현재가 수동 업데이트 */}
-                <div className="flex gap-2">
-                  <input type="text" inputMode="numeric"
-                    placeholder="현재가 입력"
-                    value={currentPriceInput[inv.id] ?? ''}
-                    onChange={e => setCurrentPriceInput(prev => ({ ...prev, [inv.id]: e.target.value }))}
-                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <button onClick={() => handleUpdateCurrentPrice(inv.id)}
-                    className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors">
-                    업데이트
-                  </button>
-                  <button onClick={() => { setSelectedInvestmentId(prev => prev === inv.id ? null : inv.id); setPageTab('trades') }}
-                    className="px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
-                    이력 보기
-                  </button>
-                </div>
-                {inv.currentPriceUpdatedAt && (
-                  <div className="text-xs text-gray-400 mt-1">현재가 기준: {new Date(inv.currentPriceUpdatedAt).toLocaleString('ko-KR')}</div>
-                )}
-                <div className="text-xs text-gray-400 mt-1.5">💡 매수·매도 내역 수정은 <button onClick={() => { setSelectedInvestmentId(inv.id); setPageTab('trades') }} className="text-blue-500 underline">거래 이력 탭</button>에서 가능합니다</div>
               </div>
             )
           })}
+
+          {/* 미분류 종목 (계좌 없는 것) */}
+          {(investmentsByAccount.get('__none__') ?? []).length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg">📦</div>
+                <div className="flex-1">
+                  <div className="font-semibold text-gray-700">미분류</div>
+                  <div className="text-xs text-gray-400">계좌가 지정되지 않은 종목</div>
+                </div>
+              </div>
+              <div className="space-y-3 pl-1 border-l-2 border-gray-200">
+                {(investmentsByAccount.get('__none__') ?? []).map(inv => renderInvestmentCard(inv))}
+              </div>
+            </div>
+          )}
+
+          {/* 계좌만 있고 종목 없는 경우 계좌 추가 버튼 */}
+          {investmentAccounts.length > 0 && (
+            <button onClick={() => openAddAccount()}
+              className="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-500 rounded-2xl text-sm hover:bg-indigo-50 transition-colors">
+              + 새 계좌 추가
+            </button>
+          )}
         </div>
       )}
 
@@ -440,6 +626,7 @@ export default function InvestmentsPage() {
           <div className="space-y-2">
             {selectedTrades.map(trade => {
               const inv = investments.find(i => i.id === trade.investmentId)
+              const acc = inv?.accountId ? investmentAccounts.find(a => a.id === inv.accountId) : null
               const isBuy = trade.type === 'buy'
               const tradeAmt = trade.quantity * trade.price
               return (
@@ -449,7 +636,10 @@ export default function InvestmentsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900">{inv?.name ?? '-'}</div>
-                    <div className="text-xs text-gray-400">{trade.date} · {trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}</div>
+                    <div className="text-xs text-gray-400">
+                      {trade.date} · {trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}
+                      {acc && <span className="ml-1 text-indigo-400">· {acc.name}</span>}
+                    </div>
                     {trade.note && <div className="text-xs text-gray-400">{trade.note}</div>}
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -475,15 +665,87 @@ export default function InvestmentsPage() {
         </div>
       )}
 
+      {/* ── 계좌 추가/수정 모달 ────────────────────────────────────────────── */}
+      {showAccountModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">{editAccountId ? '계좌 수정' : '투자 계좌 추가'}</h2>
+              <button onClick={() => setShowAccountModal(false)} className="text-gray-400 text-xl">×</button>
+            </div>
+            <div className="space-y-3">
+              <input type="text" placeholder="계좌명 * (예: 미래에셋 연금저축)" value={accountForm.name}
+                onChange={e => setAccountForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input type="text" placeholder="증권사 / 금융기관 (예: 미래에셋증권)" value={accountForm.bank}
+                onChange={e => setAccountForm(f => ({ ...f, bank: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1.5">계좌 유형</label>
+                <div className="flex gap-2 flex-wrap">
+                  {(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, typeof INVESTMENT_SUB_LABELS[InvestmentSubType]][]).map(([type, meta]) => (
+                    <button key={type} onClick={() => setAccountForm(f => ({ ...f, type }))}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${accountForm.type === type ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                      {meta.icon} {meta.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1.5">색상</label>
+                <div className="flex gap-2 flex-wrap">
+                  {ACCOUNT_COLORS.map(c => (
+                    <button key={c} onClick={() => setAccountForm(f => ({ ...f, color: c }))}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${accountForm.color === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                {editAccountId && (
+                  <button onClick={() => setDeleteAccountId(editAccountId)}
+                    className="px-4 py-3 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors">
+                    삭제
+                  </button>
+                )}
+                <button onClick={handleSaveAccount}
+                  className="flex-1 bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors">
+                  {editAccountId ? '수정 완료' : '계좌 추가'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 종목 등록/수정 모달 ────────────────────────────────────────────── */}
       {showInvestmentModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">{editInvestmentId ? '종목 수정' : '종목 추가'}</h2>
               <button onClick={() => setShowInvestmentModal(false)} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
+              {/* 소속 계좌 */}
+              {investmentAccounts.length > 0 && (
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1.5">소속 계좌</label>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setInvestmentForm(f => ({ ...f, accountId: undefined }))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!investmentForm.accountId ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-200'}`}>
+                      미분류
+                    </button>
+                    {investmentAccounts.map(acc => (
+                      <button key={acc.id} onClick={() => setInvestmentForm(f => ({ ...f, accountId: acc.id }))}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${investmentForm.accountId === acc.id ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200'}`}
+                        style={investmentForm.accountId === acc.id ? { backgroundColor: acc.color } : {}}>
+                        {INVESTMENT_SUB_LABELS[acc.type].icon} {acc.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* 자산 유형 */}
               <div className="flex gap-1.5 flex-wrap">
                 {(Object.entries(ASSET_TYPE_META) as [InvestmentAssetType, typeof ASSET_TYPE_META[InvestmentAssetType]][]).map(([type, meta]) => (
@@ -552,7 +814,6 @@ export default function InvestmentsPage() {
                   )}
                 </div>
               )}
-
               <div className="flex gap-2 pt-1">
                 {editInvestmentId && (
                   <button onClick={() => setDeleteInvestmentId(editInvestmentId)}
@@ -579,7 +840,6 @@ export default function InvestmentsPage() {
               <button onClick={() => { setShowTradeModal(false); setEditTradeId(null) }} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
-              {/* 매수/매도 */}
               <div className="flex bg-gray-100 rounded-xl p-1">
                 {(['buy','sell'] as const).map(type => (
                   <button key={type} onClick={() => setTradeForm(f => ({ ...f, type }))}
@@ -637,6 +897,13 @@ export default function InvestmentsPage() {
         </div>
       )}
 
+      {deleteAccountId && (
+        <DeleteConfirmModal
+          message="계좌를 삭제해도 종목은 삭제되지 않으며 미분류로 이동됩니다."
+          onConfirm={() => handleDeleteAccount(deleteAccountId)}
+          onCancel={() => setDeleteAccountId(null)}
+        />
+      )}
       {deleteInvestmentId && (
         <DeleteConfirmModal
           message="종목을 삭제하면 해당 종목의 모든 거래 이력도 함께 삭제됩니다."

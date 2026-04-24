@@ -181,8 +181,18 @@ export interface InvestmentTrade {
   note?: string
 }
 
+// PRD 2.6: 투자 계좌 (증권사 계좌)
+export interface InvestmentAccount {
+  id: string
+  name: string              // e.g. "미래에셋 연금저축"
+  bank: string              // e.g. "미래에셋증권"
+  type: InvestmentSubType   // pension_savings | retirement_pension | general_investment
+  color: string
+}
+
 export interface Investment {
   id: string
+  accountId?: string        // 소속 투자 계좌 ID
   assetType: InvestmentAssetType
   name: string            // 종목명 / 코인명
   ticker?: string         // 종목코드 / 티커
