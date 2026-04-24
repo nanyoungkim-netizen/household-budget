@@ -267,8 +267,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             userRef.current = session?.user ?? null
 
             if (event === 'SIGNED_OUT') {
+              // localStorage는 보존 — 재로그인 시 데이터 복구 가능하도록
               setData(INITIAL_DATA)
-              localStorage.removeItem(STORAGE_KEY)
             }
             if (event === 'SIGNED_IN' && session?.user) {
               const { data: remoteRow } = await supabase!
