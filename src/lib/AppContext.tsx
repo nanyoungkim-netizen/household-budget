@@ -538,11 +538,23 @@ export function getCategoryExpenses(transactions: Transaction[], month: string) 
   return map
 }
 
-// PRD 2.1: 실소비만 집계하는 카테고리 지출 (카드대금·적금이체 제외)
+// PRD 2.1: 실소비만 집계하는 카테고리 지출 (카드대금·적금이체 제외, 통장환급 차감)
 export function getRealCategoryExpenses(transactions: Transaction[], categories: Category[], month: string) {
   const map: Record<string, number> = {}
   transactions
-    .filter(t => t.date.startsWith(month) && t.type === 'expense' && isRealConsumption(t, categories))
-    .forEach(t => { map[t.categoryId] = (map[t.categoryId] || 0) + t.amount })
+    .filter(t => {
+      if (!t.date.startsWith(month)) return false
+      const ct = getConsumptionType(t, categories)
+      if (ct !== 'normal') return false
+      if (t.type === 'expense') return true
+      // 카드 환급은 카드 청구 쪽에서 처리되므로 제외, 통장 환급만 차감
+      if (t.type === 'refund' && t.paymentMethod !== 'card') return true
+      return false
+    })
+    .forEach(t => {
+      const delta = t.type === 'refund' ? -t.amount : t.amount
+      map[t.categoryId] = (map[t.categoryId] || 0) + delta
+    })
+  Object.keys(map).forEach(k => { if (map[k] < 0) map[k] = 0 })
   return map
 }
