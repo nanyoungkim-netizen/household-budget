@@ -201,3 +201,14 @@ export interface Investment {
   currentPrice?: number   // 현재가 (수동 입력)
   currentPriceUpdatedAt?: string  // 현재가 업데이트 일시
 }
+
+// PRD: 배당금 기록
+export interface InvestmentDividend {
+  id: string
+  investmentId: string
+  date: string          // 입금일 (YYYY-MM-DD)
+  grossAmount: number   // 세전 배당금
+  tax: number           // 원천징수세액
+  netAmount: number     // 실수령액
+  note?: string
+}

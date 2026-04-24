@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, SavingPayment, ConsumptionType } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, SavingPayment, ConsumptionType } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -83,7 +83,8 @@ interface AppData {
   mappingRules: MappingRule[]
   investments: Investment[]            // PRD 2.6
   investmentTrades: InvestmentTrade[]  // PRD 2.6
-  investmentAccounts: InvestmentAccount[]  // PRD 2.6 계좌
+  investmentAccounts: InvestmentAccount[]   // PRD 2.6 계좌
+  investmentDividends: InvestmentDividend[] // PRD: 배당금
   savingPayments: SavingPayment[]  // PRD 2.2
   categoryHiddenMonths: Record<string, string[]>  // 월별 카테고리 숨김
   lastModified: string | null
@@ -104,6 +105,7 @@ const INITIAL_DATA: AppData = {
   investments: [],
   investmentTrades: [],
   investmentAccounts: [],
+  investmentDividends: [],
   savingPayments: [],
   categoryHiddenMonths: {},
   lastModified: null,
@@ -149,6 +151,7 @@ interface AppContextType {
   setInvestments: (investments: Investment[]) => void
   setInvestmentTrades: (trades: InvestmentTrade[]) => void
   setInvestmentAccounts: (accounts: InvestmentAccount[]) => void
+  setInvestmentDividends: (dividends: InvestmentDividend[]) => void
   // PRD 2.2: 납입 이력
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
@@ -216,6 +219,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       investments: raw.investments ?? [],
       investmentTrades: raw.investmentTrades ?? [],
       investmentAccounts: raw.investmentAccounts ?? [],
+      investmentDividends: raw.investmentDividends ?? [],
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
     }
@@ -428,6 +432,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, investmentAccounts, lastModified: now() }))
   }, [update])
 
+  const setInvestmentDividends = useCallback((investmentDividends: InvestmentDividend[]) => {
+    update(d => ({ ...d, investmentDividends, lastModified: now() }))
+  }, [update])
+
   const setSavingPayments = useCallback((savingPayments: SavingPayment[]) => {
     update(d => ({ ...d, savingPayments, lastModified: now() }))
   }, [update])
@@ -474,6 +482,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestments,
       setInvestmentTrades,
       setInvestmentAccounts,
+      setInvestmentDividends,
       setSavingPayments,
       setCategoryHiddenMonths,
       completeSetup,

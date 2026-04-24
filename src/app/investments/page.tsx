@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useApp } from '@/lib/AppContext'
 import {
-  Investment, InvestmentTrade, InvestmentAccount,
+  Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend,
   InvestmentAssetType, InvestmentCurrency, InvestmentSubType, INVESTMENT_SUB_LABELS,
 } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
@@ -55,9 +55,17 @@ const EMPTY_ACCOUNT: Omit<InvestmentAccount, 'id'> = {
   color: ACCOUNT_COLORS[0],
 }
 
+const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id' | 'investmentId'> = {
+  date: today,
+  grossAmount: 0,
+  tax: 0,
+  netAmount: 0,
+  note: '',
+}
+
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts } = useApp()
-  const { investments, investmentTrades, investmentAccounts } = data
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends } = useApp()
+  const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
 
   const [pageTab, setPageTab] = useState<PageTab>('dashboard')
 
@@ -83,13 +91,22 @@ export default function InvestmentsPage() {
   const [accountForm, setAccountForm] = useState<Omit<InvestmentAccount, 'id'>>(EMPTY_ACCOUNT)
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null)
 
+  // 배당금 모달
+  const [showDividendModal, setShowDividendModal] = useState(false)
+  const [dividendInvestmentId, setDividendInvestmentId] = useState<string | null>(null)
+  const [editDividendId, setEditDividendId] = useState<string | null>(null)
+  const [dividendForm, setDividendForm] = useState<Omit<InvestmentDividend, 'id' | 'investmentId'>>(EMPTY_DIVIDEND)
+  const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
+  const [expandedDividendInvId, setExpandedDividendInvId] = useState<string | null>(null)
+
   // ── 보유 종목별 계산 ────────────────────────────────────────────────────────
   const holdingsMap = useMemo(() => {
     const map = new Map<string, {
       investment: Investment
       avgPrice: number
       holdingQty: number
-      totalBuyAmt: number
+      totalBuyAmt: number  // 순수 매수금액 (수수료 제외)
+      totalFee: number     // 납부 수수료 합계 (별도 표기)
       realizedPnl: number
     }>()
 
@@ -100,41 +117,43 @@ export default function InvestmentsPage() {
 
       let holdingQty = 0
       let totalBuyAmt = 0
+      let totalFee = 0
       let realizedPnl = 0
 
       trades.forEach(trade => {
         const tradeAmt = trade.quantity * trade.price
         const fee = trade.fee ?? 0
+        totalFee += fee
         if (trade.type === 'buy') {
           holdingQty += trade.quantity
-          totalBuyAmt += tradeAmt + fee
+          totalBuyAmt += tradeAmt  // 수수료 제외: 순수 시세차익만 평가손익에 반영
         } else {
           const avgCost = holdingQty > 0 ? totalBuyAmt / holdingQty : 0
-          const sellRevenue = tradeAmt - fee
-          realizedPnl += sellRevenue - avgCost * trade.quantity
+          realizedPnl += (tradeAmt - fee) - avgCost * trade.quantity
           holdingQty = Math.max(0, holdingQty - trade.quantity)
           totalBuyAmt = holdingQty * avgCost
         }
       })
 
       const avgPrice = holdingQty > 0 ? totalBuyAmt / holdingQty : 0
-      map.set(inv.id, { investment: inv, avgPrice, holdingQty, totalBuyAmt, realizedPnl })
+      map.set(inv.id, { investment: inv, avgPrice, holdingQty, totalBuyAmt, totalFee, realizedPnl })
     })
     return map
   }, [investments, investmentTrades])
 
   // ── 포트폴리오 요약 ────────────────────────────────────────────────────────
   const portfolio = useMemo(() => {
-    let totalBuy = 0, totalEval = 0, totalRealized = 0
+    let totalBuy = 0, totalEval = 0, totalRealized = 0, totalFee = 0
     const byType: Record<string, number> = {}
     const byAccount: Record<string, { buy: number; eval: number }> = {}
 
-    holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, realizedPnl }) => {
+    holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalFee: invFee, realizedPnl }) => {
       const currentPrice = investment.currentPrice ?? 0
       const evalAmt = holdingQty * currentPrice
       totalBuy += totalBuyAmt
       totalEval += evalAmt
       totalRealized += realizedPnl
+      totalFee += invFee
       const type = investment.assetType
       byType[type] = (byType[type] || 0) + evalAmt
       const aId = investment.accountId ?? '__none__'
@@ -143,10 +162,12 @@ export default function InvestmentsPage() {
       byAccount[aId].eval += evalAmt
     })
 
+    const totalDividend = investmentDividends.reduce((s, d) => s + d.netAmount, 0)
     const unrealizedPnl = totalEval - totalBuy
     const returnRate = totalBuy > 0 ? (unrealizedPnl / totalBuy) * 100 : 0
-    return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, byType, byAccount }
-  }, [holdingsMap])
+    const totalReturn = unrealizedPnl + totalRealized + totalDividend
+    return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, totalDividend, totalFee, totalReturn, byType, byAccount }
+  }, [holdingsMap, investmentDividends])
 
   // ── 계좌 CRUD ──────────────────────────────────────────────────────────────
   function openAddAccount(defaultType?: InvestmentSubType) {
@@ -277,6 +298,37 @@ export default function InvestmentsPage() {
     setDeleteTradeId(null)
   }
 
+  // ── 배당금 CRUD ────────────────────────────────────────────────────────────
+  function openAddDividend(investmentId: string) {
+    setDividendInvestmentId(investmentId)
+    setEditDividendId(null)
+    setDividendForm({ ...EMPTY_DIVIDEND })
+    setShowDividendModal(true)
+  }
+
+  function openEditDividend(d: InvestmentDividend) {
+    setDividendInvestmentId(d.investmentId)
+    setEditDividendId(d.id)
+    setDividendForm({ date: d.date, grossAmount: d.grossAmount, tax: d.tax, netAmount: d.netAmount, note: d.note })
+    setShowDividendModal(true)
+  }
+
+  function handleSaveDividend() {
+    if (!dividendInvestmentId || dividendForm.netAmount <= 0) return
+    if (editDividendId) {
+      setInvestmentDividends(investmentDividends.map(d => d.id === editDividendId ? { ...d, ...dividendForm } : d))
+    } else {
+      setInvestmentDividends([...investmentDividends, { id: `div${Date.now()}`, investmentId: dividendInvestmentId, ...dividendForm }])
+    }
+    setShowDividendModal(false)
+    setEditDividendId(null)
+  }
+
+  function handleDeleteDividend(id: string) {
+    setInvestmentDividends(investmentDividends.filter(d => d.id !== id))
+    setDeleteDividendId(null)
+  }
+
   // ── 그룹: 계좌별 종목 목록 ───────────────────────────────────────────────
   const investmentsByAccount = useMemo(() => {
     const map = new Map<string, Investment[]>()
@@ -302,6 +354,9 @@ export default function InvestmentsPage() {
     const evalPnl = evalAmt - (h?.totalBuyAmt ?? 0)
     const evalRate = h?.totalBuyAmt ? (evalPnl / h.totalBuyAmt) * 100 : 0
     const isProfit = evalPnl >= 0
+    const invDividends = investmentDividends.filter(d => d.investmentId === inv.id).sort((a, b) => b.date.localeCompare(a.date))
+    const totalDividend = invDividends.reduce((s, d) => s + d.netAmount, 0)
+    const isExpanded = expandedDividendInvId === inv.id
 
     return (
       <div key={inv.id} className="bg-white rounded-2xl p-4 shadow-sm">
@@ -319,6 +374,7 @@ export default function InvestmentsPage() {
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => openAddTrade(inv.id)} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">+ 거래</button>
+            <button onClick={() => openAddDividend(inv.id)} className="text-xs bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors">+ 배당</button>
             <button onClick={() => openEditInvestment(inv)} className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">수정</button>
             <button onClick={() => setDeleteInvestmentId(inv.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">삭제</button>
           </div>
@@ -362,6 +418,44 @@ export default function InvestmentsPage() {
                 <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
               </div>
             </div>
+            {/* 납부 수수료 + 배당 수익 */}
+            {(h.totalFee > 0 || totalDividend > 0) && (
+              <div className="col-span-2 flex gap-2">
+                {h.totalFee > 0 && (
+                  <div className="flex-1 bg-gray-50 rounded-xl p-2.5">
+                    <div className="text-xs text-gray-400 mb-0.5">납부 수수료</div>
+                    <div className="text-sm font-semibold text-gray-500">-{fmtKRW(Math.round(h.totalFee))}</div>
+                  </div>
+                )}
+                {totalDividend > 0 && (
+                  <button className="flex-1 bg-emerald-50 rounded-xl p-2.5 text-left" onClick={() => setExpandedDividendInvId(prev => prev === inv.id ? null : inv.id)}>
+                    <div className="text-xs text-emerald-500 mb-0.5">배당 수령 {isExpanded ? '▲' : '▼'}</div>
+                    <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(Math.round(totalDividend))}</div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 배당금 이력 */}
+        {isExpanded && invDividends.length > 0 && (
+          <div className="mb-3 border border-emerald-100 rounded-xl overflow-hidden">
+            {invDividends.map(d => (
+              <div key={d.id} className="flex items-center gap-3 px-3 py-2 border-b border-emerald-50 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-gray-700 font-medium">{d.date}</div>
+                  {d.note && <div className="text-xs text-gray-400">{d.note}</div>}
+                </div>
+                <div className="text-right text-xs text-gray-400">
+                  세전 {fmtKRW(d.grossAmount)} → 세후 <span className="text-emerald-600 font-semibold">{fmtKRW(d.netAmount)}</span>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => openEditDividend(d)} className="text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded text-xs">✏️</button>
+                  <button onClick={() => setDeleteDividendId(d.id)} className="text-red-400 hover:text-red-600 px-1 py-0.5 rounded text-xs">🗑️</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -414,7 +508,7 @@ export default function InvestmentsPage() {
           {/* 총 요약 */}
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 text-white">
             <div className="text-xs opacity-70 mb-3">투자 현황 요약</div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="bg-white/10 rounded-xl p-3">
                 <div className="text-xs opacity-70 mb-1">총 투자금액</div>
                 <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalBuy))}</div>
@@ -424,17 +518,33 @@ export default function InvestmentsPage() {
                 <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalEval))}</div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div className={`rounded-xl p-3 ${portfolio.unrealizedPnl >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
                 <div className="text-xs opacity-70 mb-1">평가손익</div>
-                <div className="text-base font-bold">{fmtKRW(Math.round(portfolio.unrealizedPnl))}</div>
+                <div className="text-base font-bold">{portfolio.unrealizedPnl >= 0 ? '+' : ''}{fmtKRW(Math.round(portfolio.unrealizedPnl))}</div>
                 <div className="text-xs opacity-80">{fmtPct(portfolio.returnRate)}</div>
               </div>
               <div className={`rounded-xl p-3 ${portfolio.totalRealized >= 0 ? 'bg-emerald-400/20' : 'bg-red-400/20'}`}>
                 <div className="text-xs opacity-70 mb-1">실현손익</div>
-                <div className="text-base font-bold">{fmtKRW(Math.round(portfolio.totalRealized))}</div>
+                <div className="text-base font-bold">{portfolio.totalRealized >= 0 ? '+' : ''}{fmtKRW(Math.round(portfolio.totalRealized))}</div>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/10 rounded-xl p-3">
+                <div className="text-xs opacity-70 mb-1">배당수익 합계</div>
+                <div className="text-base font-bold text-emerald-300">+{fmtKRW(Math.round(portfolio.totalDividend))}</div>
+              </div>
+              <div className="bg-white/10 rounded-xl p-3">
+                <div className="text-xs opacity-70 mb-1">납부 수수료</div>
+                <div className="text-base font-bold text-white/60">-{fmtKRW(Math.round(portfolio.totalFee))}</div>
+              </div>
+            </div>
+            {(portfolio.totalDividend > 0 || portfolio.totalRealized !== 0) && (
+              <div className={`mt-3 rounded-xl p-3 ${portfolio.totalReturn >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
+                <div className="text-xs opacity-70 mb-1">총 수익 (평가손익 + 실현손익 + 배당)</div>
+                <div className="text-lg font-bold">{portfolio.totalReturn >= 0 ? '+' : ''}{fmtKRW(Math.round(portfolio.totalReturn))}</div>
+              </div>
+            )}
           </div>
 
           {/* 계좌별 요약 */}
@@ -897,6 +1007,74 @@ export default function InvestmentsPage() {
         </div>
       )}
 
+      {/* ── 배당금 입력 모달 ──────────────────────────────────────────────── */}
+      {showDividendModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">{editDividendId ? '배당금 수정' : '배당금 입력'}</h2>
+              <button onClick={() => { setShowDividendModal(false); setEditDividendId(null) }} className="text-gray-400 text-xl">×</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">입금일 *</label>
+                <input type="date" value={dividendForm.date}
+                  onChange={e => setDividendForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">세전 배당금</label>
+                  <input type="number" min={0} placeholder="0" value={dividendForm.grossAmount || ''}
+                    onChange={e => {
+                      const gross = parseFloat(e.target.value) || 0
+                      const tax = dividendForm.tax
+                      setDividendForm(f => ({ ...f, grossAmount: gross, netAmount: Math.max(0, gross - tax) }))
+                    }}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">원천징수세액</label>
+                  <input type="number" min={0} placeholder="0" value={dividendForm.tax || ''}
+                    onChange={e => {
+                      const tax = parseFloat(e.target.value) || 0
+                      setDividendForm(f => ({ ...f, tax, netAmount: Math.max(0, f.grossAmount - tax) }))
+                    }}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">실수령액 (세후) *</label>
+                <input type="number" min={0} placeholder="0" value={dividendForm.netAmount || ''}
+                  onChange={e => setDividendForm(f => ({ ...f, netAmount: parseFloat(e.target.value) || 0 }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <input type="text" placeholder="메모 (선택)" value={dividendForm.note ?? ''}
+                onChange={e => setDividendForm(f => ({ ...f, note: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              {dividendForm.netAmount > 0 && (
+                <div className="bg-emerald-50 rounded-xl p-3 text-xs">
+                  <span className="text-gray-500">실수령액: </span>
+                  <span className="font-bold text-emerald-700">{fmtKRW(dividendForm.netAmount)}</span>
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                {editDividendId && (
+                  <button onClick={() => { setDeleteDividendId(editDividendId); setShowDividendModal(false) }}
+                    className="px-4 py-3 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors">
+                    삭제
+                  </button>
+                )}
+                <button onClick={handleSaveDividend}
+                  className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl hover:bg-emerald-700 transition-colors">
+                  {editDividendId ? '수정 완료' : '저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteAccountId && (
         <DeleteConfirmModal
           message="계좌를 삭제해도 종목은 삭제되지 않으며 미분류로 이동됩니다."
@@ -915,6 +1093,13 @@ export default function InvestmentsPage() {
         <DeleteConfirmModal
           onConfirm={() => handleDeleteTrade(deleteTradeId)}
           onCancel={() => setDeleteTradeId(null)}
+        />
+      )}
+      {deleteDividendId && (
+        <DeleteConfirmModal
+          message="배당금 기록을 삭제합니다."
+          onConfirm={() => handleDeleteDividend(deleteDividendId)}
+          onCancel={() => setDeleteDividendId(null)}
         />
       )}
     </div>
