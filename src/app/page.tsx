@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
-import { Transaction, AssetType } from '@/types'
+import { Transaction, AssetType, InvestmentSubType, INVESTMENT_SUB_LABELS } from '@/types'
 
 // FR-01: 자산 유형 메타
 const ASSET_SECTIONS: { value: AssetType; label: string; icon: string; color: string }[] = [
@@ -67,6 +67,36 @@ export default function Dashboard() {
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
   const [selectedDay, setSelectedDay] = useState(todayStr)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+
+  // ── 알림 닫기 (localStorage 지속) ──────────────────────────────────────────
+  const NOTIF_KEY = 'hb_dismissed_notifications'
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+  const [showNotifHistory, setShowNotifHistory] = useState(false)
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(NOTIF_KEY)
+      if (stored) setDismissedIds(new Set(JSON.parse(stored) as string[]))
+    } catch { /* ignore */ }
+  }, [])
+
+  const dismissNotif = useCallback((id: string) => {
+    setDismissedIds(prev => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem(NOTIF_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+
+  const restoreNotif = useCallback((id: string) => {
+    setDismissedIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      try { localStorage.setItem(NOTIF_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
 
   const isToday      = selectedDay === todayStr
   const isThisMonth  = selectedMonth === currentMonth
@@ -167,22 +197,65 @@ export default function Dashboard() {
     return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
   }, [savings, transactions])
 
-  // ── 연회비 알림 (60일 이내) ─────────────────────────────────────────────────
-  const upcomingAnnualFees = useMemo(() => {
+  // ── 통합 알림: 연회비 (60일 이내) + 적금 만기 (30일 이내) ──────────────────
+  type NotifType = 'annual_fee' | 'savings_maturity'
+  type NotifItem = {
+    id: string
+    type: NotifType
+    title: string
+    subtitle: string
+    daysUntil: number
+    accentColor: string
+    dueDate: Date
+  }
+
+  const allNotifications = useMemo<NotifItem[]>(() => {
     const now = new Date()
-    return cards
+    const items: NotifItem[] = []
+
+    // 연회비 알림 (60일 이내)
+    cards
       .filter(c => c.annualFeeAmount && c.annualFeeDate)
-      .map(c => {
+      .forEach(c => {
         const [mm, dd] = c.annualFeeDate!.split('-').map(Number)
         const thisYear = new Date(now.getFullYear(), mm - 1, dd)
         const nextYear = new Date(now.getFullYear() + 1, mm - 1, dd)
-        const feeDate  = thisYear >= now ? thisYear : nextYear
-        const daysUntil = Math.ceil((feeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        return { card: c, feeDate, daysUntil }
+        const dueDate  = thisYear >= now ? thisYear : nextYear
+        const daysUntil = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysUntil > 60) return
+        items.push({
+          id: `annual-fee-${c.id}-${dueDate.getFullYear()}`,
+          type: 'annual_fee',
+          title: `${c.name} 연회비 납부 예정`,
+          subtitle: `${dueDate.getFullYear()}년 ${dueDate.getMonth()+1}월 ${dueDate.getDate()}일 · ${fmtKRW(c.annualFeeAmount!)}`,
+          daysUntil,
+          accentColor: c.color,
+          dueDate,
+        })
       })
-      .filter(x => x.daysUntil <= 60)
-      .sort((a, b) => a.daysUntil - b.daysUntil)
-  }, [cards])
+
+    // 적금·예금 만기 알림 (30일 이내)
+    savings.forEach(s => {
+      const maturity = new Date(s.maturityDate + 'T00:00:00')
+      const daysUntil = Math.ceil((maturity.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysUntil < 0 || daysUntil > 30) return
+      const typeLabel = s.type === 'saving' ? '적금' : s.type === 'deposit' ? '예금' : '청약'
+      items.push({
+        id: `saving-maturity-${s.id}`,
+        type: 'savings_maturity',
+        title: `${s.name} 만기 도래`,
+        subtitle: `${s.maturityDate} · ${typeLabel} · 만기수령 예상 ${fmtKRW(s.expectedAmount)}`,
+        daysUntil,
+        accentColor: '#10B981',
+        dueDate: maturity,
+      })
+    })
+
+    return items.sort((a, b) => a.daysUntil - b.daysUntil)
+  }, [cards, savings])
+
+  const activeNotifs    = allNotifications.filter(n => !dismissedIds.has(n.id))
+  const dismissedNotifs = allNotifications.filter(n =>  dismissedIds.has(n.id))
 
   // ── 라벨 ─────────────────────────────────────────────────────────────────
   const periodLabel = viewMode === 'day' ? dayLabel(selectedDay) : monthLabel(selectedMonth)
@@ -205,33 +278,115 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* 연회비 알림 배너 */}
-      {upcomingAnnualFees.length > 0 && (
-        <div className="mb-4 space-y-2">
-          {upcomingAnnualFees.map(({ card, feeDate, daysUntil }) => {
-            const isUrgent  = daysUntil <= 14
-            const isWarning = daysUntil <= 30
-            const bg   = isUrgent  ? 'bg-red-50 border-red-200'    : isWarning ? 'bg-amber-50 border-amber-200'    : 'bg-blue-50 border-blue-200'
-            const txt  = isUrgent  ? 'text-red-700'                 : isWarning ? 'text-amber-700'                  : 'text-blue-700'
-            const badge = isUrgent ? 'bg-red-100 text-red-600'      : isWarning ? 'bg-amber-100 text-amber-700'     : 'bg-blue-100 text-blue-600'
-            return (
-              <div key={card.id} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${bg}`}>
-                <div className="w-10 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  style={{ backgroundColor: card.color }}>
-                  {(card.bank || card.name).slice(0, 2)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-semibold ${txt}`}>{card.name} 연회비 납부 예정</div>
-                  <div className={`text-xs mt-0.5 ${txt} opacity-80`}>
-                    {feeDate.getFullYear()}년 {feeDate.getMonth() + 1}월 {feeDate.getDate()}일 · {fmtKRW(card.annualFeeAmount!)}
+      {/* ── 통합 알림 배너 (연회비 + 적금 만기) ─────────────────────────────── */}
+      {(activeNotifs.length > 0 || dismissedNotifs.length > 0) && (
+        <div className="mb-4">
+          {/* 활성 알림 */}
+          {activeNotifs.length > 0 && (
+            <div className="space-y-2 mb-2">
+              {activeNotifs.map(n => {
+                const isUrgent  = n.daysUntil <= 7
+                const isWarning = n.daysUntil <= 14
+                const bg    = isUrgent ? 'bg-red-50 border-red-200' : isWarning ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'
+                const txt   = isUrgent ? 'text-red-700'              : isWarning ? 'text-amber-700'               : 'text-blue-700'
+                const badge = isUrgent ? 'bg-red-100 text-red-600'   : isWarning ? 'bg-amber-100 text-amber-700'  : 'bg-blue-100 text-blue-600'
+                const icon  = n.type === 'annual_fee' ? '💳' : '🏦'
+                return (
+                  <div key={n.id} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${bg}`}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                      style={{ backgroundColor: n.accentColor + '22' }}>
+                      {icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-semibold ${txt}`}>{n.title}</div>
+                      <div className={`text-xs mt-0.5 ${txt} opacity-75`}>{n.subtitle}</div>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${badge}`}>
+                      D-{n.daysUntil}
+                    </span>
+                    <button
+                      onClick={() => dismissNotif(n.id)}
+                      className="text-gray-300 hover:text-gray-500 text-lg leading-none flex-shrink-0 transition-colors"
+                      title="알림 닫기">×</button>
                   </div>
-                </div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${badge}`}>
-                  D-{daysUntil}
+                )
+              })}
+            </div>
+          )}
+
+          {/* 알림 내역 버튼 */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowNotifHistory(true)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1 px-2 rounded-lg hover:bg-gray-100">
+              🔔 알림 내역
+              {activeNotifs.length > 0 && (
+                <span className="bg-blue-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {activeNotifs.length}
                 </span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 알림 내역 모달 ────────────────────────────────────────────────────── */}
+      {showNotifHistory && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4" onClick={() => setShowNotifHistory(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🔔</span>
+                <h2 className="text-base font-bold text-gray-900">알림 내역</h2>
               </div>
-            )
-          })}
+              <button onClick={() => setShowNotifHistory(false)} className="text-gray-400 text-xl leading-none hover:text-gray-600">×</button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto">
+              {allNotifications.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <div className="text-3xl mb-2">🔕</div>
+                  <p className="text-sm">알림이 없어요</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {allNotifications.map(n => {
+                    const isDismissed = dismissedIds.has(n.id)
+                    const icon = n.type === 'annual_fee' ? '💳' : '🏦'
+                    const urgencyLabel = n.daysUntil <= 7 ? 'text-red-500' : n.daysUntil <= 14 ? 'text-amber-500' : 'text-blue-500'
+                    return (
+                      <div key={n.id} className={`flex items-start gap-3 px-5 py-4 ${isDismissed ? 'opacity-40' : ''}`}>
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-gray-100">
+                          {icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-semibold text-gray-800">{n.title}</span>
+                            {isDismissed && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">닫음</span>}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">{n.subtitle}</div>
+                          <div className={`text-xs font-semibold mt-1 ${urgencyLabel}`}>D-{n.daysUntil}</div>
+                        </div>
+                        {isDismissed ? (
+                          <button
+                            onClick={() => restoreNotif(n.id)}
+                            className="text-xs text-blue-500 hover:text-blue-700 font-medium flex-shrink-0 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
+                            복원
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => dismissNotif(n.id)}
+                            className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+                            닫기
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -384,6 +539,76 @@ export default function Dashboard() {
         const sectionAccounts = accountBalances.filter(a => (a.assetType ?? 'cash') === section.value)
         if (sectionAccounts.length === 0) return null
         const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
+
+        // 투자 섹션: 세부 유형별 그룹으로 표시
+        if (section.value === 'investment') {
+          const subGroups: { key: string; label: string; icon: string; accounts: typeof sectionAccounts }[] = [
+            ...(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, { label: string; icon: string }][]).map(([key, meta]) => ({
+              key,
+              label: meta.label,
+              icon: meta.icon,
+              accounts: sectionAccounts.filter(a => a.investmentSubType === key),
+            })),
+            {
+              key: 'other',
+              label: '기타 투자',
+              icon: '💼',
+              accounts: sectionAccounts.filter(a => !a.investmentSubType),
+            },
+          ].filter(g => g.accounts.length > 0)
+
+          return (
+            <div key={section.value} className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm">{section.icon}</span>
+                  <span className="text-xs font-bold text-gray-500">{section.label}</span>
+                </div>
+                <span className="text-xs font-semibold" style={{ color: section.color }}>{fmtKRW(subtotal)}</span>
+              </div>
+              <div className="space-y-3">
+                {subGroups.map(group => {
+                  const groupSubtotal = group.accounts.reduce((s, a) => s + a.computed, 0)
+                  return (
+                    <div key={group.key} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">{group.icon}</span>
+                          <span className="text-xs font-semibold text-gray-600">{group.label}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-violet-600">{fmtKRW(groupSubtotal)}</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-50 sm:divide-y-0 sm:divide-x">
+                        {group.accounts.map(acc => {
+                          const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
+                          const diff = acc.computed - prevBal
+                          return (
+                            <div key={acc.id} className="p-4" style={{ borderTop: `3px solid ${acc.color}` }}>
+                              <div className="mb-2">
+                                {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
+                                <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                              </div>
+                              <div className="text-xl font-bold text-gray-900 tabular-nums">
+                                {acc.computed.toLocaleString('ko-KR')}원
+                              </div>
+                              {diff !== 0 && (
+                                <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                                  {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        }
+
+        // 현금성 / 예적금: 기존 플랫 그리드
         return (
           <div key={section.value} className="mb-4">
             <div className="flex items-center justify-between mb-2">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/AppContext'
 import { Budget, Category } from '@/types'
@@ -67,6 +67,15 @@ export default function BudgetPage() {
 
   // 이월 확인 모달
   const [showCarryOver, setShowCarryOver] = useState(false)
+
+  // 월이 바뀌면 진행 중인 편집 즉시 취소 (stale-closure 방지)
+  useEffect(() => {
+    setEditing(null)
+    setEditingName(null)
+  }, [month])
+
+  // 현재달 이전 → 잠금 (수정 불가)
+  const isPastMonth = month < currentMonth
 
   // 삭제 확인 모달
   const [deleteCatId, setDeleteCatId] = useState<string | null>(null)
@@ -146,6 +155,7 @@ export default function BudgetPage() {
 
   // ── 예산 저장 ────────────────────────────────────────────────────────────
   function saveBudget(catId: string) {
+    if (month < currentMonth) { setEditing(null); return }
     const amount = parseAmt(editValue)
     if (isNaN(amount) || amount < 0) { setEditing(null); return }
     const next = budgets.filter(b => !(b.categoryId === catId && b.month === month))
@@ -307,6 +317,13 @@ export default function BudgetPage() {
             className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
+
+      {isPastMonth && (
+        <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+          <span>🔒</span>
+          <span>지난 달 예산은 수정이 잠겨 있습니다. 현재 달 이후만 편집할 수 있어요.</span>
+        </div>
+      )}
 
       {/* 총계 카드 */}
       <div className="grid grid-cols-3 gap-3 mb-5">
@@ -526,7 +543,7 @@ export default function BudgetPage() {
                           </div>
                           {/* 예산 (클릭 편집) */}
                           <div className="text-right">
-                            {editing === cat.id ? (
+                            {editing === cat.id && !isPastMonth ? (
                               <input
                                 type="text"
                                 inputMode="numeric"
@@ -537,6 +554,10 @@ export default function BudgetPage() {
                                 className="w-24 text-right text-xs border border-blue-300 rounded-lg px-2 py-1 focus:outline-none"
                                 autoFocus
                               />
+                            ) : isPastMonth ? (
+                              <span className="text-sm text-gray-400 tabular-nums">
+                                {budgetAmt > 0 ? fmtKRW(budgetAmt) : <span className="text-gray-300 text-xs">-</span>}
+                              </span>
                             ) : (
                               <button
                                 onClick={() => { setEditing(cat.id); setEditValue(fmtInput(String(budgetAmt))); setEditingName(null) }}
@@ -583,11 +604,13 @@ export default function BudgetPage() {
                   )}
 
                   {/* + 소분류 추가 */}
-                  <button
-                    onClick={() => { setModalParentId(parent.id); setModal('addChild') }}
-                    className="w-full px-4 py-2.5 text-xs text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 border-t border-gray-50">
-                    <span className="text-base leading-none">+</span> 소분류 추가
-                  </button>
+                  {!isPastMonth && (
+                    <button
+                      onClick={() => { setModalParentId(parent.id); setModal('addChild') }}
+                      className="w-full px-4 py-2.5 text-xs text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 border-t border-gray-50">
+                      <span className="text-base leading-none">+</span> 소분류 추가
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -596,11 +619,13 @@ export default function BudgetPage() {
       </div>
 
       {/* + 대분류 추가 버튼 */}
-      <button
-        onClick={() => setModal('addParent')}
-        className="mt-4 w-full bg-white rounded-2xl shadow-sm py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">
-        <span className="text-lg">+</span> 대분류 추가
-      </button>
+      {!isPastMonth && (
+        <button
+          onClick={() => setModal('addParent')}
+          className="mt-4 w-full bg-white rounded-2xl shadow-sm py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">
+          <span className="text-lg">+</span> 대분류 추가
+        </button>
+      )}
 
       {/* ── 이전달 이월 확인 모달 ─────────────────────────────────── */}
       {showCarryOver && (

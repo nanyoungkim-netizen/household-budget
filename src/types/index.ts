@@ -3,13 +3,23 @@ export type TransactionType = 'income' | 'expense' | 'transfer' | 'refund'
 // FR-01: 자산 유형
 export type AssetType = 'cash' | 'savings' | 'investment'
 
+// 투자 세부 유형
+export type InvestmentSubType = 'pension_savings' | 'retirement_pension' | 'general_investment'
+
+export const INVESTMENT_SUB_LABELS: Record<InvestmentSubType, { label: string; icon: string }> = {
+  pension_savings:    { label: '연금저축',  icon: '🏛️' },
+  retirement_pension: { label: '퇴직연금',  icon: '🎯' },
+  general_investment: { label: '일반투자',  icon: '📈' },
+}
+
 export interface Account {
   id: string
   name: string
   bank: string
   balance: number
   color: string
-  assetType?: AssetType  // FR-01: 현금성/예적금/투자
+  assetType?: AssetType                  // FR-01: 현금성/예적금/투자
+  investmentSubType?: InvestmentSubType  // 투자 세부 유형 (assetType==='investment'일 때)
 }
 
 export type CategoryRole = 'card_payment' | 'savings'
