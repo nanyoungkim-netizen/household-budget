@@ -82,10 +82,16 @@ export default function BudgetPage() {
 
   // ── 카테고리 분류 ─────────────────────────────────────────────────────────
   const expenseParents = categories.filter(c => c.parentId === null && c.type === 'expense')
-  // 지출 + 통장환급(차감)만 포함 — 카드 환급 제외, 카드대금 제외 (카드 사용과 이중 계산 방지)
+  // 실제지출 합계용 (대시보드와 동일): 카드대금·적금 제외
   const monthTx = transactions.filter(t =>
     t.date.startsWith(month) &&
     !isExcludedFromReal(t.categoryId) &&
+    (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
+  )
+  // 카테고리별 예산 실적용: 적금 포함, 카드대금만 제외 (카드 사용과 이중계산 방지)
+  const budgetTx = transactions.filter(t =>
+    t.date.startsWith(month) &&
+    !isCardPaymentCat(t.categoryId) &&
     (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
 
@@ -144,8 +150,7 @@ export default function BudgetPage() {
     return categories.filter(c => c.parentId === parentId)
   }
   function getActual(catId: string) {
-    // 지출은 +, 환급은 - (차감)
-    return monthTx
+    return budgetTx
       .filter(t => t.categoryId === catId)
       .reduce((s, t) => t.type === 'refund' ? s - t.amount : s + t.amount, 0)
   }
