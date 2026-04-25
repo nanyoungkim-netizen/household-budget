@@ -65,7 +65,7 @@ function PctTooltip({ active, payload, label }: { active?: boolean; payload?: { 
 
 export default function StatisticsPage() {
   const { data, categories } = useApp()
-  const { transactions } = data
+  const { transactions, categoryExcludeMonths } = data
 
   const [tab, setTab]           = useState<Tab>('trend')
   const [catTab, setCatTab]     = useState<'expense' | 'income'>('expense')
@@ -104,11 +104,26 @@ export default function StatisticsPage() {
     const expense = txs.filter(t => t.type === 'expense' && !isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
     const savingAmt  = txs.filter(t => t.type === 'expense' && !isCardPayment(t) && isSaving(t)).reduce((s, t) => s + t.amount, 0)
     const cardPayAmt = txs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
-    const realConsumption = Math.max(0, expense - savingAmt - refund)
+    // 실소비: categoryExcludeMonths 반영
+    const realExpense = txs.filter(t => {
+      if (t.type !== 'expense') return false
+      if (isCardPayment(t) || isSaving(t)) return false
+      const cat = catMap.get(t.categoryId)
+      if (!cat) return true
+      const catExcluded = (categoryExcludeMonths[cat.id] ?? []).includes(m)
+      if (catExcluded) return false
+      const parent = cat.parentId ? catMap.get(cat.parentId) : undefined
+      if (parent) {
+        const parentExcluded = (categoryExcludeMonths[parent.id] ?? []).includes(m)
+        if (parentExcluded) return false
+      }
+      return true
+    }).reduce((s, t) => s + t.amount, 0)
+    const realConsumption = Math.max(0, realExpense - refund)
     const savingRate      = income > 0 ? (savingAmt / income) * 100 : 0
     const netIncome       = income - realConsumption - savingAmt
     return { income, expense, savingAmt, cardPayAmt, realConsumption, savingRate, netIncome, refund }
-  }, [transactions, isCardPayment, isSaving])
+  }, [transactions, isCardPayment, isSaving, catMap, categoryExcludeMonths])
 
   // ── KPI (이번달·전월) ───────────────────────────────────────────────────
   const thisStats = useMemo(() => getMonthStats(currentMonth), [getMonthStats])

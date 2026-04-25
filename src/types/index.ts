@@ -183,13 +183,27 @@ export interface InvestmentTrade {
   note?: string
 }
 
+// F-03: 투자 계좌 유형
+export interface InvestmentAccountType {
+  id: string
+  name: string        // 유형명 (예: "ISA", "연금저축펀드")
+  isDefault: boolean  // 기본 제공 여부 (true면 삭제 불가)
+}
+
 // PRD 2.6: 투자 계좌 (증권사 계좌)
 export interface InvestmentAccount {
   id: string
   name: string              // e.g. "미래에셋 연금저축"
   bank: string              // e.g. "미래에셋증권"
-  type: InvestmentSubType   // pension_savings | retirement_pension | general_investment
+  type?: InvestmentSubType  // 레거시 (마이그레이션용)
+  typeId: string            // InvestmentAccountType.id 참조
   color: string
+}
+
+// F-05: 목표 투자 비율
+export interface InvestmentTargetAllocation {
+  investmentId: string
+  targetPct: number  // 0~100
 }
 
 export interface Investment {

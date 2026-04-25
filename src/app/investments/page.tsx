@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useApp } from '@/lib/AppContext'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { useApp, DEFAULT_INVESTMENT_ACCOUNT_TYPES } from '@/lib/AppContext'
 import {
   Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend,
-  InvestmentAssetType, InvestmentCurrency, InvestmentSubType, INVESTMENT_SUB_LABELS,
+  InvestmentAssetType, InvestmentCurrency, InvestmentAccountType, InvestmentTargetAllocation,
 } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
@@ -25,7 +25,7 @@ const CURRENCIES: InvestmentCurrency[] = ['KRW', 'USD', 'USDT', 'other']
 
 const ACCOUNT_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6']
 
-type PageTab = 'dashboard' | 'holdings' | 'trades'
+type PageTab = 'dashboard' | 'holdings' | 'trades' | 'portfolio'
 
 const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
   assetType: 'domestic_stock',
@@ -51,7 +51,7 @@ const EMPTY_TRADE: Omit<InvestmentTrade, 'id' | 'investmentId'> = {
 const EMPTY_ACCOUNT: Omit<InvestmentAccount, 'id'> = {
   name: '',
   bank: '',
-  type: 'general_investment',
+  typeId: 'iat_general',
   color: ACCOUNT_COLORS[0],
 }
 
@@ -64,8 +64,10 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id' | 'investmentId'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends } = useApp()
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentAccountTypes, setInvestmentTargetAllocations } = useApp()
   const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
+  const investmentAccountTypes: InvestmentAccountType[] = data.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES
+  const investmentTargetAllocations: InvestmentTargetAllocation[] = data.investmentTargetAllocations ?? []
 
   const [pageTab, setPageTab] = useState<PageTab>('dashboard')
 
@@ -76,6 +78,34 @@ export default function InvestmentsPage() {
   const [initialBuy, setInitialBuy] = useState<{ date: string; quantity: string; price: string; fee: string } | null>(null)
   const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
   const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
+
+  // F-04: 종목명 자동완성
+  const [nameDropdownOpen, setNameDropdownOpen] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const nameDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        nameDropdownRef.current && !nameDropdownRef.current.contains(e.target as Node) &&
+        nameInputRef.current && !nameInputRef.current.contains(e.target as Node)
+      ) {
+        setNameDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const nameSuggestions = useMemo(() => {
+    const q = investmentForm.name.trim()
+    if (!q) return []
+    return investments
+      .filter(inv => inv.id !== editInvestmentId && inv.name.includes(q))
+      .map(inv => inv.name)
+      .filter((name, idx, arr) => arr.indexOf(name) === idx)
+      .slice(0, 5)
+  }, [investmentForm.name, investments, editInvestmentId])
 
   // 거래 모달
   const [showTradeModal, setShowTradeModal] = useState(false)
@@ -91,6 +121,13 @@ export default function InvestmentsPage() {
   const [accountForm, setAccountForm] = useState<Omit<InvestmentAccount, 'id'>>(EMPTY_ACCOUNT)
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null)
 
+  // F-03: 계좌 유형 관리 모달
+  const [showTypeModal, setShowTypeModal] = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
+  const [editTypeId, setEditTypeId] = useState<string | null>(null)
+  const [editTypeName, setEditTypeName] = useState('')
+  const [deleteTypeId, setDeleteTypeId] = useState<string | null>(null)
+
   // 배당금 모달
   const [showDividendModal, setShowDividendModal] = useState(false)
   const [dividendInvestmentId, setDividendInvestmentId] = useState<string | null>(null)
@@ -99,14 +136,19 @@ export default function InvestmentsPage() {
   const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
   const [expandedDividendInvId, setExpandedDividendInvId] = useState<string | null>(null)
 
+  // F-05: 포트폴리오 관리
+  const [targetInputs, setTargetInputs] = useState<Record<string, string>>({})
+  const [additionalInvestment, setAdditionalInvestment] = useState('')
+  const [rebalanceResult, setRebalanceResult] = useState<{ id: string; name: string; addAmt: number; expectedPct: number }[] | null>(null)
+
   // ── 보유 종목별 계산 ────────────────────────────────────────────────────────
   const holdingsMap = useMemo(() => {
     const map = new Map<string, {
       investment: Investment
       avgPrice: number
       holdingQty: number
-      totalBuyAmt: number  // 순수 매수금액 (수수료 제외)
-      totalFee: number     // 납부 수수료 합계 (별도 표기)
+      totalBuyAmt: number
+      totalFee: number
       realizedPnl: number
     }>()
 
@@ -126,7 +168,7 @@ export default function InvestmentsPage() {
         totalFee += fee
         if (trade.type === 'buy') {
           holdingQty += trade.quantity
-          totalBuyAmt += tradeAmt  // 수수료 제외: 순수 시세차익만 평가손익에 반영
+          totalBuyAmt += tradeAmt
         } else {
           const avgCost = holdingQty > 0 ? totalBuyAmt / holdingQty : 0
           realizedPnl += (tradeAmt - fee) - avgCost * trade.quantity
@@ -169,16 +211,46 @@ export default function InvestmentsPage() {
     return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, totalDividend, totalFee, totalReturn, byType, byAccount }
   }, [holdingsMap, investmentDividends])
 
+  // ── F-03: 계좌 유형 헬퍼 ─────────────────────────────────────────────────
+  function getTypeLabel(typeId: string): string {
+    return investmentAccountTypes.find(t => t.id === typeId)?.name ?? typeId
+  }
+
+  function handleAddType() {
+    const name = newTypeName.trim()
+    if (!name) return
+    const newType: InvestmentAccountType = { id: `iat_${Date.now()}`, name, isDefault: false }
+    setInvestmentAccountTypes([...investmentAccountTypes, newType])
+    setNewTypeName('')
+  }
+
+  function handleSaveTypeName() {
+    if (!editTypeId || !editTypeName.trim()) return
+    setInvestmentAccountTypes(investmentAccountTypes.map(t => t.id === editTypeId ? { ...t, name: editTypeName.trim() } : t))
+    setEditTypeId(null)
+    setEditTypeName('')
+  }
+
+  function handleDeleteType(id: string) {
+    const usedCount = investmentAccounts.filter(a => a.typeId === id).length
+    if (usedCount > 0) {
+      alert(`${usedCount}개 계좌에서 사용 중입니다. 삭제할 수 없습니다.`)
+      return
+    }
+    setInvestmentAccountTypes(investmentAccountTypes.filter(t => t.id !== id))
+    setDeleteTypeId(null)
+  }
+
   // ── 계좌 CRUD ──────────────────────────────────────────────────────────────
-  function openAddAccount(defaultType?: InvestmentSubType) {
+  function openAddAccount() {
     setEditAccountId(null)
-    setAccountForm({ ...EMPTY_ACCOUNT, type: defaultType ?? 'general_investment', color: ACCOUNT_COLORS[investmentAccounts.length % ACCOUNT_COLORS.length] })
+    setAccountForm({ ...EMPTY_ACCOUNT, color: ACCOUNT_COLORS[investmentAccounts.length % ACCOUNT_COLORS.length] })
     setShowAccountModal(true)
   }
 
   function openEditAccount(acc: InvestmentAccount) {
     setEditAccountId(acc.id)
-    setAccountForm({ name: acc.name, bank: acc.bank, type: acc.type, color: acc.color })
+    setAccountForm({ name: acc.name, bank: acc.bank, typeId: acc.typeId, color: acc.color })
     setShowAccountModal(true)
   }
 
@@ -194,7 +266,6 @@ export default function InvestmentsPage() {
   }
 
   function handleDeleteAccount(id: string) {
-    // 계좌 삭제 시 해당 계좌의 종목들은 accountId를 제거 (미분류로 이동)
     setInvestments(investments.map(inv => inv.accountId === id ? { ...inv, accountId: undefined } : inv))
     setInvestmentAccounts(investmentAccounts.filter(a => a.id !== id))
     setDeleteAccountId(null)
@@ -329,6 +400,80 @@ export default function InvestmentsPage() {
     setDeleteDividendId(null)
   }
 
+  // ── F-05: 포트폴리오 관리 ────────────────────────────────────────────────────
+  // 보유 종목 (holdingQty > 0)
+  const holdingInvestments = useMemo(() =>
+    investments.filter(inv => (holdingsMap.get(inv.id)?.holdingQty ?? 0) > 0)
+  , [investments, holdingsMap])
+
+  const totalEvalForPortfolio = useMemo(() =>
+    holdingInvestments.reduce((s, inv) => {
+      const h = holdingsMap.get(inv.id)
+      return s + (h ? h.holdingQty * (inv.currentPrice ?? 0) : 0)
+    }, 0)
+  , [holdingInvestments, holdingsMap])
+
+  // 현재 비율 계산
+  const currentPctMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    holdingInvestments.forEach(inv => {
+      const h = holdingsMap.get(inv.id)
+      const evalAmt = h ? h.holdingQty * (inv.currentPrice ?? 0) : 0
+      map[inv.id] = totalEvalForPortfolio > 0 ? (evalAmt / totalEvalForPortfolio) * 100 : 0
+    })
+    return map
+  }, [holdingInvestments, holdingsMap, totalEvalForPortfolio])
+
+  // 목표 비율 합계
+  const targetPctSum = useMemo(() => {
+    return holdingInvestments.reduce((s, inv) => {
+      const v = parseFloat(targetInputs[inv.id] ?? '') || 0
+      return s + v
+    }, 0)
+  }, [holdingInvestments, targetInputs])
+
+  // 저장된 목표 비율 합계
+  const savedTargetPctSum = investmentTargetAllocations.reduce((s, a) => s + a.targetPct, 0)
+
+  function handleSaveTargetAllocations() {
+    const allocations: InvestmentTargetAllocation[] = holdingInvestments.map(inv => ({
+      investmentId: inv.id,
+      targetPct: parseFloat(targetInputs[inv.id] ?? '') || 0,
+    }))
+    setInvestmentTargetAllocations(allocations)
+  }
+
+  function initTargetInputs() {
+    const inputs: Record<string, string> = {}
+    holdingInvestments.forEach(inv => {
+      const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
+      inputs[inv.id] = saved ? String(saved.targetPct) : ''
+    })
+    setTargetInputs(inputs)
+  }
+
+  useEffect(() => {
+    initTargetInputs()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holdingInvestments.length, investmentTargetAllocations.length])
+
+  function handleCalcRebalance() {
+    const addAmt = parseFloat(additionalInvestment) || 0
+    const currentEval = totalEvalForPortfolio
+    const totalAfter = currentEval + addAmt
+    const results = holdingInvestments.map(inv => {
+      const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
+      const targetPct = saved?.targetPct ?? 0
+      const h = holdingsMap.get(inv.id)
+      const currentInvEval = h ? h.holdingQty * (inv.currentPrice ?? 0) : 0
+      const targetAmt = (targetPct / 100) * totalAfter
+      const addInv = Math.max(0, targetAmt - currentInvEval)
+      const expectedPct = totalAfter > 0 ? ((currentInvEval + addInv) / totalAfter) * 100 : 0
+      return { id: inv.id, name: inv.name, addAmt: addInv, expectedPct }
+    })
+    setRebalanceResult(results)
+  }
+
   // ── 그룹: 계좌별 종목 목록 ───────────────────────────────────────────────
   const investmentsByAccount = useMemo(() => {
     const map = new Map<string, Investment[]>()
@@ -418,7 +563,6 @@ export default function InvestmentsPage() {
                 <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
               </div>
             </div>
-            {/* 납부 수수료 + 배당 수익 */}
             {(h.totalFee > 0 || totalDividend > 0) && (
               <div className="col-span-2 flex gap-2">
                 {h.totalFee > 0 && (
@@ -438,7 +582,6 @@ export default function InvestmentsPage() {
           </div>
         )}
 
-        {/* 배당금 이력 */}
         {isExpanded && invDividends.length > 0 && (
           <div className="mb-3 border border-emerald-100 rounded-xl overflow-hidden">
             {invDividends.map(d => (
@@ -486,17 +629,23 @@ export default function InvestmentsPage() {
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">투자 내역 관리</h1>
-        <button onClick={() => openAddAccount()}
-          className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
-          + 계좌 추가
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowTypeModal(true)}
+            className="bg-gray-100 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-200 transition-colors">
+            계좌유형 관리
+          </button>
+          <button onClick={() => openAddAccount()}
+            className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
+            + 계좌 추가
+          </button>
+        </div>
       </div>
 
       {/* 탭 */}
-      <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-1">
-        {([['dashboard','📊 대시보드'],['holdings','💼 보유 종목'],['trades','📋 거래 이력']] as const).map(([key, label]) => (
+      <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-1 overflow-x-auto">
+        {([['dashboard','📊 대시보드'],['holdings','💼 보유 종목'],['trades','📋 거래 이력'],['portfolio','🎯 포트폴리오']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setPageTab(key)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pageTab === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pageTab === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
             {label}
           </button>
         ))}
@@ -505,7 +654,6 @@ export default function InvestmentsPage() {
       {/* ══ 대시보드 탭 ══════════════════════════════════════════════════════ */}
       {pageTab === 'dashboard' && (
         <div className="space-y-4">
-          {/* 총 요약 */}
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 text-white">
             <div className="text-xs opacity-70 mb-3">투자 현황 요약</div>
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -547,20 +695,20 @@ export default function InvestmentsPage() {
             )}
           </div>
 
-          {/* 계좌별 요약 */}
           {investmentAccounts.length > 0 && (
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-semibold text-gray-700 mb-3">계좌별 현황</div>
               <div className="space-y-3">
                 {investmentAccounts.map(acc => {
-                  const sub = INVESTMENT_SUB_LABELS[acc.type]
                   const stats = portfolio.byAccount[acc.id]
                   if (!stats) return (
                     <div key={acc.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style={{ backgroundColor: acc.color + '20', color: acc.color }}>{sub.icon}</div>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
+                        {getTypeLabel(acc.typeId).slice(0, 1)}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900">{acc.name}</div>
-                        <div className="text-xs text-gray-400">{acc.bank} · {sub.label}</div>
+                        <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)}</div>
                       </div>
                       <div className="text-xs text-gray-400">종목 없음</div>
                     </div>
@@ -569,10 +717,12 @@ export default function InvestmentsPage() {
                   const rate = stats.buy > 0 ? (pnl / stats.buy) * 100 : 0
                   return (
                     <div key={acc.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style={{ backgroundColor: acc.color + '20', color: acc.color }}>{sub.icon}</div>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
+                        {getTypeLabel(acc.typeId).slice(0, 1)}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900">{acc.name}</div>
-                        <div className="text-xs text-gray-400">{acc.bank} · {sub.label}</div>
+                        <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(stats.eval))}</div>
@@ -585,7 +735,6 @@ export default function InvestmentsPage() {
             </div>
           )}
 
-          {/* 자산 유형별 비중 */}
           {Object.keys(portfolio.byType).length > 0 && (
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-semibold text-gray-700 mb-3">자산 유형별 비중</div>
@@ -622,7 +771,6 @@ export default function InvestmentsPage() {
       {/* ══ 보유 종목 탭 ══════════════════════════════════════════════════════ */}
       {pageTab === 'holdings' && (
         <div className="space-y-5">
-          {/* 계좌 없는 경우 안내 */}
           {investmentAccounts.length === 0 && investments.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <div className="text-4xl mb-2">💼</div>
@@ -632,21 +780,18 @@ export default function InvestmentsPage() {
             </div>
           )}
 
-          {/* 계좌별 섹션 */}
           {investmentAccounts.map(acc => {
-            const sub = INVESTMENT_SUB_LABELS[acc.type]
             const accInvestments = investmentsByAccount.get(acc.id) ?? []
             const stats = portfolio.byAccount[acc.id]
             return (
               <div key={acc.id}>
-                {/* 계좌 헤더 */}
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
-                    {sub.icon}
+                    {getTypeLabel(acc.typeId).slice(0, 1)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900">{acc.name}</div>
-                    <div className="text-xs text-gray-400">{acc.bank} · {sub.label}</div>
+                    <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)}</div>
                   </div>
                   {stats && (
                     <div className="text-right mr-1">
@@ -672,7 +817,6 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
 
-                {/* 계좌 내 종목 목록 */}
                 {accInvestments.length === 0 ? (
                   <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border-2 border-dashed border-gray-200">
                     <div className="text-2xl mb-1">📭</div>
@@ -688,7 +832,6 @@ export default function InvestmentsPage() {
             )
           })}
 
-          {/* 미분류 종목 (계좌 없는 것) */}
           {(investmentsByAccount.get('__none__') ?? []).length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -704,7 +847,6 @@ export default function InvestmentsPage() {
             </div>
           )}
 
-          {/* 계좌만 있고 종목 없는 경우 계좌 추가 버튼 */}
           {investmentAccounts.length > 0 && (
             <button onClick={() => openAddAccount()}
               className="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-500 rounded-2xl text-sm hover:bg-indigo-50 transition-colors">
@@ -717,7 +859,6 @@ export default function InvestmentsPage() {
       {/* ══ 거래 이력 탭 ══════════════════════════════════════════════════════ */}
       {pageTab === 'trades' && (
         <div>
-          {/* 종목 필터 */}
           {investments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={() => setSelectedInvestmentId(null)}
@@ -775,6 +916,184 @@ export default function InvestmentsPage() {
         </div>
       )}
 
+      {/* ══ 포트폴리오 관리 탭 (F-05) ══════════════════════════════════════════ */}
+      {pageTab === 'portfolio' && (
+        <div className="space-y-4">
+          {holdingInvestments.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <div className="text-4xl mb-2">🎯</div>
+              <div className="text-sm">등록된 투자 내역이 없습니다</div>
+              <div className="text-xs mt-1">보유 종목이 있어야 포트폴리오 관리를 사용할 수 있습니다</div>
+            </div>
+          ) : (
+            <>
+              {/* 목표 비율 설정 테이블 */}
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-semibold text-gray-800">목표 비율 설정</div>
+                  <div className={`text-xs font-medium px-2 py-1 rounded-lg ${Math.abs(targetPctSum - 100) < 0.01 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                    합계 {targetPctSum.toFixed(1)}%
+                    {Math.abs(targetPctSum - 100) >= 0.01 && ' ⚠️ 100% 필요'}
+                  </div>
+                </div>
+                <div className="space-y-2 mb-3">
+                  {holdingInvestments.map(inv => (
+                    <div key={inv.id} className="flex items-center gap-3">
+                      <div className="flex-1 text-sm text-gray-700 truncate">{ASSET_TYPE_META[inv.assetType].icon} {inv.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number" min={0} max={100} step={0.1}
+                          placeholder="0"
+                          value={targetInputs[inv.id] ?? ''}
+                          onChange={e => setTargetInputs(prev => ({ ...prev, [inv.id]: e.target.value }))}
+                          className="w-20 text-right border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-400">%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSaveTargetAllocations}
+                  disabled={Math.abs(targetPctSum - 100) >= 0.01}
+                  className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                  저장하기
+                </button>
+              </div>
+
+              {/* 현재 vs 목표 비율 비교 */}
+              {investmentTargetAllocations.length > 0 && Math.abs(savedTargetPctSum - 100) < 0.01 && (
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="text-sm font-semibold text-gray-800 mb-3">현재 vs 목표 비율</div>
+                  <div className="grid grid-cols-4 text-xs font-semibold text-gray-400 mb-2 px-1">
+                    <span>종목</span>
+                    <span className="text-right">목표</span>
+                    <span className="text-right">현재</span>
+                    <span className="text-right">차이</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {holdingInvestments.map(inv => {
+                      const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
+                      const targetPct = saved?.targetPct ?? 0
+                      const curPct = currentPctMap[inv.id] ?? 0
+                      const diff = curPct - targetPct
+                      return (
+                        <div key={inv.id} className="grid grid-cols-4 items-center py-1.5 border-b border-gray-50 last:border-0">
+                          <div className="text-sm text-gray-700 truncate">{inv.name}</div>
+                          <div className="text-right text-sm text-gray-600">{targetPct.toFixed(1)}%</div>
+                          <div className="text-right text-sm text-gray-600">{curPct.toFixed(1)}%</div>
+                          <div className={`text-right text-sm font-semibold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                            {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 리밸런싱 추천 */}
+              {investmentTargetAllocations.length > 0 && Math.abs(savedTargetPctSum - 100) < 0.01 && (
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="text-sm font-semibold text-gray-800 mb-3">리밸런싱 추천</div>
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="number" min={0} placeholder="추가 투자 가능 금액 (원)"
+                      value={additionalInvestment}
+                      onChange={e => setAdditionalInvestment(e.target.value)}
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button onClick={handleCalcRebalance}
+                      className="px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors">
+                      계산
+                    </button>
+                  </div>
+                  {rebalanceResult && (
+                    <div>
+                      <div className="grid grid-cols-3 text-xs font-semibold text-gray-400 mb-2 px-1">
+                        <span>종목</span>
+                        <span className="text-right">추천 매수금액</span>
+                        <span className="text-right">예상 비율</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {rebalanceResult.map(r => (
+                          <div key={r.id} className="grid grid-cols-3 items-center py-1.5 border-b border-gray-50 last:border-0">
+                            <div className="text-sm text-gray-700 truncate">{r.name}</div>
+                            <div className="text-right text-sm font-semibold text-blue-600">{r.addAmt > 0 ? fmtKRW(Math.round(r.addAmt)) : '-'}</div>
+                            <div className="text-right text-sm text-gray-600">{r.expectedPct.toFixed(1)}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── F-03: 계좌 유형 관리 모달 ─────────────────────────────────────────── */}
+      {showTypeModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">계좌유형 관리</h2>
+              <button onClick={() => { setShowTypeModal(false); setEditTypeId(null); setNewTypeName('') }} className="text-gray-400 text-xl">×</button>
+            </div>
+            <div className="space-y-2 mb-4">
+              {investmentAccountTypes.map(t => (
+                <div key={t.id} className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0">
+                  {editTypeId === t.id ? (
+                    <>
+                      <input
+                        type="text" value={editTypeName}
+                        onChange={e => setEditTypeName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveTypeName(); if (e.key === 'Escape') setEditTypeId(null) }}
+                        className="flex-1 border border-blue-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                      <button onClick={handleSaveTypeName} className="text-xs text-blue-600 font-semibold px-2 py-1.5 rounded-lg hover:bg-blue-50">저장</button>
+                      <button onClick={() => setEditTypeId(null)} className="text-xs text-gray-400 px-2 py-1.5 rounded-lg hover:bg-gray-100">취소</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm text-gray-800">{t.name}</span>
+                      {t.isDefault && (
+                        <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full font-medium">기본</span>
+                      )}
+                      <button onClick={() => { setEditTypeId(t.id); setEditTypeName(t.name) }}
+                        className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
+                        수정
+                      </button>
+                      {!t.isDefault && (
+                        <button onClick={() => handleDeleteType(t.id)}
+                          className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">
+                          삭제
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text" placeholder="새 유형 이름"
+                value={newTypeName}
+                onChange={e => setNewTypeName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddType() }}
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button onClick={handleAddType} disabled={!newTypeName.trim()}
+                className="px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-40">
+                추가
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 계좌 추가/수정 모달 ────────────────────────────────────────────── */}
       {showAccountModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
@@ -793,10 +1112,10 @@ export default function InvestmentsPage() {
               <div>
                 <label className="text-xs text-gray-400 block mb-1.5">계좌 유형</label>
                 <div className="flex gap-2 flex-wrap">
-                  {(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, typeof INVESTMENT_SUB_LABELS[InvestmentSubType]][]).map(([type, meta]) => (
-                    <button key={type} onClick={() => setAccountForm(f => ({ ...f, type }))}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${accountForm.type === type ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
-                      {meta.icon} {meta.label}
+                  {investmentAccountTypes.map(t => (
+                    <button key={t.id} onClick={() => setAccountForm(f => ({ ...f, typeId: t.id }))}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${accountForm.typeId === t.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                      {t.name}
                     </button>
                   ))}
                 </div>
@@ -828,7 +1147,7 @@ export default function InvestmentsPage() {
         </div>
       )}
 
-      {/* ── 종목 등록/수정 모달 ────────────────────────────────────────────── */}
+      {/* ── 종목 등록/수정 모달 (F-04 자동완성 포함) ──────────────────────────── */}
       {showInvestmentModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -837,7 +1156,6 @@ export default function InvestmentsPage() {
               <button onClick={() => setShowInvestmentModal(false)} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
-              {/* 소속 계좌 */}
               {investmentAccounts.length > 0 && (
                 <div>
                   <label className="text-xs text-gray-400 block mb-1.5">소속 계좌</label>
@@ -850,13 +1168,12 @@ export default function InvestmentsPage() {
                       <button key={acc.id} onClick={() => setInvestmentForm(f => ({ ...f, accountId: acc.id }))}
                         className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${investmentForm.accountId === acc.id ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200'}`}
                         style={investmentForm.accountId === acc.id ? { backgroundColor: acc.color } : {}}>
-                        {INVESTMENT_SUB_LABELS[acc.type].icon} {acc.name}
+                        {getTypeLabel(acc.typeId).slice(0, 1)} {acc.name}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              {/* 자산 유형 */}
               <div className="flex gap-1.5 flex-wrap">
                 {(Object.entries(ASSET_TYPE_META) as [InvestmentAssetType, typeof ASSET_TYPE_META[InvestmentAssetType]][]).map(([type, meta]) => (
                   <button key={type} onClick={() => setInvestmentForm(f => ({ ...f, assetType: type }))}
@@ -865,9 +1182,29 @@ export default function InvestmentsPage() {
                   </button>
                 ))}
               </div>
-              <input type="text" placeholder="종목명 / 코인명 *" value={investmentForm.name}
-                onChange={e => setInvestmentForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {/* F-04: 종목명 자동완성 */}
+              <div className="relative">
+                <input
+                  ref={nameInputRef}
+                  type="text" placeholder="종목명 / 코인명 *"
+                  value={investmentForm.name}
+                  onChange={e => { setInvestmentForm(f => ({ ...f, name: e.target.value })); setNameDropdownOpen(true) }}
+                  onFocus={() => setNameDropdownOpen(true)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {nameDropdownOpen && nameSuggestions.length > 0 && (
+                  <div ref={nameDropdownRef} className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+                    {nameSuggestions.map((name, idx) => (
+                      <button
+                        key={idx}
+                        onMouseDown={e => { e.preventDefault(); setInvestmentForm(f => ({ ...f, name })); setNameDropdownOpen(false) }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <input type="text" placeholder="티커 / 종목코드" value={investmentForm.ticker ?? ''}
                   onChange={e => setInvestmentForm(f => ({ ...f, ticker: e.target.value }))}
@@ -887,7 +1224,6 @@ export default function InvestmentsPage() {
                   ))}
                 </div>
               </div>
-              {/* 첫 매수 정보 (신규 등록 시만) */}
               {!editInvestmentId && initialBuy && (
                 <div className="border border-blue-100 bg-blue-50/50 rounded-xl p-3 space-y-2">
                   <div className="text-xs font-semibold text-blue-600">첫 매수 정보 입력</div>

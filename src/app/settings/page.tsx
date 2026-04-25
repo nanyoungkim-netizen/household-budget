@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
-import { Account, Card, Category, CategoryRole, MappingRule, AssetType, InvestmentSubType, INVESTMENT_SUB_LABELS } from '@/types'
+import { Account, Card, Category, CategoryRole, MappingRule, INVESTMENT_SUB_LABELS } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string) { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
@@ -61,8 +61,6 @@ export default function SettingsPage() {
   const [editingAccount, setEditingAccount] = useState<string | null>(null)
   const [accountForm, setAccountForm] = useState({
     name: '', bank: '', color: '#0064FF', balance: '',
-    assetType: 'cash' as AssetType,
-    investmentSubType: '' as InvestmentSubType | '',
     memo: '',
   })
 
@@ -125,7 +123,7 @@ export default function SettingsPage() {
 
   function openAddAccount() {
     setEditAccountId(null)
-    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', assetType: 'cash', investmentSubType: '', memo: '' })
+    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', memo: '' })
     setShowAccountModal(true)
   }
 
@@ -134,8 +132,6 @@ export default function SettingsPage() {
     setAccountForm({
       name: acc.name, bank: acc.bank, color: acc.color,
       balance: acc.balance === 0 ? '' : fmtInput(String(acc.balance)),
-      assetType: acc.assetType ?? 'cash',
-      investmentSubType: acc.investmentSubType ?? '',
       memo: acc.memo ?? '',
     })
     setShowAccountModal(true)
@@ -143,13 +139,10 @@ export default function SettingsPage() {
 
   function saveAccount() {
     if (!accountForm.name || !accountForm.bank) return
-    const invSub = accountForm.assetType === 'investment' && accountForm.investmentSubType
-      ? accountForm.investmentSubType as InvestmentSubType
-      : undefined
     if (editAccountId) {
-      // 수정
+      // 수정 (assetType/investmentSubType은 기존 값 유지)
       setAccounts(accounts.map(a => a.id === editAccountId
-        ? { ...a, name: accountForm.name, bank: accountForm.bank, color: accountForm.color, balance: parseAmt(accountForm.balance), assetType: accountForm.assetType, investmentSubType: invSub, memo: accountForm.memo || undefined }
+        ? { ...a, name: accountForm.name, bank: accountForm.bank, color: accountForm.color, balance: parseAmt(accountForm.balance), memo: accountForm.memo || undefined }
         : a
       ))
     } else {
@@ -160,15 +153,13 @@ export default function SettingsPage() {
         bank: accountForm.bank,
         balance: parseAmt(accountForm.balance),
         color: accountForm.color,
-        assetType: accountForm.assetType,
-        investmentSubType: invSub,
         memo: accountForm.memo || undefined,
       }
       setAccounts([...accounts, newAcc])
     }
     setShowAccountModal(false)
     setEditAccountId(null)
-    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', assetType: 'cash', investmentSubType: '', memo: '' })
+    setAccountForm({ name: '', bank: '', color: '#0064FF', balance: '', memo: '' })
   }
 
   function deleteAccount(id: string) {
@@ -371,10 +362,10 @@ export default function SettingsPage() {
                     <div>
                       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>
                       <div className="font-semibold text-gray-900">{acc.name}</div>
-                      {acc.assetType === 'investment' && acc.investmentSubType && (
-                        <span className="text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full font-medium">
-                          {INVESTMENT_SUB_LABELS[acc.investmentSubType].icon} {INVESTMENT_SUB_LABELS[acc.investmentSubType].label}
-                        </span>
+                      {acc.memo && (
+                        <div className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[160px]" title={acc.memo}>
+                          {acc.memo.length > 20 ? acc.memo.slice(0, 20) + '...' : acc.memo}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -781,47 +772,6 @@ export default function SettingsPage() {
               <input type="text" inputMode="numeric" placeholder="현재 잔액 (원)" value={accountForm.balance}
                 onChange={e => setAccountForm(f => ({ ...f, balance: fmtInput(e.target.value) }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              {/* 자산 유형 */}
-              <div>
-                <div className="text-xs text-gray-400 mb-1.5">자산 유형</div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {([
-                    { value: 'cash',       label: '현금성', icon: '💵' },
-                    { value: 'savings',    label: '예·적금', icon: '🏦' },
-                    { value: 'investment', label: '투자',   icon: '📈' },
-                  ] as { value: AssetType; label: string; icon: string }[]).map(opt => (
-                    <button key={opt.value}
-                      onClick={() => setAccountForm(f => ({ ...f, assetType: opt.value, investmentSubType: '' }))}
-                      className={`py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1 transition-all border ${
-                        accountForm.assetType === opt.value
-                          ? 'bg-blue-50 border-blue-400 text-blue-700'
-                          : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}>
-                      <span>{opt.icon}</span>{opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 투자 세부 유형 (투자 선택 시만 표시) */}
-              {accountForm.assetType === 'investment' && (
-                <div>
-                  <div className="text-xs text-gray-400 mb-1.5">투자 세부 유형</div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, { label: string; icon: string }][]).map(([key, meta]) => (
-                      <button key={key}
-                        onClick={() => setAccountForm(f => ({ ...f, investmentSubType: f.investmentSubType === key ? '' : key }))}
-                        className={`py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1 transition-all border ${
-                          accountForm.investmentSubType === key
-                            ? 'bg-violet-50 border-violet-400 text-violet-700'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
-                        }`}>
-                        <span>{meta.icon}</span>{meta.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <input type="text" placeholder="메모 (대시보드에 작게 표시)" value={accountForm.memo}
                 onChange={e => setAccountForm(f => ({ ...f, memo: e.target.value }))}
@@ -836,6 +786,9 @@ export default function SettingsPage() {
                       style={{ backgroundColor: c }} />
                   ))}
                 </div>
+              </div>
+              <div className="text-xs text-blue-600 bg-blue-50 rounded-xl px-3 py-2.5">
+                💡 예적금 계좌는 예적금 탭에서, 투자 계좌는 투자 탭에서 등록해 주세요.
               </div>
               <button onClick={saveAccount}
                 className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm">

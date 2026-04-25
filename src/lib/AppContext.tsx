@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, SavingPayment, ConsumptionType } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -69,6 +69,15 @@ export const DEFAULT_CARDS: Card[] = [
   { id: 'card4', name: '삼성카드', bank: '삼성카드', billingDate: 20, color: '#1259AA' },
 ]
 
+// F-03: 투자 계좌 유형 기본값
+export const DEFAULT_INVESTMENT_ACCOUNT_TYPES: InvestmentAccountType[] = [
+  { id: 'iat_general', name: '일반계좌',    isDefault: true },
+  { id: 'iat_isa',     name: 'ISA',         isDefault: true },
+  { id: 'iat_pension', name: '연금저축펀드', isDefault: true },
+  { id: 'iat_irp',     name: 'IRP',         isDefault: true },
+  { id: 'iat_retire',  name: '퇴직연금',     isDefault: true },
+]
+
 // ── 앱 데이터 타입 ────────────────────────────────────────────────────────────
 interface AppData {
   categories: Category[]
@@ -85,6 +94,8 @@ interface AppData {
   investmentTrades: InvestmentTrade[]  // PRD 2.6
   investmentAccounts: InvestmentAccount[]   // PRD 2.6 계좌
   investmentDividends: InvestmentDividend[] // PRD: 배당금
+  investmentAccountTypes: InvestmentAccountType[]  // F-03
+  investmentTargetAllocations: InvestmentTargetAllocation[]  // F-05
   savingPayments: SavingPayment[]  // PRD 2.2
   categoryHiddenMonths: Record<string, string[]>   // 월별 카테고리 숨김
   categoryExcludeMonths: Record<string, string[]>  // 월별 실소비 제외
@@ -107,6 +118,8 @@ const INITIAL_DATA: AppData = {
   investmentTrades: [],
   investmentAccounts: [],
   investmentDividends: [],
+  investmentAccountTypes: DEFAULT_INVESTMENT_ACCOUNT_TYPES,
+  investmentTargetAllocations: [],
   savingPayments: [],
   categoryHiddenMonths: {},
   categoryExcludeMonths: {},
@@ -154,6 +167,8 @@ interface AppContextType {
   setInvestmentTrades: (trades: InvestmentTrade[]) => void
   setInvestmentAccounts: (accounts: InvestmentAccount[]) => void
   setInvestmentDividends: (dividends: InvestmentDividend[]) => void
+  setInvestmentAccountTypes: (types: InvestmentAccountType[]) => void
+  setInvestmentTargetAllocations: (allocations: InvestmentTargetAllocation[]) => void
   // PRD 2.2: 납입 이력
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
@@ -214,6 +229,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return localTime >= remoteTime ? localData : remoteData
   }
 
+  // F-03: 기존 InvestmentSubType → typeId 마이그레이션
+  function migrateInvestmentAccounts(accs: InvestmentAccount[]): InvestmentAccount[] {
+    const subTypeMap: Record<string, string> = {
+      pension_savings:    'iat_pension',
+      retirement_pension: 'iat_retire',
+      general_investment: 'iat_general',
+    }
+    return accs.map(acc => {
+      if (acc.typeId) return acc  // 이미 마이그레이션됨
+      const legacyType = acc.type as string | undefined
+      const typeId = (legacyType && subTypeMap[legacyType]) ? subTypeMap[legacyType] : 'iat_general'
+      return { ...acc, typeId }
+    })
+  }
+
   function hydrateData(raw: Partial<AppData>): AppData {
     const rawCats = (raw.categories && raw.categories.length > 0) ? raw.categories : DEFAULT_CATEGORIES
     return {
@@ -222,8 +252,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       categories: migrateCategories(rawCats),
       investments: raw.investments ?? [],
       investmentTrades: raw.investmentTrades ?? [],
-      investmentAccounts: raw.investmentAccounts ?? [],
+      investmentAccounts: migrateInvestmentAccounts(raw.investmentAccounts ?? []),
       investmentDividends: raw.investmentDividends ?? [],
+      investmentAccountTypes: raw.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES,
+      investmentTargetAllocations: raw.investmentTargetAllocations ?? [],
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
@@ -441,6 +473,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, investmentDividends, lastModified: now() }))
   }, [update])
 
+  const setInvestmentAccountTypes = useCallback((investmentAccountTypes: InvestmentAccountType[]) => {
+    update(d => ({ ...d, investmentAccountTypes, lastModified: now() }))
+  }, [update])
+
+  const setInvestmentTargetAllocations = useCallback((investmentTargetAllocations: InvestmentTargetAllocation[]) => {
+    update(d => ({ ...d, investmentTargetAllocations, lastModified: now() }))
+  }, [update])
+
   const setSavingPayments = useCallback((savingPayments: SavingPayment[]) => {
     update(d => ({ ...d, savingPayments, lastModified: now() }))
   }, [update])
@@ -492,6 +532,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestmentTrades,
       setInvestmentAccounts,
       setInvestmentDividends,
+      setInvestmentAccountTypes,
+      setInvestmentTargetAllocations,
       setSavingPayments,
       setCategoryHiddenMonths,
       setCategoryExcludeMonths,
@@ -523,9 +565,27 @@ export function getConsumptionType(tx: Transaction, categories: Category[]): 'no
   return 'normal'
 }
 
-export function isRealConsumption(tx: Transaction, categories: Category[]): boolean {
+export function isRealConsumption(
+  tx: Transaction,
+  categories: Category[],
+  categoryExcludeMonths?: Record<string, string[]>,
+  month?: string
+): boolean {
   if (tx.type !== 'expense') return false
-  return getConsumptionType(tx, categories) === 'normal'
+  if (getConsumptionType(tx, categories) !== 'normal') return false
+  // 월별 실소비 제외 체크
+  if (categoryExcludeMonths && month) {
+    const cat = categories.find(c => c.id === tx.categoryId)
+    if (!cat) return true
+    const catExcluded = (categoryExcludeMonths[cat.id] ?? []).includes(month)
+    if (catExcluded) return false
+    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+    if (parent) {
+      const parentExcluded = (categoryExcludeMonths[parent.id] ?? []).includes(month)
+      if (parentExcluded) return false
+    }
+  }
+  return true
 }
 
 // 편의 함수
@@ -567,13 +627,31 @@ export function getCategoryExpenses(transactions: Transaction[], month: string) 
 }
 
 // PRD 2.1: 실소비만 집계하는 카테고리 지출 (카드대금·적금이체 제외, 통장환급 차감)
-export function getRealCategoryExpenses(transactions: Transaction[], categories: Category[], month: string) {
+export function getRealCategoryExpenses(
+  transactions: Transaction[],
+  categories: Category[],
+  month: string,
+  categoryExcludeMonths?: Record<string, string[]>
+) {
   const map: Record<string, number> = {}
   transactions
     .filter(t => {
       if (!t.date.startsWith(month)) return false
       const ct = getConsumptionType(t, categories)
       if (ct !== 'normal') return false
+      // 월별 실소비 제외 체크
+      if (categoryExcludeMonths) {
+        const cat = categories.find(c => c.id === t.categoryId)
+        if (cat) {
+          const catExcluded = (categoryExcludeMonths[cat.id] ?? []).includes(month)
+          if (catExcluded) return false
+          const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+          if (parent) {
+            const parentExcluded = (categoryExcludeMonths[parent.id] ?? []).includes(month)
+            if (parentExcluded) return false
+          }
+        }
+      }
       if (t.type === 'expense') return true
       // 카드 환급은 카드 청구 쪽에서 처리되므로 제외, 통장 환급만 차감
       if (t.type === 'refund' && t.paymentMethod !== 'card') return true

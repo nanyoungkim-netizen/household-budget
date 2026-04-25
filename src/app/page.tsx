@@ -61,7 +61,7 @@ function calcStats(txs: Transaction[]) {
 export default function Dashboard() {
   const { data, categories } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -136,7 +136,7 @@ export default function Dashboard() {
   const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && isSavingTx(t)).reduce((s, t) => s + t.amount, 0)
   const cardPayAmt  = periodTxs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
   const realConsumption = Math.max(0, stats.expense - savingAmt)
-  const catExpenses = getRealCategoryExpenses(transactions, categories, viewMode === 'day' ? selectedDay : selectedMonth)
+  const catExpenses = getRealCategoryExpenses(transactions, categories, viewMode === 'day' ? selectedDay : selectedMonth, categoryExcludeMonths)
 
   // 거래 목록 (최신순, 최대 8개)
   const listTx = [...periodTxs]
@@ -176,7 +176,7 @@ export default function Dashboard() {
   // 예산 — 월 기준
   const budgetMonth  = viewMode === 'day' ? selectedDay.slice(0, 7) : selectedMonth
   const totalBudget  = budgets.filter(b => b.month === budgetMonth).reduce((s, b) => s + b.amount, 0)
-  const budgetUsed   = Object.values(getRealCategoryExpenses(transactions, categories, budgetMonth)).reduce((s, v) => s + v, 0)
+  const budgetUsed   = Object.values(getRealCategoryExpenses(transactions, categories, budgetMonth, categoryExcludeMonths)).reduce((s, v) => s + v, 0)
   const budgetPct    = totalBudget > 0 ? Math.min((budgetUsed / totalBudget) * 100, 100) : 0
   const budgetLeft   = totalBudget - budgetUsed
 
