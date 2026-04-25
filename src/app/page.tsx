@@ -135,7 +135,17 @@ export default function Dashboard() {
   // 지출 구성 분리
   const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && isSavingTx(t)).reduce((s, t) => s + t.amount, 0)
   const cardPayAmt  = periodTxs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
-  const realConsumption = Math.max(0, stats.expense - savingAmt)
+  const currentPeriodMonth = (viewMode === 'day' ? selectedDay : selectedMonth).slice(0, 7)
+  const isExcludedByMonth = (t: Transaction) => {
+    if (isSavingTx(t)) return false
+    const cat = categories.find(c => c.id === t.categoryId)
+    if (!cat) return false
+    if ((categoryExcludeMonths[cat.id] ?? []).includes(currentPeriodMonth)) return true
+    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+    return !!parent && (categoryExcludeMonths[parent.id] ?? []).includes(currentPeriodMonth)
+  }
+  const excludedAmt = periodTxsForStats.filter(t => t.type === 'expense' && isExcludedByMonth(t)).reduce((s, t) => s + t.amount, 0)
+  const realConsumption = Math.max(0, stats.expense - savingAmt - excludedAmt)
   const catExpenses = getRealCategoryExpenses(transactions, categories, viewMode === 'day' ? selectedDay : selectedMonth, categoryExcludeMonths)
 
   // 거래 목록 (최신순, 최대 8개)
@@ -481,7 +491,7 @@ export default function Dashboard() {
         </div>
 
         {/* 지출 구성: 실소비 / 저축 / 카드대금 */}
-        {(savingAmt > 0 || cardPayAmt > 0) && (
+        {(savingAmt > 0 || cardPayAmt > 0 || excludedAmt > 0) && (
           <div className="mt-3 pt-3 border-t border-white/20">
             <div className="text-[10px] opacity-60 mb-2">지출 구성</div>
             <div className="grid grid-cols-3 gap-2">
@@ -513,15 +523,22 @@ export default function Dashboard() {
       </div>
 
       {/* PRD 2.1: 이달 비소비 항목 별도 카드 */}
-      {viewMode === 'month' && (savingAmt > 0 || cardPayAmt > 0) && (
+      {viewMode === 'month' && (savingAmt > 0 || cardPayAmt > 0 || excludedAmt > 0) && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
           <div className="text-xs font-semibold text-gray-500 mb-3">이달 비소비 항목 합계</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${excludedAmt > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <div className="bg-teal-50 rounded-xl p-3">
               <div className="text-xs text-teal-600 mb-0.5">적금·예금 이체</div>
               <div className="text-base font-bold text-teal-700">{fmtKRW(savingAmt)}</div>
               <div className="text-xs text-teal-400 mt-0.5">저축성 지출 (실소비 제외)</div>
             </div>
+            {excludedAmt > 0 && (
+              <div className="bg-purple-50 rounded-xl p-3">
+                <div className="text-xs text-purple-600 mb-0.5">사용자 제외 항목</div>
+                <div className="text-base font-bold text-purple-700">{fmtKRW(excludedAmt)}</div>
+                <div className="text-xs text-purple-400 mt-0.5">예산탭에서 제외 설정</div>
+              </div>
+            )}
             <div className="bg-amber-50 rounded-xl p-3">
               <div className="text-xs text-amber-600 mb-0.5">카드대금 결제</div>
               <div className="text-base font-bold text-amber-700">{fmtKRW(cardPayAmt)}</div>

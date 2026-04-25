@@ -136,6 +136,16 @@ export default function InvestmentsPage() {
   const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
   const [expandedDividendInvId, setExpandedDividendInvId] = useState<string | null>(null)
 
+  // 계좌별 접기/펼치기
+  const [collapsedAccounts, setCollapsedAccounts] = useState<Set<string>>(new Set())
+  function toggleCollapse(id: string) {
+    setCollapsedAccounts(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
   // F-05: 포트폴리오 관리
   const [targetInputs, setTargetInputs] = useState<Record<string, string>>({})
   const [additionalInvestment, setAdditionalInvestment] = useState('')
@@ -783,15 +793,20 @@ export default function InvestmentsPage() {
           {investmentAccounts.map(acc => {
             const accInvestments = investmentsByAccount.get(acc.id) ?? []
             const stats = portfolio.byAccount[acc.id]
+            const isCollapsed = collapsedAccounts.has(acc.id)
             return (
               <div key={acc.id}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
+                <div className="flex items-center gap-3 mb-3 cursor-pointer select-none"
+                  onClick={() => toggleCollapse(acc.id)}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
                     {getTypeLabel(acc.typeId).slice(0, 1)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900">{acc.name}</div>
-                    <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)}</div>
+                    <div className="font-semibold text-gray-900 flex items-center gap-1.5">
+                      {acc.name}
+                      <span className="text-xs text-gray-400">{isCollapsed ? '▶' : '▼'}</span>
+                    </div>
+                    <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)} · {accInvestments.length}종목</div>
                   </div>
                   {stats && (
                     <div className="text-right mr-1">
@@ -801,7 +816,7 @@ export default function InvestmentsPage() {
                       </div>
                     </div>
                   )}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     <button onClick={() => openAddInvestment(acc.id)}
                       className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
                       + 종목
@@ -817,16 +832,18 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
 
-                {accInvestments.length === 0 ? (
-                  <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border-2 border-dashed border-gray-200">
-                    <div className="text-2xl mb-1">📭</div>
-                    <div className="text-xs">등록된 종목이 없습니다</div>
-                    <button onClick={() => openAddInvestment(acc.id)} className="mt-2 text-xs text-blue-500 underline">+ 종목 추가</button>
-                  </div>
-                ) : (
-                  <div className="space-y-3 pl-1 border-l-2" style={{ borderColor: acc.color + '60' }}>
-                    {accInvestments.map(inv => renderInvestmentCard(inv))}
-                  </div>
+                {!isCollapsed && (
+                  accInvestments.length === 0 ? (
+                    <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border-2 border-dashed border-gray-200 mb-4">
+                      <div className="text-2xl mb-1">📭</div>
+                      <div className="text-xs">등록된 종목이 없습니다</div>
+                      <button onClick={() => openAddInvestment(acc.id)} className="mt-2 text-xs text-blue-500 underline">+ 종목 추가</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pl-1 border-l-2 mb-4" style={{ borderColor: acc.color + '60' }}>
+                      {accInvestments.map(inv => renderInvestmentCard(inv))}
+                    </div>
+                  )
                 )}
               </div>
             )

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { flushSync } from 'react-dom'
-import { useApp, DEFAULT_ACCOUNTS, DEFAULT_CARDS } from '@/lib/AppContext'
+import { useApp, DEFAULT_CARDS } from '@/lib/AppContext'
 import { Account, Saving, Goal } from '@/types'
 
 // FR-016: 쉼표 포맷 헬퍼
@@ -12,19 +12,21 @@ function fmtComma(n: number) { return n === 0 ? '' : n.toLocaleString('ko-KR') }
 
 const STEPS = ['계좌 잔액', '적금·예금', '재무 목표', '완료']
 
+const PRESET_ACC_COLORS = ['#0064FF', '#00B493', '#FF6B6B', '#FFB800', '#9B59B6', '#E67E22', '#1ABC9C', '#E74C3C']
+
 export default function SetupPage() {
   const { completeSetup } = useApp()
   const router = useRouter()
   const [step, setStep] = useState(0)
 
-  // Step 0 - 계좌 잔액
-  const [accounts, setAccounts] = useState<Account[]>(
-    DEFAULT_ACCOUNTS.map(a => ({ ...a }))
-  )
-  // FR-016: 표시용 문자열 상태 (쉼표 포함)
-  const [balanceInputs, setBalanceInputs] = useState<Record<string, string>>(
-    Object.fromEntries(DEFAULT_ACCOUNTS.map(a => [a.id, '']))
-  )
+  // Step 0 - 계좌 잔액 (빈 상태로 시작)
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [balanceInputs, setBalanceInputs] = useState<Record<string, string>>({})
+
+  // 계좌 추가 폼
+  const [showAccForm, setShowAccForm] = useState(false)
+  const [accForm, setAccForm] = useState({ name: '', bank: '', color: PRESET_ACC_COLORS[0], balance: '' })
+
   // FR-014: 계좌명 인라인 수정
   const [editingAccName, setEditingAccName] = useState<string | null>(null)
   const [accNameInput, setAccNameInput] = useState('')
@@ -43,6 +45,25 @@ export default function SetupPage() {
   })
 
   const PRESET_COLORS = ['#0064FF', '#00B493', '#FF6B6B', '#FFB800', '#9B59B6', '#E67E22']
+
+  // 계좌 추가
+  function addAccount() {
+    const name = accForm.name.trim()
+    const bank = accForm.bank.trim()
+    if (!name) return
+    const id = `acc_${Date.now()}`
+    const num = parseNum(accForm.balance)
+    setAccounts(prev => [...prev, { id, name, bank, color: accForm.color, balance: num, assetType: 'cash' }])
+    setBalanceInputs(prev => ({ ...prev, [id]: num > 0 ? fmtComma(num) : '' }))
+    setAccForm({ name: '', bank: '', color: PRESET_ACC_COLORS[accounts.length % PRESET_ACC_COLORS.length], balance: '' })
+    setShowAccForm(false)
+  }
+
+  // 계좌 삭제
+  function deleteAccount(id: string) {
+    setAccounts(prev => prev.filter(a => a.id !== id))
+    setBalanceInputs(prev => { const n = { ...prev }; delete n[id]; return n })
+  }
 
   // FR-014: 계좌명 수정
   function saveAccName(id: string) {
@@ -133,53 +154,100 @@ export default function SetupPage() {
 
         {/* STEP 0: 계좌 잔액 */}
         {step === 0 && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <h2 className="font-bold text-gray-900 mb-1">계좌별 현재 잔액</h2>
-            <p className="text-xs text-gray-400 mb-4">오늘 기준 각 통장의 실제 잔액을 입력해주세요.</p>
-            <div className="space-y-3">
-              {accounts.map(acc => (
-                <div key={acc.id} className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                    style={{ backgroundColor: acc.color }}>
-                    {acc.name.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    {/* FR-014: 계좌명 인라인 수정 */}
-                    {editingAccName === acc.id ? (
-                      <input
-                        type="text"
-                        value={accNameInput}
-                        onChange={e => setAccNameInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') saveAccName(acc.id); if (e.key === 'Escape') setEditingAccName(null) }}
-                        onBlur={() => saveAccName(acc.id)}
-                        className="w-full text-sm font-medium border-b-2 border-blue-400 bg-transparent outline-none mb-1"
-                        autoFocus
-                      />
-                    ) : (
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-sm font-medium text-gray-900">{acc.name}</span>
-                        <button onClick={() => { setEditingAccName(acc.id); setAccNameInput(acc.name) }}
-                          className="text-xs text-gray-300 hover:text-blue-400 transition-colors">✏️</button>
-                      </div>
-                    )}
-                    {/* FR-016: type="text" + inputMode="numeric" + 쉼표 포맷 */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={balanceInputs[acc.id] ?? ''}
-                        onChange={e => updateBalance(acc.id, e.target.value)}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">원</span>
+          <div className="space-y-3">
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <h2 className="font-bold text-gray-900 mb-1">계좌 등록</h2>
+              <p className="text-xs text-gray-400 mb-4">보유 중인 계좌와 현재 잔액을 추가해주세요.</p>
+
+              {accounts.length === 0 && !showAccForm && (
+                <div className="text-center py-6 text-gray-400">
+                  <div className="text-3xl mb-2">🏦</div>
+                  <div className="text-sm mb-3">등록된 계좌가 없습니다</div>
+                </div>
+              )}
+
+              <div className="space-y-3 mb-3">
+                {accounts.map(acc => (
+                  <div key={acc.id} className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                      style={{ backgroundColor: acc.color }}>
+                      {acc.name.charAt(0)}
                     </div>
+                    <div className="flex-1">
+                      {editingAccName === acc.id ? (
+                        <input type="text" value={accNameInput}
+                          onChange={e => setAccNameInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveAccName(acc.id); if (e.key === 'Escape') setEditingAccName(null) }}
+                          onBlur={() => saveAccName(acc.id)}
+                          className="w-full text-sm font-medium border-b-2 border-blue-400 bg-transparent outline-none mb-1"
+                          autoFocus />
+                      ) : (
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-sm font-medium text-gray-900">{acc.name}</span>
+                          {acc.bank && <span className="text-xs text-gray-400">{acc.bank}</span>}
+                          <button onClick={() => { setEditingAccName(acc.id); setAccNameInput(acc.name) }}
+                            className="text-xs text-gray-300 hover:text-blue-400 transition-colors">✏️</button>
+                        </div>
+                      )}
+                      <div className="relative">
+                        <input type="text" inputMode="numeric" placeholder="0"
+                          value={balanceInputs[acc.id] ?? ''}
+                          onChange={e => updateBalance(acc.id, e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">원</span>
+                      </div>
+                    </div>
+                    <button onClick={() => deleteAccount(acc.id)}
+                      className="text-gray-300 hover:text-red-400 text-lg flex-shrink-0 transition-colors">×</button>
+                  </div>
+                ))}
+              </div>
+
+              {/* 계좌 추가 폼 */}
+              {showAccForm ? (
+                <div className="border border-blue-200 rounded-xl p-3 bg-blue-50/40 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="계좌명 (예: 급여통장)" value={accForm.name}
+                      onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))}
+                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                    <input type="text" placeholder="은행명 (예: 카카오뱅크)" value={accForm.bank}
+                      onChange={e => setAccForm(f => ({ ...f, bank: e.target.value }))}
+                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                  </div>
+                  <div className="relative">
+                    <input type="text" inputMode="numeric" placeholder="현재 잔액 (원)" value={accForm.balance}
+                      onChange={e => { const d = e.target.value.replace(/[^0-9]/g, ''); setAccForm(f => ({ ...f, balance: d ? Number(d).toLocaleString('ko-KR') : '' })) }}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">원</span>
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {PRESET_ACC_COLORS.map(c => (
+                      <button key={c} onClick={() => setAccForm(f => ({ ...f, color: c }))}
+                        className={`w-6 h-6 rounded-lg transition-transform ${accForm.color === c ? 'scale-125 ring-2 ring-offset-1 ring-blue-400' : ''}`}
+                        style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={addAccount}
+                      className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-blue-700 transition-colors">
+                      추가
+                    </button>
+                    <button onClick={() => { setShowAccForm(false); setAccForm({ name: '', bank: '', color: PRESET_ACC_COLORS[0], balance: '' }) }}
+                      className="flex-1 bg-gray-100 text-gray-600 text-sm font-medium py-2 rounded-xl hover:bg-gray-200 transition-colors">
+                      취소
+                    </button>
                   </div>
                 </div>
-              ))}
+              ) : (
+                <button onClick={() => setShowAccForm(true)}
+                  className="w-full bg-blue-50 text-blue-600 text-sm font-medium py-2.5 rounded-xl hover:bg-blue-100 transition-colors">
+                  + 계좌 추가
+                </button>
+              )}
             </div>
+
             {totalBalance > 0 && (
-              <div className="mt-4 bg-blue-50 rounded-xl p-3 text-center">
+              <div className="bg-blue-50 rounded-xl p-3 text-center">
                 <span className="text-xs text-gray-500">총 잔액 </span>
                 <span className="text-sm font-bold text-blue-600">{fmtComma(totalBalance)}원</span>
               </div>
