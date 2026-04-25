@@ -186,9 +186,22 @@ export default function Dashboard() {
   // 예산 — 월 기준
   const budgetMonth  = viewMode === 'day' ? selectedDay.slice(0, 7) : selectedMonth
   const totalBudget  = budgets.filter(b => b.month === budgetMonth).reduce((s, b) => s + b.amount, 0)
+  // 실소비 예산: savings/card_payment/제외 카테고리 제외 (예산탭 totalBudgetReal 기준과 동일)
+  const totalBudgetReal = budgets
+    .filter(b => b.month === budgetMonth)
+    .reduce((s, b) => {
+      const cat = categories.find(c => c.id === b.categoryId)
+      if (!cat || cat.parentId === null) return s
+      if (cat.role === 'savings' || cat.role === 'card_payment') return s
+      if ((categoryExcludeMonths[cat.id] ?? []).includes(budgetMonth)) return s
+      const parent = categories.find(c => c.id === cat.parentId)
+      if (parent?.role === 'savings' || parent?.role === 'card_payment') return s
+      if (parent && (categoryExcludeMonths[parent.id] ?? []).includes(budgetMonth)) return s
+      return s + b.amount
+    }, 0)
   const budgetUsed   = Object.values(getRealCategoryExpenses(transactions, categories, budgetMonth, categoryExcludeMonths)).reduce((s, v) => s + v, 0)
-  const budgetPct    = totalBudget > 0 ? Math.min((budgetUsed / totalBudget) * 100, 100) : 0
-  const budgetLeft   = totalBudget - budgetUsed
+  const budgetPct    = totalBudgetReal > 0 ? Math.min((budgetUsed / totalBudgetReal) * 100, 100) : 0
+  const budgetLeft   = totalBudgetReal - budgetUsed
 
   // ── 적금·예금 요약 ──────────────────────────────────────────────────────────
   const savingsSummary = useMemo(() => {
@@ -780,11 +793,11 @@ export default function Dashboard() {
             </div>
             <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
           </div>
-          {totalBudget > 0 ? (
+          {totalBudgetReal > 0 ? (
             <>
               <div className="flex justify-between text-xs text-gray-500 mb-2">
                 <span>사용 {fmtShort(budgetUsed)}</span>
-                <span>예산 {fmtShort(totalBudget)}</span>
+                <span>예산 {fmtShort(totalBudgetReal)}</span>
               </div>
               <div className="bg-gray-100 rounded-full h-2 mb-2">
                 <div className={`h-2 rounded-full transition-all ${budgetPct > 90 ? 'bg-red-500' : budgetPct > 70 ? 'bg-amber-400' : 'bg-blue-500'}`}

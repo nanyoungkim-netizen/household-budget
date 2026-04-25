@@ -92,10 +92,9 @@ export default function BudgetPage() {
     !isExcludedFromReal(t.categoryId) &&
     (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
-  // 카테고리별 예산 실적용: 적금 포함, 카드대금만 제외 (카드 사용과 이중계산 방지)
+  // 카테고리별 예산 실적용: 카드대금 포함 (사용자가 직접 제외 토글 가능)
   const budgetTx = transactions.filter(t =>
     t.date.startsWith(month) &&
-    !isCardPaymentCat(t.categoryId) &&
     (t.type === 'expense' || (t.type === 'refund' && t.paymentMethod !== 'card'))
   )
 
