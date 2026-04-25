@@ -237,6 +237,9 @@ export default function BudgetPage() {
   const totalActual = allLeaf.reduce((s, c) => s + getActual(c.id), 0)
   const totalActualSavings = allLeaf.filter(c => isSavingsCat(c.id)).reduce((s, c) => s + getActual(c.id), 0)
   const totalActualReal = totalActual - totalActualSavings
+  // 실소비 기준 예산 비교용: 적금 예산 제외
+  const totalBudgetSavings = allLeaf.filter(c => isSavingsCat(c.id)).reduce((s, c) => s + getBudget(c.id), 0)
+  const totalBudgetReal = totalBudget - totalBudgetSavings
 
   // ── 카테고리 CRUD ────────────────────────────────────────────────────────
   function addChild() {
@@ -344,56 +347,74 @@ export default function BudgetPage() {
       <div className="grid grid-cols-3 gap-2 mb-3">
         {/* 총 예산 */}
         <div className="bg-white rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">총 예산</div>
-          <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtKRW(totalBudget)}</div>
-        </div>
-
-        {/* 실제 지출 — 실소비 / 적금 구분 */}
-        <div className="bg-white rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">실제 지출</div>
-          <div className={`text-base font-bold tabular-nums leading-tight ${totalActual > totalBudget && totalBudget > 0 ? 'text-red-500' : 'text-gray-900'}`}>
-            {fmtKRW(totalActual)}
-          </div>
-          {totalActualSavings > 0 && (
-            <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-gray-400">실소비</span>
-                <span className="text-[11px] font-semibold text-gray-700 tabular-nums">{fmtKRW(totalActualReal)}</span>
-              </div>
+          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">실소비 예산</div>
+          <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{totalBudgetReal > 0 ? fmtKRW(totalBudgetReal) : '-'}</div>
+          {totalBudgetSavings > 0 && (
+            <div className="mt-1.5 pt-1.5 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-blue-400">적금·저축</span>
-                <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(totalActualSavings)}</span>
+                <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(totalBudgetSavings)}</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* 남은 예산 / 초과 사용 */}
-        <div className={`rounded-xl p-3 shadow-sm ${totalBudget > 0 && totalActual > totalBudget ? 'bg-red-50' : 'bg-white'}`}>
-          <div className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${totalBudget > 0 && totalActual > totalBudget ? 'text-red-400' : 'text-gray-400'}`}>
-            {totalBudget > 0 && totalActual > totalBudget ? '⚠️ 초과 사용' : '남은 예산'}
+        {/* 실제 지출 — 실소비만 메인, 적금·카드대금은 구분 표시 */}
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">실소비</div>
+          <div className="text-base font-bold tabular-nums leading-tight text-gray-900">
+            {fmtKRW(totalActualReal)}
           </div>
-          <div className={`text-base font-bold tabular-nums leading-tight ${totalBudget - totalActual >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {totalBudget > 0 ? fmtKRW(Math.abs(totalBudget - totalActual)) : '-'}
-          </div>
-          {totalBudget > 0 && totalActual > totalBudget && (
-            <div className="text-[10px] text-red-400 mt-0.5">예산 대비 {((totalActual / totalBudget - 1) * 100).toFixed(0)}% 초과</div>
+          {(totalActualSavings > 0 || cardPayment > 0) && (
+            <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
+              {totalActualSavings > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-blue-400">적금·저축</span>
+                  <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(totalActualSavings)}</span>
+                </div>
+              )}
+              {cardPayment > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-purple-400">카드대금 납부</span>
+                  <span className="text-[11px] font-semibold text-purple-500 tabular-nums">{fmtKRW(cardPayment)}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
+
+        {/* 남은 실소비 예산 / 초과 사용 */}
+        {(() => {
+          const isOver = totalBudgetReal > 0 && totalActualReal > totalBudgetReal
+          const diff = totalBudgetReal - totalActualReal
+          return (
+            <div className={`rounded-xl p-3 shadow-sm ${isOver ? 'bg-red-50' : 'bg-white'}`}>
+              <div className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${isOver ? 'text-red-400' : 'text-gray-400'}`}>
+                {isOver ? '⚠️ 초과 사용' : '남은 예산'}
+              </div>
+              <div className={`text-base font-bold tabular-nums leading-tight ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {totalBudgetReal > 0 ? fmtKRW(Math.abs(diff)) : '-'}
+              </div>
+              {isOver && (
+                <div className="text-[10px] text-red-400 mt-0.5">실소비 예산 대비 {((totalActualReal / totalBudgetReal - 1) * 100).toFixed(0)}% 초과</div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
-      {/* 전체 진행바 */}
-      {totalBudget > 0 && (
+      {/* 전체 진행바 — 실소비 기준 */}
+      {totalBudgetReal > 0 && (
         <div className="bg-white rounded-xl px-4 py-3 shadow-sm mb-3">
           <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-semibold text-gray-500">전체 예산 사용률</span>
-            <span className={`text-sm font-bold tabular-nums ${totalActual > totalBudget ? 'text-red-500' : 'text-blue-600'}`}>
-              {Math.min(totalActual / totalBudget * 100, 100).toFixed(1)}%
+            <span className="text-xs font-semibold text-gray-500">실소비 예산 사용률</span>
+            <span className={`text-sm font-bold tabular-nums ${totalActualReal > totalBudgetReal ? 'text-red-500' : 'text-blue-600'}`}>
+              {Math.min(totalActualReal / totalBudgetReal * 100, 100).toFixed(1)}%
             </span>
           </div>
           <div className="bg-gray-100 rounded-full h-2.5">
-            <div className={`h-2.5 rounded-full transition-all ${totalActual > totalBudget ? 'bg-red-500' : totalActual / totalBudget > 0.8 ? 'bg-amber-400' : 'bg-blue-500'}`}
-              style={{ width: `${Math.min(totalActual / totalBudget * 100, 100)}%` }} />
+            <div className={`h-2.5 rounded-full transition-all ${totalActualReal > totalBudgetReal ? 'bg-red-500' : totalActualReal / totalBudgetReal > 0.8 ? 'bg-amber-400' : 'bg-blue-500'}`}
+              style={{ width: `${Math.min(totalActualReal / totalBudgetReal * 100, 100)}%` }} />
           </div>
         </div>
       )}
