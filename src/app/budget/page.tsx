@@ -241,18 +241,25 @@ export default function BudgetPage() {
   const totalBudget = allLeaf.reduce((s, c) => s + getBudget(c.id), 0)
   const totalActual = allLeaf.reduce((s, c) => s + getActual(c.id), 0)
 
-  // 제외 대분류별 그룹 (요약 카드에 이름별로 표시)
+  // 제외 그룹: 대분류 전체 제외 OR 소분류 개별 제외 모두 처리
   const excludedGroups = expenseParents
-    .filter(p => p.role === 'savings' || p.excludeFromReal)
     .map(p => {
-      const children = getChildren(p.id)
+      const isParentExcluded = p.role === 'savings' || p.excludeFromReal
+      const allChildren = getChildren(p.id)
+      const excChildren = isParentExcluded
+        ? allChildren
+        : allChildren.filter(c => c.excludeFromReal)
+      if (excChildren.length === 0) return null
+      const isPartial = !isParentExcluded
       return {
-        id: p.id, name: p.name, icon: p.icon, color: p.color,
+        id: p.id, name: p.name, icon: p.icon,
         isSavings: p.role === 'savings',
-        actual: children.reduce((s, c) => s + getActual(c.id), 0),
-        budget: children.reduce((s, c) => s + getBudget(c.id), 0),
+        isPartial,
+        actual: excChildren.reduce((s, c) => s + getActual(c.id), 0),
+        budget: excChildren.reduce((s, c) => s + getBudget(c.id), 0),
       }
     })
+    .filter((g): g is NonNullable<typeof g> => g !== null)
 
   const totalExcludedActual = excludedGroups.reduce((s, g) => s + g.actual, 0)
   const totalExcludedBudget = excludedGroups.reduce((s, g) => s + g.budget, 0)
@@ -371,7 +378,7 @@ export default function BudgetPage() {
             <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
               {excludedGroups.filter(g => g.budget > 0).map(g => (
                 <div key={g.id} className="flex items-center justify-between">
-                  <span className="text-[10px] text-blue-400">{g.icon} {g.name}</span>
+                  <span className="text-[10px] text-blue-400">{g.icon} {g.name}{g.isPartial ? ' (일부)' : ''}</span>
                   <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(g.budget)}</span>
                 </div>
               ))}
@@ -389,7 +396,7 @@ export default function BudgetPage() {
             <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
               {excludedGroups.filter(g => g.actual > 0).map(g => (
                 <div key={g.id} className="flex items-center justify-between">
-                  <span className="text-[10px] text-blue-400">{g.icon} {g.name}</span>
+                  <span className="text-[10px] text-blue-400">{g.icon} {g.name}{g.isPartial ? ' (일부)' : ''}</span>
                   <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(g.actual)}</span>
                 </div>
               ))}
@@ -610,7 +617,7 @@ export default function BudgetPage() {
                     const isOver = budgetAmt > 0 && actual > budgetAmt
 
                     return (
-                      <div key={cat.id} className="border-b border-gray-50 last:border-0 group">
+                      <div key={cat.id} className={`border-b border-gray-50 last:border-0 group ${isExcludedCat(cat.id) && !parent.excludeFromReal ? 'bg-blue-50/40' : ''}`}>
                         <div className="grid grid-cols-4 px-3 py-1.5 items-center hover:bg-gray-50 transition-colors">
                           {/* 소분류명 */}
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -627,8 +634,21 @@ export default function BudgetPage() {
                             ) : (
                               <span className="text-sm text-gray-700 truncate">{cat.name}</span>
                             )}
-                            {/* 편집/삭제 버튼 (hover 시 표시) */}
+                            {/* hover 시 표시: 제외 토글 + 편집/삭제 */}
                             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              {/* 부모가 전체 제외 중이 아닐 때만 소분류 개별 토글 표시 */}
+                              {parent.role !== 'savings' && !parent.excludeFromReal && (
+                                <button
+                                  onClick={() => toggleExcludeFromReal(cat.id)}
+                                  className={`text-[9px] px-1 py-0.5 rounded-full font-medium border transition-all ${
+                                    cat.excludeFromReal
+                                      ? 'bg-blue-100 border-blue-300 text-blue-600'
+                                      : 'bg-gray-50 border-gray-200 text-gray-300 hover:text-gray-500'
+                                  }`}
+                                  title={cat.excludeFromReal ? '제외 중 (클릭 시 포함)' : '실소비에서 제외'}>
+                                  {cat.excludeFromReal ? '제외중' : '제외'}
+                                </button>
+                              )}
                               <button
                                 onClick={() => startEditName(cat)}
                                 className="text-gray-300 hover:text-blue-400 text-xs"
