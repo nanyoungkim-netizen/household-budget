@@ -223,23 +223,41 @@ export default function BudgetPage() {
     }
   }
 
-  function isSavingsCat(categoryId: string): boolean {
+  // 소분류가 실소비 제외 대상인지 (role=savings 또는 부모/자신의 excludeFromReal)
+  function isExcludedCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
     if (!cat) return false
-    if (cat.role === 'savings') return true
+    if (cat.role === 'savings' || cat.excludeFromReal) return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    return parent?.role === 'savings' || false
+    return parent?.role === 'savings' || parent?.excludeFromReal || false
+  }
+
+  function toggleExcludeFromReal(catId: string) {
+    setCategories(categories.map(c => c.id === catId ? { ...c, excludeFromReal: !c.excludeFromReal } : c))
   }
 
   // ── 전체 합계 ────────────────────────────────────────────────────────────
   const allLeaf = categories.filter(c => c.parentId !== null && c.type === 'expense')
   const totalBudget = allLeaf.reduce((s, c) => s + getBudget(c.id), 0)
   const totalActual = allLeaf.reduce((s, c) => s + getActual(c.id), 0)
-  const totalActualSavings = allLeaf.filter(c => isSavingsCat(c.id)).reduce((s, c) => s + getActual(c.id), 0)
-  const totalActualReal = totalActual - totalActualSavings
-  // 실소비 기준 예산 비교용: 적금 예산 제외
-  const totalBudgetSavings = allLeaf.filter(c => isSavingsCat(c.id)).reduce((s, c) => s + getBudget(c.id), 0)
-  const totalBudgetReal = totalBudget - totalBudgetSavings
+
+  // 제외 대분류별 그룹 (요약 카드에 이름별로 표시)
+  const excludedGroups = expenseParents
+    .filter(p => p.role === 'savings' || p.excludeFromReal)
+    .map(p => {
+      const children = getChildren(p.id)
+      return {
+        id: p.id, name: p.name, icon: p.icon, color: p.color,
+        isSavings: p.role === 'savings',
+        actual: children.reduce((s, c) => s + getActual(c.id), 0),
+        budget: children.reduce((s, c) => s + getBudget(c.id), 0),
+      }
+    })
+
+  const totalExcludedActual = excludedGroups.reduce((s, g) => s + g.actual, 0)
+  const totalExcludedBudget = excludedGroups.reduce((s, g) => s + g.budget, 0)
+  const totalActualReal = totalActual - totalExcludedActual
+  const totalBudgetReal = totalBudget - totalExcludedBudget
 
   // ── 카테고리 CRUD ────────────────────────────────────────────────────────
   function addChild() {
@@ -349,33 +367,35 @@ export default function BudgetPage() {
         <div className="bg-white rounded-xl p-3 shadow-sm">
           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">실소비 예산</div>
           <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{totalBudgetReal > 0 ? fmtKRW(totalBudgetReal) : '-'}</div>
-          {totalBudgetSavings > 0 && (
-            <div className="mt-1.5 pt-1.5 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-blue-400">적금·저축</span>
-                <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(totalBudgetSavings)}</span>
-              </div>
+          {excludedGroups.filter(g => g.budget > 0).length > 0 && (
+            <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
+              {excludedGroups.filter(g => g.budget > 0).map(g => (
+                <div key={g.id} className="flex items-center justify-between">
+                  <span className="text-[10px] text-blue-400">{g.icon} {g.name}</span>
+                  <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(g.budget)}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* 실제 지출 — 실소비만 메인, 적금·카드대금은 구분 표시 */}
+        {/* 실소비 — 실소비만 메인, 제외 항목·카드대금은 구분 표시 */}
         <div className="bg-white rounded-xl p-3 shadow-sm">
           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">실소비</div>
           <div className="text-base font-bold tabular-nums leading-tight text-gray-900">
             {fmtKRW(totalActualReal)}
           </div>
-          {(totalActualSavings > 0 || cardPayment > 0) && (
+          {(excludedGroups.filter(g => g.actual > 0).length > 0 || cardPayment > 0) && (
             <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
-              {totalActualSavings > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-blue-400">적금·저축</span>
-                  <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(totalActualSavings)}</span>
+              {excludedGroups.filter(g => g.actual > 0).map(g => (
+                <div key={g.id} className="flex items-center justify-between">
+                  <span className="text-[10px] text-blue-400">{g.icon} {g.name}</span>
+                  <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(g.actual)}</span>
                 </div>
-              )}
+              ))}
               {cardPayment > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-purple-400">카드대금 납부</span>
+                  <span className="text-[10px] text-purple-400">💳 카드대금 납부</span>
                   <span className="text-[11px] font-semibold text-purple-500 tabular-nums">{fmtKRW(cardPayment)}</span>
                 </div>
               )}
@@ -538,6 +558,21 @@ export default function BudgetPage() {
                     </span>
                   )}
                   <span className="text-xs text-gray-500 tabular-nums">{fmtShort(grpActual)} / {grpBudget > 0 ? fmtShort(grpBudget) : '-'}</span>
+                  {/* 실소비 제외 토글 */}
+                  {parent.role !== 'savings' ? (
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleExcludeFromReal(parent.id) }}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border transition-all ${
+                        parent.excludeFromReal
+                          ? 'bg-blue-100 border-blue-300 text-blue-600'
+                          : 'bg-gray-50 border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400'
+                      }`}
+                      title={parent.excludeFromReal ? '실소비 제외 중 (클릭 시 포함)' : '실소비에서 제외하기'}>
+                      {parent.excludeFromReal ? '제외중' : '제외'}
+                    </button>
+                  ) : (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-400 font-medium">적금</span>
+                  )}
                   {/* 이름 편집 버튼 */}
                   <button
                     onClick={e => { e.stopPropagation(); startEditName(parent) }}

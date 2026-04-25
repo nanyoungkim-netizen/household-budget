@@ -34,6 +34,7 @@ export interface Category {
   parentId?: string | null  // null = 대분류, string = 소분류, undefined = 레거시
   savingId?: string          // 연동된 적금·예금 상품 ID
   role?: CategoryRole        // 연동 역할: card_payment | savings
+  excludeFromReal?: boolean  // 실소비 제외 (여행통장, 적금 등 user 지정)
 }
 
 export type PaymentMethod = 'account' | 'card'
