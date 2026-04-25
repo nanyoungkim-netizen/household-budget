@@ -86,7 +86,8 @@ interface AppData {
   investmentAccounts: InvestmentAccount[]   // PRD 2.6 계좌
   investmentDividends: InvestmentDividend[] // PRD: 배당금
   savingPayments: SavingPayment[]  // PRD 2.2
-  categoryHiddenMonths: Record<string, string[]>  // 월별 카테고리 숨김
+  categoryHiddenMonths: Record<string, string[]>   // 월별 카테고리 숨김
+  categoryExcludeMonths: Record<string, string[]>  // 월별 실소비 제외
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -108,6 +109,7 @@ const INITIAL_DATA: AppData = {
   investmentDividends: [],
   savingPayments: [],
   categoryHiddenMonths: {},
+  categoryExcludeMonths: {},
   lastModified: null,
   isSetupComplete: false,
 }
@@ -156,6 +158,8 @@ interface AppContextType {
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
   setCategoryHiddenMonths: (map: Record<string, string[]>) => void
+  // 월별 실소비 제외
+  setCategoryExcludeMonths: (map: Record<string, string[]>) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -222,6 +226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       investmentDividends: raw.investmentDividends ?? [],
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
+      categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
     }
   }
 
@@ -444,6 +449,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, categoryHiddenMonths, lastModified: now() }))
   }, [update])
 
+  const setCategoryExcludeMonths = useCallback((categoryExcludeMonths: Record<string, string[]>) => {
+    update(d => ({ ...d, categoryExcludeMonths, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -485,6 +494,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestmentDividends,
       setSavingPayments,
       setCategoryHiddenMonths,
+      setCategoryExcludeMonths,
       completeSetup,
       resetAll,
     }}>

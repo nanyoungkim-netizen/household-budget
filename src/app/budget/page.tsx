@@ -34,8 +34,8 @@ const PRESET_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6
 type ModalType = 'addChild' | 'addParent' | null
 
 export default function BudgetPage() {
-  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths } = useApp()
-  const { budgets, transactions, categoryHiddenMonths } = data
+  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths, setCategoryExcludeMonths } = useApp()
+  const { budgets, transactions, categoryHiddenMonths, categoryExcludeMonths } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
@@ -68,14 +68,18 @@ export default function BudgetPage() {
   // 이월 확인 모달
   const [showCarryOver, setShowCarryOver] = useState(false)
 
-  // 월이 바뀌면 진행 중인 편집 즉시 취소 (stale-closure 방지)
+  // 과거 달 잠금 해제 (수동 토글)
+  const [unlocked, setUnlocked] = useState(false)
+
+  // 월이 바뀌면 진행 중인 편집 + 잠금 해제 초기화
   useEffect(() => {
     setEditing(null)
     setEditingName(null)
+    setUnlocked(false)
   }, [month])
 
-  // 현재달 이전 → 잠금 (수정 불가)
-  const isPastMonth = month < currentMonth
+  // 현재달 이전 → 잠금 (수정 불가), 단 unlocked 상태면 해제
+  const isPastMonth = month < currentMonth && !unlocked
 
   // 삭제 확인 모달
   const [deleteCatId, setDeleteCatId] = useState<string | null>(null)
@@ -223,17 +227,29 @@ export default function BudgetPage() {
     }
   }
 
-  // 소분류가 실소비 제외 대상인지 (role=savings 또는 부모/자신의 excludeFromReal)
+  // 이 달에 실소비 제외 대상인지 (role=savings / 이 달 categoryExcludeMonths 기준)
   function isExcludedCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
     if (!cat) return false
-    if (cat.role === 'savings' || cat.excludeFromReal) return true
+    if (cat.role === 'savings') return true
+    if ((categoryExcludeMonths[categoryId] ?? []).includes(month)) return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    return parent?.role === 'savings' || parent?.excludeFromReal || false
+    if (!parent) return false
+    if (parent.role === 'savings') return true
+    return (categoryExcludeMonths[parent.id] ?? []).includes(month)
   }
 
-  function toggleExcludeFromReal(catId: string) {
-    setCategories(categories.map(c => c.id === catId ? { ...c, excludeFromReal: !c.excludeFromReal } : c))
+  function isExcludedThisMonth(catId: string): boolean {
+    return (categoryExcludeMonths[catId] ?? []).includes(month)
+  }
+
+  function toggleExcludeMonth(catId: string) {
+    const months = categoryExcludeMonths[catId] ?? []
+    const next = { ...categoryExcludeMonths }
+    next[catId] = months.includes(month)
+      ? months.filter(m => m !== month)
+      : [...months, month]
+    setCategoryExcludeMonths(next)
   }
 
   // ── 전체 합계 ────────────────────────────────────────────────────────────
@@ -241,14 +257,14 @@ export default function BudgetPage() {
   const totalBudget = allLeaf.reduce((s, c) => s + getBudget(c.id), 0)
   const totalActual = allLeaf.reduce((s, c) => s + getActual(c.id), 0)
 
-  // 제외 그룹: 대분류 전체 제외 OR 소분류 개별 제외 모두 처리
+  // 제외 그룹: 대분류 전체 제외(이달) OR 소분류 개별 제외(이달) 모두 처리
   const excludedGroups = expenseParents
     .map(p => {
-      const isParentExcluded = p.role === 'savings' || p.excludeFromReal
+      const isParentExcluded = p.role === 'savings' || isExcludedThisMonth(p.id)
       const allChildren = getChildren(p.id)
       const excChildren = isParentExcluded
         ? allChildren
-        : allChildren.filter(c => c.excludeFromReal)
+        : allChildren.filter(c => isExcludedThisMonth(c.id))
       if (excChildren.length === 0) return null
       const isPartial = !isParentExcluded
       return {
@@ -361,10 +377,17 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {isPastMonth && (
-        <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
-          <span>🔒</span>
-          <span>지난 달 예산은 수정이 잠겨 있습니다. 현재 달 이후만 편집할 수 있어요.</span>
+      {month < currentMonth && (
+        <div className="mb-4 flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+          <div className="flex items-center gap-2">
+            <span>{unlocked ? '🔓' : '🔒'}</span>
+            <span>{unlocked ? '잠금 해제됨 — 수정 가능합니다.' : '지난 달 예산은 수정이 잠겨 있습니다.'}</span>
+          </div>
+          <button
+            onClick={() => setUnlocked(v => !v)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 transition-colors flex-shrink-0">
+            {unlocked ? '다시 잠금' : '잠금 해제'}
+          </button>
         </div>
       )}
 
@@ -568,14 +591,14 @@ export default function BudgetPage() {
                   {/* 실소비 제외 토글 */}
                   {parent.role !== 'savings' ? (
                     <button
-                      onClick={e => { e.stopPropagation(); toggleExcludeFromReal(parent.id) }}
+                      onClick={e => { e.stopPropagation(); toggleExcludeMonth(parent.id) }}
                       className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border transition-all ${
-                        parent.excludeFromReal
+                        isExcludedThisMonth(parent.id)
                           ? 'bg-blue-100 border-blue-300 text-blue-600'
                           : 'bg-gray-50 border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400'
                       }`}
-                      title={parent.excludeFromReal ? '실소비 제외 중 (클릭 시 포함)' : '실소비에서 제외하기'}>
-                      {parent.excludeFromReal ? '제외중' : '제외'}
+                      title={isExcludedThisMonth(parent.id) ? '이달 실소비 제외 중 (클릭 시 포함)' : '이달 실소비에서 제외하기'}>
+                      {isExcludedThisMonth(parent.id) ? '제외중' : '제외'}
                     </button>
                   ) : (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-400 font-medium">적금</span>
@@ -617,7 +640,7 @@ export default function BudgetPage() {
                     const isOver = budgetAmt > 0 && actual > budgetAmt
 
                     return (
-                      <div key={cat.id} className={`border-b border-gray-50 last:border-0 group ${isExcludedCat(cat.id) && !parent.excludeFromReal ? 'bg-blue-50/40' : ''}`}>
+                      <div key={cat.id} className={`border-b border-gray-50 last:border-0 group ${isExcludedThisMonth(cat.id) && !isExcludedThisMonth(parent.id) ? 'bg-blue-50/40' : ''}`}>
                         <div className="grid grid-cols-4 px-3 py-1.5 items-center hover:bg-gray-50 transition-colors">
                           {/* 소분류명 */}
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -637,16 +660,16 @@ export default function BudgetPage() {
                             {/* hover 시 표시: 제외 토글 + 편집/삭제 */}
                             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                               {/* 부모가 전체 제외 중이 아닐 때만 소분류 개별 토글 표시 */}
-                              {parent.role !== 'savings' && !parent.excludeFromReal && (
+                              {parent.role !== 'savings' && !isExcludedThisMonth(parent.id) && (
                                 <button
-                                  onClick={() => toggleExcludeFromReal(cat.id)}
+                                  onClick={() => toggleExcludeMonth(cat.id)}
                                   className={`text-[9px] px-1 py-0.5 rounded-full font-medium border transition-all ${
-                                    cat.excludeFromReal
+                                    isExcludedThisMonth(cat.id)
                                       ? 'bg-blue-100 border-blue-300 text-blue-600'
                                       : 'bg-gray-50 border-gray-200 text-gray-300 hover:text-gray-500'
                                   }`}
-                                  title={cat.excludeFromReal ? '제외 중 (클릭 시 포함)' : '실소비에서 제외'}>
-                                  {cat.excludeFromReal ? '제외중' : '제외'}
+                                  title={isExcludedThisMonth(cat.id) ? '이달 제외 중 (클릭 시 포함)' : '이달 실소비에서 제외'}>
+                                  {isExcludedThisMonth(cat.id) ? '제외중' : '제외'}
                                 </button>
                               )}
                               <button
@@ -877,37 +900,54 @@ export default function BudgetPage() {
         </div>
       )}
 
-      {deleteCatId && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteCatId(null)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="text-base font-semibold text-gray-900 mb-2">카테고리 삭제</div>
-            <p className="text-sm text-gray-500 mb-5">
-              이번 달 예산만 삭제할 수 있습니다.<br />
-              카테고리 자체를 완전히 삭제하면 <span className="text-red-600 font-medium">모든 달의 예산과 거래 내역 분류</span>가 사라집니다.
-            </p>
-            <div className="space-y-2">
-              <button
-                onClick={() => { deleteMonthBudget(deleteCatId); setDeleteCatId(null) }}
-                className="w-full py-2.5 rounded-xl bg-blue-50 text-blue-600 font-medium text-sm hover:bg-blue-100 transition-colors"
-              >
-                이번 달 예산만 삭제
-              </button>
-              <button
-                onClick={() => { deleteCategoryGlobal(deleteCatId); setDeleteCatId(null) }}
-                className="w-full py-2.5 rounded-xl bg-red-50 text-red-600 font-medium text-sm hover:bg-red-100 transition-colors"
-              >
-                카테고리 완전 삭제 (전체 달 적용)
-              </button>
-              <button
-                onClick={() => setDeleteCatId(null)}
-                className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-500 font-medium text-sm hover:bg-gray-200 transition-colors"
-              >
-                취소
-              </button>
+      {deleteCatId && (() => {
+        // 이 카테고리(또는 자식 카테고리)에 거래 내역이 있는지 확인
+        const cat = categories.find(c => c.id === deleteCatId)
+        const childIds = categories.filter(c => c.parentId === deleteCatId).map(c => c.id)
+        const relatedIds = new Set([deleteCatId, ...childIds])
+        const hasTx = transactions.some(t => relatedIds.has(t.categoryId))
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteCatId(null)}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="text-base font-semibold text-gray-900 mb-2">카테고리 삭제</div>
+              {hasTx && (
+                <div className="mb-3 flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5 text-xs text-orange-700">
+                  <span className="mt-0.5 flex-shrink-0">⚠️</span>
+                  <span><span className="font-semibold">{cat?.name}</span>에 거래 내역이 있습니다. 완전 삭제 시 해당 거래들의 카테고리 분류가 사라집니다.</span>
+                </div>
+              )}
+              <p className="text-sm text-gray-500 mb-4">
+                이번 달 예산만 숨기거나, 카테고리를 완전히 삭제할 수 있습니다.<br />
+                완전 삭제 시 <span className="text-red-600 font-medium">모든 달의 예산과 거래 내역 분류</span>가 사라집니다.
+              </p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => { deleteMonthBudget(deleteCatId); setDeleteCatId(null) }}
+                  className="w-full py-2.5 rounded-xl bg-blue-50 text-blue-600 font-medium text-sm hover:bg-blue-100 transition-colors"
+                >
+                  이번 달 예산만 숨기기
+                </button>
+                <button
+                  onClick={() => { if (!hasTx || confirm(`거래 내역이 있는 카테고리입니다. 정말 완전 삭제할까요?`)) { deleteCategoryGlobal(deleteCatId); setDeleteCatId(null) } }}
+                  className={`w-full py-2.5 rounded-xl font-medium text-sm transition-colors ${
+                    hasTx
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-200'
+                      : 'bg-red-50 text-red-600 hover:bg-red-100'
+                  }`}
+                >
+                  {hasTx ? '⚠️ 완전 삭제 (거래 내역 있음)' : '카테고리 완전 삭제'}
+                </button>
+                <button
+                  onClick={() => setDeleteCatId(null)}
+                  className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-500 font-medium text-sm hover:bg-gray-200 transition-colors"
+                >
+                  취소
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
