@@ -414,7 +414,7 @@ export default function BudgetPage() {
           <div className="text-base font-bold tabular-nums leading-tight text-gray-900">
             {fmtKRW(totalActualReal)}
           </div>
-          {(excludedGroups.filter(g => g.actual > 0).length > 0 || cardPayment > 0) && (
+          {excludedGroups.filter(g => g.actual > 0).length > 0 && (
             <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
               {excludedGroups.filter(g => g.actual > 0).map(g => (
                 <div key={g.id} className="flex items-center justify-between">
@@ -422,12 +422,6 @@ export default function BudgetPage() {
                   <span className="text-[11px] font-semibold text-blue-500 tabular-nums">{fmtKRW(g.actual)}</span>
                 </div>
               ))}
-              {cardPayment > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-purple-400">💳 카드대금 납부</span>
-                  <span className="text-[11px] font-semibold text-purple-500 tabular-nums">{fmtKRW(cardPayment)}</span>
-                </div>
-              )}
             </div>
           )}
         </div>
