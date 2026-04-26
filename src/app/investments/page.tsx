@@ -117,6 +117,7 @@ export default function InvestmentsPage() {
   const [deleteTradeId, setDeleteTradeId] = useState<string | null>(null)
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
   const [selectedTradeAccountId, setSelectedTradeAccountId] = useState<string | null>(null)
+  const [selectedTradeInvName, setSelectedTradeInvName] = useState<string | null>(null)
   const [collapsedTradeInvIds, setCollapsedTradeInvIds] = useState<Set<string>>(new Set())
 
   // 계좌 모달
@@ -349,6 +350,7 @@ export default function InvestmentsPage() {
     setInvestmentTrades(investmentTrades.filter(t => t.investmentId !== id))
     setDeleteInvestmentId(null)
     if (selectedInvestmentId === id) setSelectedInvestmentId(null)
+    setSelectedTradeInvName(null)
   }
 
   function handleUpdateCurrentPrice(invId: string) {
@@ -530,20 +532,26 @@ export default function InvestmentsPage() {
         return inv?.accountId === selectedTradeAccountId
       })
     : investmentTrades
-  const selectedTrades = (selectedInvestmentId
-    ? tradeFilteredByAccount.filter(t => t.investmentId === selectedInvestmentId)
+  const selectedTrades = (selectedTradeInvName
+    ? tradeFilteredByAccount.filter(t => {
+        const inv = investments.find(i => i.id === t.investmentId)
+        return inv?.name === selectedTradeInvName
+      })
     : tradeFilteredByAccount
   ).slice().sort((a, b) => b.date.localeCompare(a.date))
 
-  // 거래 이력 - 계좌 필터에 맞는 종목만
-  const tradeInvestments = selectedTradeAccountId
-    ? investments.filter(inv => inv.accountId === selectedTradeAccountId)
-    : investments
+  // 거래 이력 - 계좌 필터에 맞는 종목 이름 (중복 제거)
+  const tradeInvNames = (() => {
+    const base = selectedTradeAccountId
+      ? investments.filter(inv => inv.accountId === selectedTradeAccountId)
+      : investments
+    const seen = new Set<string>()
+    return base.map(inv => inv.name).filter(n => { if (seen.has(n)) return false; seen.add(n); return true })
+  })()
 
-  // 거래 이력 - 이름 기준 그룹화 (같은 이름 = 같은 종목)
+  // 거래 이력 - 이름 기준 그룹화 (같은 이름 = 같은 종목), 특정 이름 선택 시 null
   const tradeGroupsByName = (() => {
-    if (selectedInvestmentId) return null // 특정 종목 선택시 그룹화 X
-    // name → trades (날짜순)
+    if (selectedTradeInvName) return null
     const map = new Map<string, typeof selectedTrades>()
     for (const t of selectedTrades) {
       const name = investments.find(i => i.id === t.investmentId)?.name ?? t.investmentId
@@ -981,12 +989,12 @@ export default function InvestmentsPage() {
           {/* 계좌 필터 (Row 1) */}
           {investmentAccounts.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
-              <button onClick={() => { setSelectedTradeAccountId(null); setSelectedInvestmentId(null) }}
+              <button onClick={() => { setSelectedTradeAccountId(null); setSelectedTradeInvName(null) }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!selectedTradeAccountId ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
                 전체 계좌
               </button>
               {investmentAccounts.map(acc => (
-                <button key={acc.id} onClick={() => { setSelectedTradeAccountId(prev => prev === acc.id ? null : acc.id); setSelectedInvestmentId(null) }}
+                <button key={acc.id} onClick={() => { setSelectedTradeAccountId(prev => prev === acc.id ? null : acc.id); setSelectedTradeInvName(null) }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${selectedTradeAccountId === acc.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
                   {acc.name}
                 </button>
@@ -994,19 +1002,23 @@ export default function InvestmentsPage() {
             </div>
           )}
 
-          {/* 종목 필터 (Row 2) */}
-          {tradeInvestments.length > 0 && (
+          {/* 종목 필터 (Row 2) — 이름 기준 중복 제거 */}
+          {tradeInvNames.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
-              <button onClick={() => setSelectedInvestmentId(null)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!selectedInvestmentId ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+              <button onClick={() => setSelectedTradeInvName(null)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!selectedTradeInvName ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
                 전체 종목
               </button>
-              {tradeInvestments.map(inv => (
-                <button key={inv.id} onClick={() => setSelectedInvestmentId(prev => prev === inv.id ? null : inv.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${selectedInvestmentId === inv.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
-                  {ASSET_TYPE_META[inv.assetType].icon} {inv.name}
-                </button>
-              ))}
+              {tradeInvNames.map(name => {
+                const assetType = investments.find(i => i.name === name)?.assetType ?? 'domestic_stock'
+                const meta = ASSET_TYPE_META[assetType as InvestmentAssetType]
+                return (
+                  <button key={name} onClick={() => setSelectedTradeInvName(prev => prev === name ? null : name)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${selectedTradeInvName === name ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                    {meta.icon} {name}
+                  </button>
+                )
+              })}
             </div>
           )}
 
