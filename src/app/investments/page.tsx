@@ -806,10 +806,17 @@ export default function InvestmentsPage() {
                   </div>
                   {stats && (
                     <div className="text-right mr-1">
-                      <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(stats.eval))}</div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {fmtKRW(Math.round(stats.eval + (stats.divs ?? 0)))}
+                      </div>
                       <div className={`text-xs ${stats.eval - stats.buy >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                         {stats.eval - stats.buy >= 0 ? '+' : ''}{fmtKRW(Math.round(stats.eval - stats.buy))}
                       </div>
+                      {(stats.divs ?? 0) > 0 && (
+                        <div className="text-xs text-emerald-500 font-medium">
+                          예수금 {fmtKRW(Math.round(stats.divs ?? 0))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -855,10 +862,13 @@ export default function InvestmentsPage() {
                       {accDividends.length > 0 && (
                         <div className="bg-emerald-50 rounded-xl p-3 mt-2 mb-4">
                           <div className="flex items-center justify-between mb-2">
-                            <div className="text-xs font-semibold text-emerald-700">배당 내역</div>
-                            <div className="text-xs font-bold text-emerald-700">
-                              합계 +{fmtKRW(accDividends.reduce((s, d) => s + d.netAmount, 0))}
+                            <div>
+                              <div className="text-xs font-semibold text-emerald-700">💰 예수금 잔고 (배당 누계)</div>
+                              <div className="text-base font-bold text-emerald-700">
+                                +{fmtKRW(accDividends.reduce((s, d) => s + d.netAmount, 0))}
+                              </div>
                             </div>
+                            <div className="text-xs text-emerald-500">{accDividends.length}건</div>
                           </div>
                           <div className="space-y-1">
                             {displayDividends.map(d => {
