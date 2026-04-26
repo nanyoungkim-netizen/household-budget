@@ -540,14 +540,16 @@ export default function InvestmentsPage() {
     ? investments.filter(inv => inv.accountId === selectedTradeAccountId)
     : investments
 
-  // 거래 이력 - 종목별 그룹화
-  const tradeGroupsByInv = (() => {
+  // 거래 이력 - 이름 기준 그룹화 (같은 이름 = 같은 종목)
+  const tradeGroupsByName = (() => {
     if (selectedInvestmentId) return null // 특정 종목 선택시 그룹화 X
+    // name → trades (날짜순)
     const map = new Map<string, typeof selectedTrades>()
     for (const t of selectedTrades) {
-      const arr = map.get(t.investmentId) ?? []
+      const name = investments.find(i => i.id === t.investmentId)?.name ?? t.investmentId
+      const arr = map.get(name) ?? []
       arr.push(t)
-      map.set(t.investmentId, arr)
+      map.set(name, arr)
     }
     return map
   })()
@@ -1009,42 +1011,47 @@ export default function InvestmentsPage() {
           )}
 
           {/* 거래 목록 */}
-          {tradeGroupsByInv ? (
-            /* 전체 보기: 종목별 그룹화 */
+          {tradeGroupsByName ? (
+            /* 전체 보기: 이름 기준 그룹화 */
             <div className="space-y-3">
-              {tradeGroupsByInv.size === 0 && (
+              {tradeGroupsByName.size === 0 && (
                 <div className="text-center py-12 text-gray-400">
                   <div className="text-3xl mb-2">📋</div>
                   <div className="text-sm">거래 이력이 없습니다</div>
                 </div>
               )}
-              {Array.from(tradeGroupsByInv.entries()).map(([invId, trades]) => {
-                const inv = investments.find(i => i.id === invId)
-                const acc = inv?.accountId ? investmentAccounts.find(a => a.id === inv.accountId) : null
-                const meta = inv ? ASSET_TYPE_META[inv.assetType] : null
-                const isCollapsed = collapsedTradeInvIds.has(invId)
+              {Array.from(tradeGroupsByName.entries()).map(([invName, trades]) => {
+                // 이 그룹에 속한 고유 investment 목록 (아이콘·계좌 표시용)
+                const groupInvIds = [...new Set(trades.map(t => t.investmentId))]
+                const groupInvs = groupInvIds.map(id => investments.find(i => i.id === id)).filter(Boolean) as typeof investments
+                const meta = groupInvs[0] ? ASSET_TYPE_META[groupInvs[0].assetType] : null
+                // 계좌 목록 (중복 제거)
+                const accNames = [...new Set(
+                  groupInvs.map(inv => inv.accountId ? investmentAccounts.find(a => a.id === inv.accountId)?.name : null).filter(Boolean) as string[]
+                )]
+                const isCollapsed = collapsedTradeInvIds.has(invName)
                 const buyTotal = trades.filter(t => t.type === 'buy').reduce((s, t) => s + t.quantity * t.price, 0)
                 const sellTotal = trades.filter(t => t.type === 'sell').reduce((s, t) => s + t.quantity * t.price, 0)
                 const buyCount = trades.filter(t => t.type === 'buy').length
                 const sellCount = trades.filter(t => t.type === 'sell').length
                 return (
-                  <div key={invId} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div key={invName} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                     {/* 그룹 헤더 */}
                     <button
                       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
                       onClick={() => setCollapsedTradeInvIds(prev => {
                         const next = new Set(prev)
-                        if (next.has(invId)) next.delete(invId); else next.add(invId)
+                        if (next.has(invName)) next.delete(invName); else next.add(invName)
                         return next
                       })}>
                       <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-base flex-shrink-0">
                         {meta?.icon ?? '📦'}
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <div className="text-sm font-semibold text-gray-900 truncate">{inv?.name ?? '알 수 없는 종목'}</div>
+                        <div className="text-sm font-semibold text-gray-900 truncate">{invName}</div>
                         <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
-                          {acc && <span className="text-indigo-400">{acc.name}</span>}
-                          {acc && <span>·</span>}
+                          {accNames.map(n => <span key={n} className="text-indigo-400">{n}</span>)}
+                          {accNames.length > 0 && <span>·</span>}
                           <span>총 {trades.length}건</span>
                           {buyCount > 0 && <span className="text-blue-500">매수 {buyCount}건</span>}
                           {sellCount > 0 && <span className="text-red-400">매도 {sellCount}건</span>}
@@ -1060,6 +1067,8 @@ export default function InvestmentsPage() {
                     {!isCollapsed && (
                       <div className="border-t border-gray-100 divide-y divide-gray-50">
                         {trades.map(trade => {
+                          const tradeInv = investments.find(i => i.id === trade.investmentId)
+                          const tradeAcc = tradeInv?.accountId ? investmentAccounts.find(a => a.id === tradeInv.accountId) : null
                           const isBuy = trade.type === 'buy'
                           const tradeAmt = trade.quantity * trade.price
                           return (
@@ -1070,6 +1079,7 @@ export default function InvestmentsPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs text-gray-500">
                                   {trade.date} · {trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}
+                                  {tradeAcc && <span className="ml-1 text-indigo-400">· {tradeAcc.name}</span>}
                                 </div>
                                 {trade.note && <div className="text-xs text-gray-400">{trade.note}</div>}
                               </div>
