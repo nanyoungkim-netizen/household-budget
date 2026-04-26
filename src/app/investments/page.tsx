@@ -457,6 +457,22 @@ export default function InvestmentsPage() {
   // 저장된 목표 비율 합계
   const savedTargetPctSum = investmentTargetAllocations.reduce((s, a) => s + a.targetPct, 0)
 
+  // 포트폴리오 탭 계좌별 그룹화
+  const portfolioGroups = useMemo(() => {
+    const groups: Array<{ accId: string; accName: string; invs: typeof holdingInvestments }> = []
+    const seen = new Set<string>()
+    for (const inv of holdingInvestments) {
+      const accId = inv.accountId ?? '__none__'
+      if (!seen.has(accId)) {
+        seen.add(accId)
+        const acc = investmentAccounts.find(a => a.id === accId)
+        groups.push({ accId, accName: acc?.name ?? '미분류', invs: [] })
+      }
+      groups.find(g => g.accId === accId)!.invs.push(inv)
+    }
+    return groups
+  }, [holdingInvestments, investmentAccounts])
+
   function handleSaveTargetAllocations() {
     const allocations: InvestmentTargetAllocation[] = holdingInvestments.map(inv => ({
       investmentId: inv.id,
@@ -1141,19 +1157,30 @@ export default function InvestmentsPage() {
                     {Math.abs(targetPctSum - 100) >= 0.01 && ' ⚠️ 100% 필요'}
                   </div>
                 </div>
-                <div className="space-y-2 mb-3">
-                  {holdingInvestments.map(inv => (
-                    <div key={inv.id} className="flex items-center gap-3">
-                      <div className="flex-1 text-sm text-gray-700 truncate">{ASSET_TYPE_META[inv.assetType].icon} {inv.name}</div>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="number" min={0} max={100} step={0.1}
-                          placeholder="0"
-                          value={targetInputs[inv.id] ?? ''}
-                          onChange={e => setTargetInputs(prev => ({ ...prev, [inv.id]: e.target.value }))}
-                          className="w-20 text-right border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="text-xs text-gray-400">%</span>
+                <div className="space-y-3 mb-3">
+                  {portfolioGroups.map(group => (
+                    <div key={group.accId}>
+                      {portfolioGroups.length > 1 && (
+                        <div className="text-xs font-semibold text-indigo-500 mb-1.5 px-1 flex items-center gap-1">
+                          <span>🏦</span> {group.accName}
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {group.invs.map(inv => (
+                          <div key={inv.id} className="flex items-center gap-3">
+                            <div className="flex-1 text-sm text-gray-700 truncate">{ASSET_TYPE_META[inv.assetType].icon} {inv.name}</div>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number" min={0} max={100} step={0.1}
+                                placeholder="0"
+                                value={targetInputs[inv.id] ?? ''}
+                                onChange={e => setTargetInputs(prev => ({ ...prev, [inv.id]: e.target.value }))}
+                                className="w-20 text-right border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <span className="text-xs text-gray-400">%</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -1176,23 +1203,32 @@ export default function InvestmentsPage() {
                     <span className="text-right">현재</span>
                     <span className="text-right">차이</span>
                   </div>
-                  <div className="space-y-1.5">
-                    {holdingInvestments.map(inv => {
-                      const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
-                      const targetPct = saved?.targetPct ?? 0
-                      const curPct = currentPctMap[inv.id] ?? 0
-                      const diff = curPct - targetPct
-                      return (
-                        <div key={inv.id} className="grid grid-cols-4 items-center py-1.5 border-b border-gray-50 last:border-0">
-                          <div className="text-sm text-gray-700 truncate">{inv.name}</div>
-                          <div className="text-right text-sm text-gray-600">{targetPct.toFixed(1)}%</div>
-                          <div className="text-right text-sm text-gray-600">{curPct.toFixed(1)}%</div>
-                          <div className={`text-right text-sm font-semibold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                            {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                  <div className="space-y-3">
+                    {portfolioGroups.map(group => (
+                      <div key={group.accId}>
+                        {portfolioGroups.length > 1 && (
+                          <div className="text-xs font-semibold text-indigo-500 py-1 flex items-center gap-1 border-b border-indigo-50 mb-1">
+                            <span>🏦</span> {group.accName}
                           </div>
-                        </div>
-                      )
-                    })}
+                        )}
+                        {group.invs.map(inv => {
+                          const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
+                          const targetPct = saved?.targetPct ?? 0
+                          const curPct = currentPctMap[inv.id] ?? 0
+                          const diff = curPct - targetPct
+                          return (
+                            <div key={inv.id} className="grid grid-cols-4 items-center py-1.5 border-b border-gray-50 last:border-0">
+                              <div className="text-sm text-gray-700 truncate">{inv.name}</div>
+                              <div className="text-right text-sm text-gray-600">{targetPct.toFixed(1)}%</div>
+                              <div className="text-right text-sm text-gray-600">{curPct.toFixed(1)}%</div>
+                              <div className={`text-right text-sm font-semibold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1220,12 +1256,25 @@ export default function InvestmentsPage() {
                         <span className="text-right">추천 매수금액</span>
                         <span className="text-right">예상 비율</span>
                       </div>
-                      <div className="space-y-1.5">
-                        {rebalanceResult.map(r => (
-                          <div key={r.id} className="grid grid-cols-3 items-center py-1.5 border-b border-gray-50 last:border-0">
-                            <div className="text-sm text-gray-700 truncate">{r.name}</div>
-                            <div className="text-right text-sm font-semibold text-blue-600">{r.addAmt > 0 ? fmtKRW(Math.round(r.addAmt)) : '-'}</div>
-                            <div className="text-right text-sm text-gray-600">{r.expectedPct.toFixed(1)}%</div>
+                      <div className="space-y-3">
+                        {portfolioGroups.map(group => (
+                          <div key={group.accId}>
+                            {portfolioGroups.length > 1 && (
+                              <div className="text-xs font-semibold text-indigo-500 py-1 flex items-center gap-1 border-b border-indigo-50 mb-1">
+                                <span>🏦</span> {group.accName}
+                              </div>
+                            )}
+                            {group.invs.map(inv => {
+                              const r = rebalanceResult.find(x => x.id === inv.id)
+                              if (!r) return null
+                              return (
+                                <div key={r.id} className="grid grid-cols-3 items-center py-1.5 border-b border-gray-50 last:border-0">
+                                  <div className="text-sm text-gray-700 truncate">{ASSET_TYPE_META[inv.assetType].icon} {r.name}</div>
+                                  <div className="text-right text-sm font-semibold text-blue-600">{r.addAmt > 0 ? fmtKRW(Math.round(r.addAmt)) : '-'}</div>
+                                  <div className="text-right text-sm text-gray-600">{r.expectedPct.toFixed(1)}%</div>
+                                </div>
+                              )
+                            })}
                           </div>
                         ))}
                       </div>
