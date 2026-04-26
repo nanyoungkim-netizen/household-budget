@@ -44,9 +44,9 @@ export default function BudgetPage() {
   function isExcludedFromReal(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
     if (!cat) return false
-    if (cat.role === 'card_payment' || cat.role === 'savings') return true
+    if (cat.role === 'savings') return true  // 저축만 자동 제외, card_payment는 수동 제외만
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    return parent?.role === 'savings' || parent?.role === 'card_payment' || false
+    return parent?.role === 'savings' || false
   }
   const [month, setMonth] = useState(currentMonth)
   const router = useRouter()

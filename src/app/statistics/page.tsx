@@ -97,33 +97,27 @@ export default function StatisticsPage() {
 
   // ── 월별 핵심 지표 ───────────────────────────────────────────────────────
   const getMonthStats = useCallback((m: string) => {
-    const txs     = transactions.filter(t => t.date.startsWith(m))
-    const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-    const refund  = txs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
-    // 카드대금 납부는 이중계산이므로 지출에서 제외
-    const expense = txs.filter(t => t.type === 'expense' && !isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
-    const savingAmt  = txs.filter(t => t.type === 'expense' && !isCardPayment(t) && isSaving(t)).reduce((s, t) => s + t.amount, 0)
-    const cardPayAmt = txs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
-    // 실소비: categoryExcludeMonths 반영
-    const realExpense = txs.filter(t => {
+    const txs    = transactions.filter(t => t.date.startsWith(m))
+    const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+    const refund = txs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
+    // 카드대금 자동 제외 없음 — 수동 제외(categoryExcludeMonths)만 적용
+    const expense   = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+    const savingAmt = txs.filter(t => t.type === 'expense' && isSaving(t)).reduce((s, t) => s + t.amount, 0)
+    // 수동 제외 금액 (저축 제외 후, categoryExcludeMonths 기준)
+    const excludedAmt = txs.filter(t => {
       if (t.type !== 'expense') return false
-      if (isCardPayment(t) || isSaving(t)) return false
+      if (isSaving(t)) return false
       const cat = catMap.get(t.categoryId)
-      if (!cat) return true
-      const catExcluded = (categoryExcludeMonths[cat.id] ?? []).includes(m)
-      if (catExcluded) return false
+      if (!cat) return false
+      if ((categoryExcludeMonths[cat.id] ?? []).includes(m)) return true
       const parent = cat.parentId ? catMap.get(cat.parentId) : undefined
-      if (parent) {
-        const parentExcluded = (categoryExcludeMonths[parent.id] ?? []).includes(m)
-        if (parentExcluded) return false
-      }
-      return true
+      return !!parent && (categoryExcludeMonths[parent.id] ?? []).includes(m)
     }).reduce((s, t) => s + t.amount, 0)
-    const realConsumption = Math.max(0, realExpense - refund)
+    const realConsumption = Math.max(0, expense - savingAmt - excludedAmt - refund)
     const savingRate      = income > 0 ? (savingAmt / income) * 100 : 0
     const netIncome       = income - realConsumption - savingAmt
-    return { income, expense, savingAmt, cardPayAmt, realConsumption, savingRate, netIncome, refund }
-  }, [transactions, isCardPayment, isSaving, catMap, categoryExcludeMonths])
+    return { income, expense, savingAmt, excludedAmt, realConsumption, savingRate, netIncome, refund }
+  }, [transactions, isSaving, catMap, categoryExcludeMonths])
 
   // ── KPI (이번달·전월) ───────────────────────────────────────────────────
   const thisStats = useMemo(() => getMonthStats(currentMonth), [getMonthStats])
@@ -132,11 +126,11 @@ export default function StatisticsPage() {
   const consumptionDiff = thisStats.realConsumption - lastStats.realConsumption
   const savingRateDiff  = thisStats.savingRate - lastStats.savingRate
 
-  // 이달 지출 구성 비율
-  const totalOutflow = thisStats.realConsumption + thisStats.savingAmt + thisStats.cardPayAmt
+  // 이달 지출 구성 비율 (예산탭과 동일: 실소비 / 저축 / 제외항목)
+  const totalOutflow   = thisStats.realConsumption + thisStats.savingAmt + thisStats.excludedAmt
   const consumptionPct = totalOutflow > 0 ? (thisStats.realConsumption / totalOutflow) * 100 : 0
   const savingPct      = totalOutflow > 0 ? (thisStats.savingAmt / totalOutflow) * 100 : 0
-  const cardPayPct     = totalOutflow > 0 ? (thisStats.cardPayAmt / totalOutflow) * 100 : 0
+  const excludedPct    = totalOutflow > 0 ? (thisStats.excludedAmt / totalOutflow) * 100 : 0
 
   // ── 추이 탭: 최근 6개월 ─────────────────────────────────────────────────
   const trendData = useMemo(() => Array.from({ length: 6 }, (_, i) => {
@@ -145,7 +139,7 @@ export default function StatisticsPage() {
     const mo = parseInt(m.split('-')[1])
     return {
       label: `${mo}월`, 수입: s.income, 실소비: s.realConsumption,
-      저축: s.savingAmt, 카드대금: s.cardPayAmt, 순수입: s.netIncome,
+      저축: s.savingAmt, 제외항목: s.excludedAmt, 순수입: s.netIncome,
       저축률: Math.round(s.savingRate),
     }
   }), [getMonthStats])
@@ -237,26 +231,42 @@ export default function StatisticsPage() {
       const day     = String(i + 1).padStart(2, '0')
       const dateStr = `${analysisMonth}-${day}`
       const amt     = transactions
-        .filter(t => t.date === dateStr && t.type === 'expense' && !isCardPayment(t))
+        .filter(t => {
+          if (t.date !== dateStr || t.type !== 'expense') return false
+          if (isSaving(t)) return false
+          const cat = catMap.get(t.categoryId)
+          if (!cat) return true
+          if ((categoryExcludeMonths[cat.id] ?? []).includes(analysisMonth)) return false
+          const parent = cat.parentId ? catMap.get(cat.parentId) : undefined
+          return !(parent && (categoryExcludeMonths[parent.id] ?? []).includes(analysisMonth))
+        })
         .reduce((s, t) => s + t.amount, 0)
       cumulative += amt
       return { day: i + 1, 일별: amt, 누적: cumulative }
     })
-  }, [transactions, isCardPayment, analysisMonth])
+  }, [transactions, isSaving, catMap, categoryExcludeMonths, analysisMonth])
 
   const dowData = useMemo(() => {
     const DOW = ['일', '월', '화', '수', '목', '금', '토']
     const amounts = Array(7).fill(0)
     const counts  = Array(7).fill(0)
     transactions
-      .filter(t => t.date.startsWith(analysisMonth) && t.type === 'expense' && !isCardPayment(t))
+      .filter(t => {
+        if (!t.date.startsWith(analysisMonth) || t.type !== 'expense') return false
+        if (isSaving(t)) return false  // 저축 제외
+        const cat = catMap.get(t.categoryId)
+        if (!cat) return true
+        if ((categoryExcludeMonths[cat.id] ?? []).includes(analysisMonth)) return false
+        const parent = cat.parentId ? catMap.get(cat.parentId) : undefined
+        return !(parent && (categoryExcludeMonths[parent.id] ?? []).includes(analysisMonth))
+      })
       .forEach(t => {
         const dow = new Date(t.date + 'T00:00:00').getDay()
         amounts[dow] += t.amount
         counts[dow]++
       })
     return DOW.map((label, i) => ({ label, amount: amounts[i], count: counts[i] }))
-  }, [transactions, isCardPayment, analysisMonth])
+  }, [transactions, isSaving, catMap, categoryExcludeMonths, analysisMonth])
 
   const payMethodData = useMemo(() => {
     const card    = transactions.filter(t => t.date.startsWith(analysisMonth) && t.type === 'expense' && t.paymentMethod === 'card'    && !isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
@@ -284,7 +294,7 @@ export default function StatisticsPage() {
     const s = getMonthStats(m)
     return {
       label: `${i + 1}월`, 수입: s.income, 실소비: s.realConsumption,
-      저축: s.savingAmt, 카드대금: s.cardPayAmt, 저축률: Math.round(s.savingRate),
+      저축: s.savingAmt, 제외항목: s.excludedAmt, 저축률: Math.round(s.savingRate),
     }
   }), [getMonthStats, targetYear])
 
@@ -471,18 +481,18 @@ export default function StatisticsPage() {
           {totalOutflow > 0 && (
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="font-semibold text-sm text-gray-900 mb-1">이달 지출 구성</div>
-              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 저축 · 카드대금으로 분리</div>
+              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 저축 · 제외항목으로 분리 (예산탭 기준)</div>
               {/* 스택 바 */}
               <div className="flex h-5 rounded-full overflow-hidden mb-3">
                 {consumptionPct > 0 && <div style={{ width: `${consumptionPct}%`, backgroundColor: '#FF6B6B' }} />}
                 {savingPct > 0      && <div style={{ width: `${savingPct}%`,      backgroundColor: '#0064FF' }} />}
-                {cardPayPct > 0     && <div style={{ width: `${cardPayPct}%`,     backgroundColor: '#F59E0B' }} />}
+                {excludedPct > 0    && <div style={{ width: `${excludedPct}%`,    backgroundColor: '#8B5CF6' }} />}
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${thisStats.excludedAmt > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 {[
-                  { label: '실소비', color: '#FF6B6B', value: thisStats.realConsumption, pct: consumptionPct },
-                  { label: '저축',   color: '#0064FF', value: thisStats.savingAmt,       pct: savingPct },
-                  { label: '카드대금', color: '#F59E0B', value: thisStats.cardPayAmt,    pct: cardPayPct },
+                  { label: '실소비',   color: '#FF6B6B', value: thisStats.realConsumption, pct: consumptionPct },
+                  { label: '저축',     color: '#0064FF', value: thisStats.savingAmt,       pct: savingPct },
+                  ...(thisStats.excludedAmt > 0 ? [{ label: '제외항목', color: '#8B5CF6', value: thisStats.excludedAmt, pct: excludedPct }] : []),
                 ].map(item => (
                   <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: item.color + '14' }}>
                     <div className="flex items-center gap-1.5 mb-1">
@@ -497,10 +507,10 @@ export default function StatisticsPage() {
             </div>
           )}
 
-          {/* 수입/실소비/저축/카드대금 */}
+          {/* 수입/실소비/저축/제외항목 */}
           <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="font-semibold text-sm text-gray-900 mb-0.5">최근 6개월 수입 · 실소비 · 저축 · 카드대금</div>
-            <div className="text-xs text-gray-400 mb-4">카드대금은 지출과 별도로 분리해서 표시합니다</div>
+            <div className="font-semibold text-sm text-gray-900 mb-0.5">최근 6개월 수입 · 실소비 · 저축</div>
+            <div className="text-xs text-gray-400 mb-4">예산탭 제외항목은 별도 표시 · 실소비 기준 예산탭과 동일</div>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={trendData} barGap={2} barCategoryGap="28%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -511,7 +521,7 @@ export default function StatisticsPage() {
                 <Bar dataKey="수입"    fill="#00B493" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="실소비"  fill="#FF6B6B" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="저축"    fill="#0064FF" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="카드대금" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="제외항목" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -703,20 +713,23 @@ export default function StatisticsPage() {
           {/* 요일별 패턴 */}
           <div className="bg-white rounded-2xl p-5 shadow-sm">
             <div className="font-semibold text-sm text-gray-900 mb-4">요일별 소비 패턴</div>
-            <ResponsiveContainer width="100%" height={190}>
-              <BarChart data={dowData} barCategoryGap="40%">
+            <ResponsiveContainer width="100%" height={210}>
+              <ComposedChart data={dowData} barCategoryGap="40%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                 <XAxis dataKey="label" tick={{ fontSize: 13, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v, name) => [name === 'amount' ? fmtKRW(Number(v)) : v + '건', name === 'amount' ? '소비금액' : '건수']} />
-                <Bar dataKey="amount" name="소비금액" radius={[5, 5, 0, 0]}>
+                <YAxis yAxisId="left" tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} unit="건" />
+                <Tooltip formatter={(v, name) => [name === '소비금액' ? fmtKRW(Number(v)) : v + '건', name]} />
+                <Bar yAxisId="left" dataKey="amount" name="소비금액" radius={[5, 5, 0, 0]}>
                   {dowData.map((_, i) => <Cell key={i} fill={i === 0 || i === 6 ? '#FF6B6B' : '#8B5CF6'} />)}
                 </Bar>
-              </BarChart>
+                <Line yAxisId="right" type="monotone" dataKey="count" name="건수" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3, fill: '#F59E0B' }} />
+              </ComposedChart>
             </ResponsiveContainer>
             <div className="flex justify-center gap-4 mt-2">
               <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-400" /><span className="text-xs text-gray-400">주말</span></div>
               <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-violet-500" /><span className="text-xs text-gray-400">평일</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className="text-xs text-gray-400">건수</span></div>
             </div>
           </div>
 
@@ -798,7 +811,7 @@ export default function StatisticsPage() {
 
           {/* 연간 수입/실소비/저축 */}
           <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="font-semibold text-sm text-gray-900 mb-4">{targetYear}년 월별 수입 · 실소비 · 저축 · 카드대금</div>
+            <div className="font-semibold text-sm text-gray-900 mb-4">{targetYear}년 월별 수입 · 실소비 · 저축</div>
             <ResponsiveContainer width="100%" height={270}>
               <BarChart data={annualData} barGap={2} barCategoryGap="22%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -809,7 +822,7 @@ export default function StatisticsPage() {
                 <Bar dataKey="수입"    fill="#00B493" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="실소비"  fill="#FF6B6B" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="저축"    fill="#0064FF" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="카드대금" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="제외항목" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

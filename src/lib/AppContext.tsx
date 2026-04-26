@@ -647,7 +647,7 @@ export function getRealCategoryExpenses(
     .filter(t => {
       if (!t.date.startsWith(month)) return false
       const ct = getConsumptionType(t, categories)
-      if (ct !== 'normal') return false
+      if (ct === 'savings_transfer') return false  // 저축이체만 자동 제외, card_payment는 수동 제외
       // 월별 실소비 제외 체크
       if (categoryExcludeMonths) {
         const cat = categories.find(c => c.id === t.categoryId)

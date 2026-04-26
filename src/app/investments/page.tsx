@@ -199,7 +199,7 @@ export default function InvestmentsPage() {
   const portfolio = useMemo(() => {
     let totalBuy = 0, totalEval = 0, totalRealized = 0, totalFee = 0
     const byType: Record<string, number> = {}
-    const byAccount: Record<string, { buy: number; eval: number }> = {}
+    const byAccount: Record<string, { buy: number; eval: number; divs: number }> = {}
 
     holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalFee: invFee, realizedPnl }) => {
       const currentPrice = investment.currentPrice ?? 0
@@ -211,12 +211,19 @@ export default function InvestmentsPage() {
       const type = investment.assetType
       byType[type] = (byType[type] || 0) + evalAmt
       const aId = investment.accountId ?? '__none__'
-      if (!byAccount[aId]) byAccount[aId] = { buy: 0, eval: 0 }
+      if (!byAccount[aId]) byAccount[aId] = { buy: 0, eval: 0, divs: 0 }
       byAccount[aId].buy += totalBuyAmt
       byAccount[aId].eval += evalAmt
     })
 
+    // 배당금 → 계좌별 예수금(현금 잔고)에 합산
     const totalDividend = investmentDividends.reduce((s, d) => s + d.netAmount, 0)
+    investmentDividends.forEach(d => {
+      const aId = d.accountId ?? '__none__'
+      if (!byAccount[aId]) byAccount[aId] = { buy: 0, eval: 0, divs: 0 }
+      byAccount[aId].divs = (byAccount[aId].divs ?? 0) + d.netAmount
+    })
+
     const unrealizedPnl = totalEval - totalBuy
     const returnRate = totalBuy > 0 ? (unrealizedPnl / totalBuy) * 100 : 0
     const totalReturn = unrealizedPnl + totalRealized + totalDividend
@@ -716,8 +723,13 @@ export default function InvestmentsPage() {
                         <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(stats.eval))}</div>
+                        <div className="text-sm font-semibold text-gray-900">
+                          {fmtKRW(Math.round(stats.eval + (stats.divs ?? 0)))}
+                        </div>
                         <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))} ({fmtPct(rate)})</div>
+                        {(stats.divs ?? 0) > 0 && (
+                          <div className="text-xs text-emerald-500">예수금 {fmtKRW(Math.round(stats.divs ?? 0))}</div>
+                        )}
                       </div>
                     </div>
                   )

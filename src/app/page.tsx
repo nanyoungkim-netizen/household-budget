@@ -120,8 +120,6 @@ export default function Dashboard() {
   // ── 기간 필터링 ───────────────────────────────────────────────────────────
   const prefix    = viewMode === 'day' ? selectedDay : selectedMonth
   const periodTxs = transactions.filter(t => t.date.startsWith(prefix))
-  // 카드대금 납부 거래는 이중계산이므로 요약에서 제외
-  const isCardPayment = (t: Transaction) => categories.find(c => c.id === t.categoryId)?.role === 'card_payment'
   const isSavingTx = (t: Transaction) => {
     const cat = categories.find(c => c.id === t.categoryId)
     if (!cat) return false
@@ -130,11 +128,11 @@ export default function Dashboard() {
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
     return parent?.role === 'savings' === true
   }
-  const periodTxsForStats = periodTxs.filter(t => !isCardPayment(t))
+  // 카드대금은 자동 제외 없음 — 수동 categoryExcludeMonths 토글 시에만 제외
+  const periodTxsForStats = periodTxs
   const stats       = calcStats(periodTxsForStats)
   // 지출 구성 분리
   const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && isSavingTx(t)).reduce((s, t) => s + t.amount, 0)
-  const cardPayAmt  = periodTxs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
   const currentPeriodMonth = (viewMode === 'day' ? selectedDay : selectedMonth).slice(0, 7)
   const isExcludedByMonth = (t: Transaction) => {
     if (isSavingTx(t)) return false
@@ -503,15 +501,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 지출 구성: 실소비 / 저축 / 카드대금 */}
-        {(savingAmt > 0 || cardPayAmt > 0 || excludedAmt > 0) && (
+        {/* 지출 구성: 실소비 / 저축 / 제외항목 */}
+        {(savingAmt > 0 || excludedAmt > 0) && (
           <div className="mt-3 pt-3 border-t border-white/20">
             <div className="text-[10px] opacity-60 mb-2">지출 구성</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${excludedAmt > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
               {[
-                { label: '실소비',  value: realConsumption, color: 'bg-red-300/30' },
-                { label: '저축',    value: savingAmt,       color: 'bg-blue-300/30' },
-                { label: '카드대금', value: cardPayAmt,     color: 'bg-amber-300/30' },
+                { label: '실소비',   value: realConsumption, color: 'bg-red-300/30' },
+                { label: '저축',     value: savingAmt,       color: 'bg-blue-300/30' },
+                ...(excludedAmt > 0 ? [{ label: '제외항목', value: excludedAmt, color: 'bg-purple-300/30' }] : []),
               ].map(item => (
                 <div key={item.label} className={`${item.color} rounded-xl p-2 text-center`}>
                   <div className="text-[10px] opacity-70 mb-0.5">{item.label}</div>
@@ -536,10 +534,10 @@ export default function Dashboard() {
       </div>
 
       {/* PRD 2.1: 이달 비소비 항목 별도 카드 */}
-      {viewMode === 'month' && (savingAmt > 0 || cardPayAmt > 0 || excludedAmt > 0) && (
+      {viewMode === 'month' && (savingAmt > 0 || excludedAmt > 0) && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
           <div className="text-xs font-semibold text-gray-500 mb-3">이달 비소비 항목 합계</div>
-          <div className={`grid gap-3 ${excludedAmt > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <div className={`grid gap-3 ${excludedAmt > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div className="bg-teal-50 rounded-xl p-3">
               <div className="text-xs text-teal-600 mb-0.5">적금·예금 이체</div>
               <div className="text-base font-bold text-teal-700">{fmtKRW(savingAmt)}</div>
@@ -547,16 +545,11 @@ export default function Dashboard() {
             </div>
             {excludedAmt > 0 && (
               <div className="bg-purple-50 rounded-xl p-3">
-                <div className="text-xs text-purple-600 mb-0.5">사용자 제외 항목</div>
+                <div className="text-xs text-purple-600 mb-0.5">제외 항목</div>
                 <div className="text-base font-bold text-purple-700">{fmtKRW(excludedAmt)}</div>
                 <div className="text-xs text-purple-400 mt-0.5">예산탭에서 제외 설정</div>
               </div>
             )}
-            <div className="bg-amber-50 rounded-xl p-3">
-              <div className="text-xs text-amber-600 mb-0.5">카드대금 결제</div>
-              <div className="text-base font-bold text-amber-700">{fmtKRW(cardPayAmt)}</div>
-              <div className="text-xs text-amber-400 mt-0.5">이중계산 방지 제외</div>
-            </div>
           </div>
           <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
             <span className="text-xs text-gray-400">이달 실소비</span>
