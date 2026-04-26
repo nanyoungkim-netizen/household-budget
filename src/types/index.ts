@@ -221,7 +221,8 @@ export interface Investment {
 // PRD: 배당금 기록
 export interface InvestmentDividend {
   id: string
-  investmentId: string
+  accountId: string      // 소속 계좌 ID
+  investmentId?: string  // 배당 발생 종목 (선택사항, 기존 호환용)
   date: string          // 입금일 (YYYY-MM-DD)
   grossAmount: number   // 세전 배당금
   tax: number           // 원천징수세액

@@ -229,6 +229,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return localTime >= remoteTime ? localData : remoteData
   }
 
+  // dividends 마이그레이션: investmentId만 있는 경우 accountId 추가
+  function migrateDividends(divs: InvestmentDividend[], investments: Investment[]): InvestmentDividend[] {
+    return divs.map(d => {
+      if ((d as any).accountId) return d  // 이미 마이그레이션됨
+      const inv = investments.find(i => i.id === d.investmentId)
+      return { ...d, accountId: inv?.accountId ?? '__none__' }
+    })
+  }
+
   // F-03: 기존 InvestmentSubType → typeId 마이그레이션
   function migrateInvestmentAccounts(accs: InvestmentAccount[]): InvestmentAccount[] {
     const subTypeMap: Record<string, string> = {
@@ -253,7 +262,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       investments: raw.investments ?? [],
       investmentTrades: raw.investmentTrades ?? [],
       investmentAccounts: migrateInvestmentAccounts(raw.investmentAccounts ?? []),
-      investmentDividends: raw.investmentDividends ?? [],
+      investmentDividends: migrateDividends(raw.investmentDividends ?? [], raw.investments ?? []),
       investmentAccountTypes: raw.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES,
       investmentTargetAllocations: raw.investmentTargetAllocations ?? [],
       savingPayments: raw.savingPayments ?? [],

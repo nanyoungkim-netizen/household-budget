@@ -55,7 +55,9 @@ const EMPTY_ACCOUNT: Omit<InvestmentAccount, 'id'> = {
   color: ACCOUNT_COLORS[0],
 }
 
-const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id' | 'investmentId'> = {
+const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
+  accountId: '',
+  investmentId: undefined,
   date: today,
   grossAmount: 0,
   tax: 0,
@@ -130,11 +132,11 @@ export default function InvestmentsPage() {
 
   // 배당금 모달
   const [showDividendModal, setShowDividendModal] = useState(false)
-  const [dividendInvestmentId, setDividendInvestmentId] = useState<string | null>(null)
+  const [dividendAccountId, setDividendAccountId] = useState<string | null>(null)
   const [editDividendId, setEditDividendId] = useState<string | null>(null)
-  const [dividendForm, setDividendForm] = useState<Omit<InvestmentDividend, 'id' | 'investmentId'>>(EMPTY_DIVIDEND)
+  const [dividendForm, setDividendForm] = useState<Omit<InvestmentDividend, 'id'>>(EMPTY_DIVIDEND)
   const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
-  const [expandedDividendInvId, setExpandedDividendInvId] = useState<string | null>(null)
+  const [expandedDividendAccId, setExpandedDividendAccId] = useState<string | null>(null)
 
   // 계좌별 접기/펼치기
   const [collapsedAccounts, setCollapsedAccounts] = useState<Set<string>>(new Set())
@@ -380,26 +382,27 @@ export default function InvestmentsPage() {
   }
 
   // ── 배당금 CRUD ────────────────────────────────────────────────────────────
-  function openAddDividend(investmentId: string) {
-    setDividendInvestmentId(investmentId)
+  function openAddDividend(accountId: string) {
+    setDividendAccountId(accountId)
     setEditDividendId(null)
-    setDividendForm({ ...EMPTY_DIVIDEND })
+    setDividendForm({ ...EMPTY_DIVIDEND, accountId, investmentId: undefined })
     setShowDividendModal(true)
   }
 
   function openEditDividend(d: InvestmentDividend) {
-    setDividendInvestmentId(d.investmentId)
+    setDividendAccountId(d.accountId)
     setEditDividendId(d.id)
-    setDividendForm({ date: d.date, grossAmount: d.grossAmount, tax: d.tax, netAmount: d.netAmount, note: d.note })
+    setDividendForm({ accountId: d.accountId, investmentId: d.investmentId, date: d.date, grossAmount: d.grossAmount, tax: d.tax, netAmount: d.netAmount, note: d.note })
     setShowDividendModal(true)
   }
 
   function handleSaveDividend() {
-    if (!dividendInvestmentId || dividendForm.netAmount <= 0) return
+    if (!dividendAccountId || dividendForm.netAmount <= 0) return
+    const formWithAccount = { ...dividendForm, accountId: dividendAccountId }
     if (editDividendId) {
-      setInvestmentDividends(investmentDividends.map(d => d.id === editDividendId ? { ...d, ...dividendForm } : d))
+      setInvestmentDividends(investmentDividends.map(d => d.id === editDividendId ? { ...d, ...formWithAccount } : d))
     } else {
-      setInvestmentDividends([...investmentDividends, { id: `div${Date.now()}`, investmentId: dividendInvestmentId, ...dividendForm }])
+      setInvestmentDividends([...investmentDividends, { id: `div${Date.now()}`, ...formWithAccount }])
     }
     setShowDividendModal(false)
     setEditDividendId(null)
@@ -509,9 +512,8 @@ export default function InvestmentsPage() {
     const evalPnl = evalAmt - (h?.totalBuyAmt ?? 0)
     const evalRate = h?.totalBuyAmt ? (evalPnl / h.totalBuyAmt) * 100 : 0
     const isProfit = evalPnl >= 0
-    const invDividends = investmentDividends.filter(d => d.investmentId === inv.id).sort((a, b) => b.date.localeCompare(a.date))
+    const invDividends = investmentDividends.filter(d => d.investmentId === inv.id)
     const totalDividend = invDividends.reduce((s, d) => s + d.netAmount, 0)
-    const isExpanded = expandedDividendInvId === inv.id
 
     return (
       <div key={inv.id} className="bg-white rounded-2xl p-4 shadow-sm">
@@ -529,7 +531,6 @@ export default function InvestmentsPage() {
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => openAddTrade(inv.id)} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">+ 거래</button>
-            <button onClick={() => openAddDividend(inv.id)} className="text-xs bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors">+ 배당</button>
             <button onClick={() => openEditInvestment(inv)} className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">수정</button>
             <button onClick={() => setDeleteInvestmentId(inv.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">삭제</button>
           </div>
@@ -582,33 +583,13 @@ export default function InvestmentsPage() {
                   </div>
                 )}
                 {totalDividend > 0 && (
-                  <button className="flex-1 bg-emerald-50 rounded-xl p-2.5 text-left" onClick={() => setExpandedDividendInvId(prev => prev === inv.id ? null : inv.id)}>
-                    <div className="text-xs text-emerald-500 mb-0.5">배당 수령 {isExpanded ? '▲' : '▼'}</div>
+                  <div className="flex-1 bg-emerald-50 rounded-xl p-2.5">
+                    <div className="text-xs text-emerald-500 mb-0.5">배당 수령</div>
                     <div className="text-sm font-semibold text-emerald-700">+{fmtKRW(Math.round(totalDividend))}</div>
-                  </button>
+                  </div>
                 )}
               </div>
             )}
-          </div>
-        )}
-
-        {isExpanded && invDividends.length > 0 && (
-          <div className="mb-3 border border-emerald-100 rounded-xl overflow-hidden">
-            {invDividends.map(d => (
-              <div key={d.id} className="flex items-center gap-3 px-3 py-2 border-b border-emerald-50 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-gray-700 font-medium">{d.date}</div>
-                  {d.note && <div className="text-xs text-gray-400">{d.note}</div>}
-                </div>
-                <div className="text-right text-xs text-gray-400">
-                  세전 {fmtKRW(d.grossAmount)} → 세후 <span className="text-emerald-600 font-semibold">{fmtKRW(d.netAmount)}</span>
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => openEditDividend(d)} className="text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded text-xs">✏️</button>
-                  <button onClick={() => setDeleteDividendId(d.id)} className="text-red-400 hover:text-red-600 px-1 py-0.5 rounded text-xs">🗑️</button>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 
@@ -821,6 +802,10 @@ export default function InvestmentsPage() {
                       className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
                       + 종목
                     </button>
+                    <button onClick={() => openAddDividend(acc.id)}
+                      className="text-xs bg-emerald-50 text-emerald-600 px-2.5 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors font-medium">
+                      + 배당
+                    </button>
                     <button onClick={() => openEditAccount(acc)}
                       className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
                       ✏️
@@ -832,19 +817,67 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
 
-                {!isCollapsed && (
-                  accInvestments.length === 0 ? (
-                    <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border-2 border-dashed border-gray-200 mb-4">
-                      <div className="text-2xl mb-1">📭</div>
-                      <div className="text-xs">등록된 종목이 없습니다</div>
-                      <button onClick={() => openAddInvestment(acc.id)} className="mt-2 text-xs text-blue-500 underline">+ 종목 추가</button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 pl-1 border-l-2 mb-4" style={{ borderColor: acc.color + '60' }}>
-                      {accInvestments.map(inv => renderInvestmentCard(inv))}
-                    </div>
+                {!isCollapsed && (() => {
+                  const accDividends = investmentDividends
+                    .filter(d => d.accountId === acc.id)
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                  const isAccDivExpanded = expandedDividendAccId === acc.id
+                  const displayDividends = isAccDivExpanded ? accDividends : accDividends.slice(0, 3)
+                  return (
+                    <>
+                      {accInvestments.length === 0 ? (
+                        <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border-2 border-dashed border-gray-200 mb-4">
+                          <div className="text-2xl mb-1">📭</div>
+                          <div className="text-xs">등록된 종목이 없습니다</div>
+                          <button onClick={() => openAddInvestment(acc.id)} className="mt-2 text-xs text-blue-500 underline">+ 종목 추가</button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 pl-1 border-l-2 mb-4" style={{ borderColor: acc.color + '60' }}>
+                          {accInvestments.map(inv => renderInvestmentCard(inv))}
+                        </div>
+                      )}
+
+                      {accDividends.length > 0 && (
+                        <div className="bg-emerald-50 rounded-xl p-3 mt-2 mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-emerald-700">배당 내역</div>
+                            <div className="text-xs font-bold text-emerald-700">
+                              합계 +{fmtKRW(accDividends.reduce((s, d) => s + d.netAmount, 0))}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            {displayDividends.map(d => {
+                              const invName = d.investmentId ? investments.find(i => i.id === d.investmentId)?.name : undefined
+                              return (
+                                <div key={d.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs text-gray-700 font-medium">{d.date}</div>
+                                    {invName && <div className="text-xs text-gray-400">{invName}</div>}
+                                    {d.note && <div className="text-xs text-gray-400">{d.note}</div>}
+                                  </div>
+                                  <div className="text-right text-xs text-gray-400 flex-shrink-0">
+                                    세후 <span className="text-emerald-600 font-semibold">{fmtKRW(d.netAmount)}</span>
+                                  </div>
+                                  <div className="flex gap-1 flex-shrink-0">
+                                    <button onClick={() => openEditDividend(d)} className="text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded text-xs">✏️</button>
+                                    <button onClick={() => setDeleteDividendId(d.id)} className="text-red-400 hover:text-red-600 px-1 py-0.5 rounded text-xs">🗑️</button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          {accDividends.length > 3 && (
+                            <button
+                              onClick={() => setExpandedDividendAccId(prev => prev === acc.id ? null : acc.id)}
+                              className="mt-2 w-full text-xs text-emerald-600 hover:text-emerald-700 font-medium">
+                              {isAccDivExpanded ? '접기 ▲' : `더보기 (${accDividends.length - 3}건 더) ▼`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )
-                )}
+                })()}
               </div>
             )
           })}
@@ -1369,6 +1402,23 @@ export default function InvestmentsPage() {
               <button onClick={() => { setShowDividendModal(false); setEditDividendId(null) }} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
+              {dividendAccountId && (
+                <div className="bg-emerald-50 rounded-xl px-3 py-2 text-xs text-emerald-700 font-medium">
+                  계좌: {investmentAccounts.find(a => a.id === dividendAccountId)?.name ?? dividendAccountId}
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">배당 종목 (선택)</label>
+                <select
+                  value={dividendForm.investmentId ?? ''}
+                  onChange={e => setDividendForm(f => ({ ...f, investmentId: e.target.value || undefined }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                  <option value="">선택 안함 (계좌 전체)</option>
+                  {investments.filter(inv => inv.accountId === dividendAccountId).map(inv => (
+                    <option key={inv.id} value={inv.id}>{inv.name}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">입금일 *</label>
                 <input type="date" value={dividendForm.date}
@@ -1419,7 +1469,8 @@ export default function InvestmentsPage() {
                   </button>
                 )}
                 <button onClick={handleSaveDividend}
-                  className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl hover:bg-emerald-700 transition-colors">
+                  disabled={!dividendAccountId || dividendForm.netAmount <= 0}
+                  className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                   {editDividendId ? '수정 완료' : '저장'}
                 </button>
               </div>
