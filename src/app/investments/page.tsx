@@ -661,7 +661,10 @@ export default function InvestmentsPage() {
               </div>
               <div className="bg-white/10 rounded-xl p-3">
                 <div className="text-xs opacity-70 mb-1">총 평가금액</div>
-                <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalEval))}</div>
+                <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalEval + portfolio.totalDividend))}</div>
+                {portfolio.totalDividend > 0 && (
+                  <div className="text-xs opacity-60 mt-0.5">주식 {fmtKRW(Math.round(portfolio.totalEval))} + 예수금 {fmtKRW(Math.round(portfolio.totalDividend))}</div>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
