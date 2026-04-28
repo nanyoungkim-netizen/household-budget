@@ -44,9 +44,13 @@ export default function BudgetPage() {
   function isExcludedFromReal(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
     if (!cat) return false
-    if (cat.role === 'savings') return true  // 저축만 자동 제외, card_payment는 수동 제외만
+    // 카드대금은 항상 자동 제외 (이중 계산 방지)
+    if (cat.role === 'card_payment') return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    return parent?.role === 'savings' || false
+    if (parent?.role === 'card_payment') return true
+    // 적금 포함 모든 카테고리: 사용자가 제외 버튼 눌렀을 때만 제외
+    const parentId = cat.parentId ?? cat.id
+    return (categoryExcludeMonths[parentId] ?? []).includes(month)
   }
   const [month, setMonth] = useState(currentMonth)
   const router = useRouter()
@@ -226,15 +230,13 @@ export default function BudgetPage() {
     }
   }
 
-  // 이 달에 실소비 제외 대상인지 (role=savings / 이 달 categoryExcludeMonths 기준)
+  // 이 달에 실소비 제외 대상인지 (사용자가 제외 버튼 눌렀을 때만)
   function isExcludedCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
     if (!cat) return false
-    if (cat.role === 'savings') return true
     if ((categoryExcludeMonths[categoryId] ?? []).includes(month)) return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
     if (!parent) return false
-    if (parent.role === 'savings') return true
     return (categoryExcludeMonths[parent.id] ?? []).includes(month)
   }
 
@@ -259,7 +261,7 @@ export default function BudgetPage() {
   // 제외 그룹: 대분류 전체 제외(이달) OR 소분류 개별 제외(이달) 모두 처리
   const excludedGroups = expenseParents
     .map(p => {
-      const isParentExcluded = p.role === 'savings' || isExcludedThisMonth(p.id)
+      const isParentExcluded = isExcludedThisMonth(p.id)
       const allChildren = getChildren(p.id)
       const excChildren = isParentExcluded
         ? allChildren
@@ -581,21 +583,17 @@ export default function BudgetPage() {
                     </span>
                   )}
                   <span className="text-xs text-gray-500 tabular-nums">{fmtShort(grpActual)} / {grpBudget > 0 ? fmtShort(grpBudget) : '-'}</span>
-                  {/* 실소비 제외 토글 */}
-                  {parent.role !== 'savings' ? (
-                    <button
-                      onClick={e => { e.stopPropagation(); toggleExcludeMonth(parent.id) }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border transition-all ${
-                        isExcludedThisMonth(parent.id)
-                          ? 'bg-blue-100 border-blue-300 text-blue-600'
-                          : 'bg-gray-50 border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400'
-                      }`}
-                      title={isExcludedThisMonth(parent.id) ? '이달 실소비 제외 중 (클릭 시 포함)' : '이달 실소비에서 제외하기'}>
-                      {isExcludedThisMonth(parent.id) ? '제외중' : '제외'}
-                    </button>
-                  ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-400 font-medium">적금</span>
-                  )}
+                  {/* 실소비 제외 토글 — 모든 카테고리 (적금 포함) */}
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleExcludeMonth(parent.id) }}
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border transition-all ${
+                      isExcludedThisMonth(parent.id)
+                        ? 'bg-blue-100 border-blue-300 text-blue-600'
+                        : 'bg-gray-50 border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400'
+                    }`}
+                    title={isExcludedThisMonth(parent.id) ? '이달 실소비 제외 중 (클릭 시 포함)' : '이달 실소비에서 제외하기'}>
+                    {isExcludedThisMonth(parent.id) ? '제외중' : '제외'}
+                  </button>
                   {/* 이름 편집 버튼 */}
                   <button
                     onClick={e => { e.stopPropagation(); startEditName(parent) }}
@@ -653,7 +651,7 @@ export default function BudgetPage() {
                             {/* hover 시 표시: 제외 토글 + 편집/삭제 */}
                             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                               {/* 부모가 전체 제외 중이 아닐 때만 소분류 개별 토글 표시 */}
-                              {parent.role !== 'savings' && !isExcludedThisMonth(parent.id) && (
+                              {!isExcludedThisMonth(parent.id) && (
                                 <button
                                   onClick={() => toggleExcludeMonth(cat.id)}
                                   className={`text-[9px] px-1 py-0.5 rounded-full font-medium border transition-all ${
