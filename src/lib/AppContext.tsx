@@ -173,11 +173,7 @@ interface AppContextType {
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
   setCategoryHiddenMonths: (map: Record<string, string[]>) => void
-<<<<<<< HEAD
-  // 월별 실소비 제외
-=======
   // 월별 실소비 제외 토글
->>>>>>> 12bb1bc (feat: 예산 제외 버튼 전 카테고리 적용 (적금 포함))
   setCategoryExcludeMonths: (map: Record<string, string[]>) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
