@@ -1,10 +1,21 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
 import { Transaction, AssetType, InvestmentSubType, INVESTMENT_SUB_LABELS } from '@/types'
+
+// PRD: 위젯 순서 커스터마이징
+type WidgetId = 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
+const DEFAULT_WIDGET_ORDER: WidgetId[] = ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
+const WIDGET_LABELS: Record<WidgetId, string> = {
+  card_payment:    '카드 사용 현황',
+  savings_summary: '적금·예금 요약',
+  budget:          '예산 현황',
+  goals:           '재무 목표',
+  transactions:    '거래 목록',
+}
 
 // FR-01: 자산 유형 메타
 const ASSET_SECTIONS: { value: AssetType; label: string; icon: string; color: string }[] = [
@@ -59,14 +70,56 @@ function calcStats(txs: Transaction[]) {
 }
 
 export default function Dashboard() {
-  const { data, categories } = useApp()
+  const { data, categories, setDashboardWidgetOrder } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
   const [selectedDay, setSelectedDay] = useState(todayStr)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+
+  // PRD: 위젯 순서 커스터마이징 state
+  const rawOrder = data.dashboardWidgetOrder ?? DEFAULT_WIDGET_ORDER
+  const widgetOrder = (rawOrder.filter(id => DEFAULT_WIDGET_ORDER.includes(id as WidgetId)) as WidgetId[])
+    .concat(DEFAULT_WIDGET_ORDER.filter(id => !rawOrder.includes(id)))
+  const [editMode, setEditMode] = useState(false)
+  const [draggingId, setDraggingId] = useState<WidgetId | null>(null)
+  const [dragOverId, setDragOverId] = useState<WidgetId | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string) {
+    setToast(msg)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 2500)
+  }
+
+  function moveWidget(fromId: WidgetId, toId: WidgetId) {
+    const next = [...widgetOrder]
+    const from = next.indexOf(fromId)
+    const to   = next.indexOf(toId)
+    if (from === -1 || to === -1 || from === to) return
+    next.splice(from, 1)
+    next.splice(to, 0, fromId)
+    setDashboardWidgetOrder(next)
+    showToast('순서가 저장되었습니다.')
+  }
+
+  function moveWidgetByIndex(id: WidgetId, dir: -1 | 1) {
+    const next = [...widgetOrder]
+    const idx = next.indexOf(id)
+    const newIdx = idx + dir
+    if (newIdx < 0 || newIdx >= next.length) return
+    ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
+    setDashboardWidgetOrder(next)
+    showToast('순서가 저장되었습니다.')
+  }
+
+  function resetWidgetOrder() {
+    setDashboardWidgetOrder([...DEFAULT_WIDGET_ORDER])
+    showToast('기본 순서로 되돌렸습니다.')
+  }
 
   // ── 알림 닫기 (localStorage 지속) ──────────────────────────────────────────
   const NOTIF_KEY = 'hb_dismissed_notifications'
@@ -217,6 +270,45 @@ export default function Dashboard() {
     }
     return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
   }, [savings, transactions])
+
+  // PRD 3-1: 투자 탭 총 평가금액 (현재가 × 보유수량)
+  const investmentTotalEval = useMemo(() => {
+    const holdingsQty = new Map<string, { qty: number; buyAmt: number }>()
+    investments.forEach(inv => holdingsQty.set(inv.id, { qty: 0, buyAmt: 0 }))
+    ;[...investmentTrades]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach(trade => {
+        const h = holdingsQty.get(trade.investmentId)
+        if (!h) return
+        if (trade.type === 'buy') {
+          h.qty += trade.quantity
+          h.buyAmt += trade.quantity * trade.price
+        } else {
+          const avgCost = h.qty > 0 ? h.buyAmt / h.qty : 0
+          h.qty = Math.max(0, h.qty - trade.quantity)
+          h.buyAmt = h.qty * avgCost
+        }
+      })
+    let total = 0
+    investments.forEach(inv => {
+      const h = holdingsQty.get(inv.id)
+      if (h && h.qty > 0 && inv.currentPrice) total += h.qty * inv.currentPrice
+    })
+    return total
+  }, [investments, investmentTrades])
+
+  // PRD 3-1: 자산 유형별 요약
+  const assetSummary = useMemo(() => {
+    const cashBalance       = accountBalances.filter(a => (a.assetType ?? 'cash') === 'cash').reduce((s, a) => s + a.computed, 0)
+    const savingsPrincipal  = savingsSummary.totalPrincipal
+    const totalAssets       = cashBalance + savingsPrincipal + investmentTotalEval
+    const investUpdatedAt   = investments.reduce<string | null>((latest, inv) => {
+      if (!inv.currentPriceUpdatedAt) return latest
+      if (!latest || inv.currentPriceUpdatedAt > latest) return inv.currentPriceUpdatedAt
+      return latest
+    }, null)
+    return { cashBalance, savingsPrincipal, investmentTotalEval, totalAssets, investUpdatedAt }
+  }, [accountBalances, savingsSummary.totalPrincipal, investmentTotalEval, investments])
 
   // ── 통합 알림: 연회비 (60일 이내) + 적금 만기 (30일 이내) ──────────────────
   type NotifType = 'annual_fee' | 'savings_maturity'
@@ -533,6 +625,40 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* PRD 3-1: 자산 요약 섹션 */}
+      <div className="mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* 계좌잔액 */}
+          <Link href="/accounts" className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow block" style={{ borderTop: '3px solid #3B82F6' }}>
+            <div className="text-xs text-gray-400 mb-1">계좌잔액</div>
+            <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(assetSummary.cashBalance)}</div>
+            <div className="text-[10px] text-gray-400 mt-1">현금성 자산</div>
+          </Link>
+          {/* 예적금 납입원금 */}
+          <Link href="/savings" className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow block" style={{ borderTop: '3px solid #10B981' }}>
+            <div className="text-xs text-gray-400 mb-1">예적금 총액</div>
+            <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(assetSummary.savingsPrincipal)}</div>
+            <div className="text-[10px] text-gray-400 mt-1">납입 원금</div>
+          </Link>
+          {/* 투자잔액 */}
+          <Link href="/investments" className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow block" style={{ borderTop: '3px solid #8B5CF6' }}>
+            <div className="text-xs text-gray-400 mb-1">투자잔액</div>
+            <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(assetSummary.investmentTotalEval)}</div>
+            {assetSummary.investUpdatedAt ? (
+              <div className="text-[10px] text-gray-400 mt-1">{fmtDate(assetSummary.investUpdatedAt)} 기준</div>
+            ) : (
+              <div className="text-[10px] text-gray-400 mt-1">평가금액 합계</div>
+            )}
+          </Link>
+          {/* 총 잔액 */}
+          <div className="bg-gradient-to-br from-blue-600 to-violet-600 rounded-2xl p-4 shadow-sm text-white">
+            <div className="text-xs opacity-75 mb-1">총 잔액</div>
+            <div className="text-base font-bold tabular-nums leading-tight">{fmtShort(assetSummary.totalAssets)}</div>
+            <div className="text-[10px] opacity-60 mt-1">전체 보유 자산</div>
+          </div>
+        </div>
+      </div>
+
       {/* PRD 2.1: 이달 비소비 항목 별도 카드 */}
       {viewMode === 'month' && (savingAmt > 0 || excludedAmt > 0) && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
@@ -670,233 +796,330 @@ export default function Dashboard() {
         )
       })}
 
-      {/* 카드 사용 현황 — 월별 */}
-      {(() => {
-        const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
+      {/* PRD 3-2: 위젯 순서 편집 바 */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs text-gray-400 font-medium">위젯 영역</span>
+        <div className="flex items-center gap-2">
+          {editMode && (
+            <button onClick={resetWidgetOrder}
+              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+              초기화
+            </button>
+          )}
+          <button
+            onClick={() => setEditMode(prev => !prev)}
+            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition-colors ${
+              editMode ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}>
+            {editMode ? '✓ 완료' : '순서 변경'}
+          </button>
+        </div>
+      </div>
 
-        // 납부된 청구월 Set
-        // billingMonth가 없으면 납부일 기준 전달로 자동 추정 (일반적인 카드 결제 주기)
-        const paidBillingMonths = new Set<string>(
-          transactions
-            .filter(t => isCardPayCat(t.categoryId))
-            .map(t => {
-              if (t.billingMonth) return t.billingMonth
-              const [y, m] = t.date.slice(0, 7).split('-').map(Number)
-              const d = new Date(y, m - 2, 1)
-              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-            })
-        )
+      {/* PRD 3-2: 위젯 드래그앤드롭 컨테이너 */}
+      <div className="space-y-4">
+        {widgetOrder.map((widgetId, idx) => {
+          const isDragging = draggingId === widgetId
+          const isDragOver = dragOverId === widgetId
 
-        // 월별 카드 사용액 집계 (전체 카드 합산)
-        const byMonth: Record<string, number> = {}
-        transactions
-          .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
-          .forEach(t => {
-            const m = t.date.slice(0, 7)
-            byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
-          })
-
-        const monthRows = Object.entries(byMonth)
-          .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: paidBillingMonths.has(m) }))
-          .filter(r => r.total > 0)
-          .sort((a, b) => b.month.localeCompare(a.month))
-          .slice(0, 6)
-
-        if (monthRows.length === 0) return null
-
-        const totalUnpaid = monthRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
-
-        return (
-          <div className="mb-4">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">💳</span>
-                  <span className="text-sm font-bold text-gray-700">카드 사용 현황</span>
-                </div>
-                <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
-              </div>
-
-              <div className="space-y-2">
-                {monthRows.map(row => {
-                  const mo = parseInt(row.month.split('-')[1])
-                  return (
-                    <div key={row.month} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-7 font-medium">{mo}월</span>
-                        {row.isPaid
-                          ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">✓ 납부완료</span>
-                          : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">미납</span>
+          const widgetContent = (() => {
+            if (widgetId === 'card_payment') {
+              const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
+              const paidBillingMonths = new Set<string>(
+                transactions
+                  .filter(t => isCardPayCat(t.categoryId))
+                  .map(t => {
+                    if (t.billingMonth) return t.billingMonth
+                    const [y, m] = t.date.slice(0, 7).split('-').map(Number)
+                    const d = new Date(y, m - 2, 1)
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                  })
+              )
+              const byMonth: Record<string, number> = {}
+              transactions
+                .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
+                .forEach(t => {
+                  const m = t.date.slice(0, 7)
+                  byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
+                })
+              const monthRows = Object.entries(byMonth)
+                .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: paidBillingMonths.has(m) }))
+                .filter(r => r.total > 0)
+                .sort((a, b) => b.month.localeCompare(a.month))
+                .slice(0, 6)
+              if (monthRows.length === 0 && !editMode) return null
+              const totalUnpaid = monthRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
+              return (
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">💳</span>
+                      <span className="text-sm font-bold text-gray-700">카드 사용 현황</span>
+                    </div>
+                    <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
+                  </div>
+                  {monthRows.length > 0 ? (
+                    <>
+                      <div className="space-y-2">
+                        {monthRows.map(row => {
+                          const mo = parseInt(row.month.split('-')[1])
+                          return (
+                            <div key={row.month} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 w-7 font-medium">{mo}월</span>
+                                {row.isPaid
+                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">✓ 납부완료</span>
+                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">미납</span>
+                                }
+                              </div>
+                              <span className={`text-sm font-semibold tabular-nums ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
+                                {fmtKRW(row.total)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-xs text-gray-500 font-medium">미납 합계</span>
+                        {totalUnpaid > 0
+                          ? <span className="text-base font-bold text-red-500 tabular-nums">-{fmtKRW(totalUnpaid)}</span>
+                          : <span className="text-sm font-bold text-emerald-600">✓ 전체 납부완료</span>
                         }
                       </div>
-                      <span className={`text-sm font-semibold tabular-nums ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
-                        {fmtKRW(row.total)}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs text-gray-500 font-medium">미납 합계</span>
-                {totalUnpaid > 0
-                  ? <span className="text-base font-bold text-red-500 tabular-nums">-{fmtKRW(totalUnpaid)}</span>
-                  : <span className="text-sm font-bold text-emerald-600">✓ 전체 납부완료</span>
-                }
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* 적금·예금 요약 */}
-      {savingsSummary.count > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm">🏦</span>
-              <span className="font-semibold text-gray-900 text-sm">적금·예금</span>
-              <span className="text-xs text-gray-400">{savingsSummary.count}건</span>
-            </div>
-            <Link href="/savings" className="text-xs text-blue-600">자세히 →</Link>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="text-xs text-gray-400 mb-1">납입원금</div>
-              <div className="text-sm font-bold text-gray-900 tabular-nums">{fmtShort(savingsSummary.totalPrincipal)}</div>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-3">
-              <div className="text-xs text-emerald-600 mb-1">예상이자</div>
-              <div className="text-sm font-bold text-emerald-700 tabular-nums">+{fmtShort(savingsSummary.totalInterest)}</div>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-3">
-              <div className="text-xs text-blue-600 mb-1">만기수령액</div>
-              <div className="text-sm font-bold text-blue-700 tabular-nums">{fmtShort(savingsSummary.totalExpected)}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        {/* 예산 현황 (항상 월 기준) */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold text-gray-900 text-sm">
-              {monthLabel(budgetMonth)} 예산
-            </div>
-            <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
-          </div>
-          {totalBudgetReal > 0 ? (
-            <>
-              <div className="flex justify-between text-xs text-gray-500 mb-2">
-                <span>사용 {fmtShort(budgetUsed)}</span>
-                <span>예산 {fmtShort(totalBudgetReal)}</span>
-              </div>
-              <div className="bg-gray-100 rounded-full h-2 mb-2">
-                <div className={`h-2 rounded-full transition-all ${budgetPct > 90 ? 'bg-red-500' : budgetPct > 70 ? 'bg-amber-400' : 'bg-blue-500'}`}
-                  style={{ width: `${budgetPct}%` }} />
-              </div>
-              <div className="text-xs text-gray-500">
-                {budgetPct.toFixed(0)}% 사용
-                <span className={`ml-2 font-medium ${budgetLeft < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                  {budgetLeft >= 0 ? `남은 예산 ${fmtShort(budgetLeft)}` : `초과 ${fmtShort(-budgetLeft)}`}
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-xs text-gray-400 mb-2">예산이 설정되지 않았어요</p>
-              <Link href="/budget" className="text-xs text-blue-500 underline">예산 설정하기</Link>
-            </div>
-          )}
-        </div>
-
-        {/* 재무 목표 */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold text-gray-900 text-sm">재무 목표</div>
-            <Link href="/goals" className="text-xs text-blue-600">자세히 →</Link>
-          </div>
-          {goals.length > 0 ? goals.slice(0, 2).map(goal => {
-            const pct = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)
-            const dday = Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / (1000*60*60*24))
-            return (
-              <div key={goal.id} className="mb-3 last:mb-0">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="font-medium text-gray-700">{goal.name}</span>
-                  <span className="text-gray-400">{dday > 0 ? `D-${dday}` : 'D-Day'}</span>
-                </div>
-                <div className="bg-gray-100 rounded-full h-1.5">
-                  <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
-                </div>
-                <div className="text-right text-xs text-gray-400 mt-0.5">{pct.toFixed(1)}%</div>
-              </div>
-            )
-          }) : (
-            <div className="text-center py-4">
-              <p className="text-xs text-gray-400 mb-2">등록된 목표가 없어요</p>
-              <Link href="/goals" className="text-xs text-blue-500 underline">목표 추가하기</Link>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 거래 목록 */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div className="font-semibold text-gray-900 text-sm">
-            {isNow && viewMode === 'day' ? '오늘 거래' : `${periodLabel} 거래`}
-          </div>
-          <Link href="/transactions" className="text-xs text-blue-600">전체보기 →</Link>
-        </div>
-
-        {listTx.length > 0 ? (
-          <div className="space-y-3">
-            {listTx.map(t => {
-              const cat      = categories.find(c => c.id === t.categoryId)
-              const acc      = accounts.find(a => a.id === t.accountId)
-              const toAcc    = accounts.find(a => a.id === t.toAccountId)
-              const isTransfer = t.type === 'transfer'
-              const isRefund   = t.type === 'refund'
-              return (
-                <div key={t.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${
-                      isTransfer ? 'bg-blue-50' : isRefund ? 'bg-purple-50' : 'bg-gray-50'
-                    }`}>
-                      {isTransfer ? '↔️' : isRefund ? '↩️' : cat?.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
-                        {isRefund && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md font-medium flex-shrink-0">환급</span>}
-                      </div>
-                      <div className="text-xs text-gray-400 truncate">
-                        {t.date}{isTransfer ? ` · ${acc?.name} → ${toAcc?.name}` : ` · ${acc?.name}`}
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`text-sm font-semibold tabular-nums flex-shrink-0 ml-2 ${
-                    isTransfer ? 'text-blue-500' :
-                    isRefund   ? 'text-purple-600' :
-                    t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
-                  }`}>
-                    {isTransfer ? '' : (t.type === 'income' || isRefund) ? '+' : '-'}{fmtKRW(t.amount)}
-                  </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-4">카드 사용 내역이 없어요</p>
+                  )}
                 </div>
               )
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-400">
-            <div className="text-3xl mb-2">📭</div>
-            <p className="text-sm">
-              {viewMode === 'day' && isToday ? '오늘 거래 내역이 없어요' : `${periodLabel} 거래 내역이 없어요`}
-            </p>
-            <Link href="/transactions" className="text-xs text-blue-500 underline mt-1 block">거래 추가하기</Link>
-          </div>
-        )}
+            }
+
+            if (widgetId === 'savings_summary') {
+              if (savingsSummary.count === 0 && !editMode) return null
+              return (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">🏦</span>
+                      <span className="font-semibold text-gray-900 text-sm">적금·예금</span>
+                      {savingsSummary.count > 0 && <span className="text-xs text-gray-400">{savingsSummary.count}건</span>}
+                    </div>
+                    <Link href="/savings" className="text-xs text-blue-600">자세히 →</Link>
+                  </div>
+                  {savingsSummary.count > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <div className="text-xs text-gray-400 mb-1">납입원금</div>
+                        <div className="text-sm font-bold text-gray-900 tabular-nums">{fmtShort(savingsSummary.totalPrincipal)}</div>
+                      </div>
+                      <div className="bg-emerald-50 rounded-xl p-3">
+                        <div className="text-xs text-emerald-600 mb-1">예상이자</div>
+                        <div className="text-sm font-bold text-emerald-700 tabular-nums">+{fmtShort(savingsSummary.totalInterest)}</div>
+                      </div>
+                      <div className="bg-blue-50 rounded-xl p-3">
+                        <div className="text-xs text-blue-600 mb-1">만기수령액</div>
+                        <div className="text-sm font-bold text-blue-700 tabular-nums">{fmtShort(savingsSummary.totalExpected)}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-4">등록된 적금·예금이 없어요</p>
+                  )}
+                </div>
+              )
+            }
+
+            if (widgetId === 'budget') {
+              return (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="font-semibold text-gray-900 text-sm">{monthLabel(budgetMonth)} 예산</div>
+                    <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
+                  </div>
+                  {totalBudgetReal > 0 ? (
+                    <>
+                      <div className="flex justify-between text-xs text-gray-500 mb-2">
+                        <span>사용 {fmtShort(budgetUsed)}</span>
+                        <span>예산 {fmtShort(totalBudgetReal)}</span>
+                      </div>
+                      <div className="bg-gray-100 rounded-full h-2 mb-2">
+                        <div className={`h-2 rounded-full transition-all ${budgetPct > 90 ? 'bg-red-500' : budgetPct > 70 ? 'bg-amber-400' : 'bg-blue-500'}`}
+                          style={{ width: `${budgetPct}%` }} />
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {budgetPct.toFixed(0)}% 사용
+                        <span className={`ml-2 font-medium ${budgetLeft < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                          {budgetLeft >= 0 ? `남은 예산 ${fmtShort(budgetLeft)}` : `초과 ${fmtShort(-budgetLeft)}`}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-gray-400 mb-2">예산이 설정되지 않았어요</p>
+                      <Link href="/budget" className="text-xs text-blue-500 underline">예산 설정하기</Link>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            if (widgetId === 'goals') {
+              return (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="font-semibold text-gray-900 text-sm">재무 목표</div>
+                    <Link href="/goals" className="text-xs text-blue-600">자세히 →</Link>
+                  </div>
+                  {goals.length > 0 ? goals.slice(0, 2).map(goal => {
+                    const pct = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)
+                    const dday = Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / (1000*60*60*24))
+                    return (
+                      <div key={goal.id} className="mb-3 last:mb-0">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-medium text-gray-700">{goal.name}</span>
+                          <span className="text-gray-400">{dday > 0 ? `D-${dday}` : 'D-Day'}</span>
+                        </div>
+                        <div className="bg-gray-100 rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
+                        </div>
+                        <div className="text-right text-xs text-gray-400 mt-0.5">{pct.toFixed(1)}%</div>
+                      </div>
+                    )
+                  }) : (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-gray-400 mb-2">등록된 목표가 없어요</p>
+                      <Link href="/goals" className="text-xs text-blue-500 underline">목표 추가하기</Link>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            if (widgetId === 'transactions') {
+              return (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="font-semibold text-gray-900 text-sm">
+                      {isNow && viewMode === 'day' ? '오늘 거래' : `${periodLabel} 거래`}
+                    </div>
+                    <Link href="/transactions" className="text-xs text-blue-600">전체보기 →</Link>
+                  </div>
+                  {listTx.length > 0 ? (
+                    <div className="space-y-3">
+                      {listTx.map(t => {
+                        const cat      = categories.find(c => c.id === t.categoryId)
+                        const acc      = accounts.find(a => a.id === t.accountId)
+                        const toAcc    = accounts.find(a => a.id === t.toAccountId)
+                        const isTransfer = t.type === 'transfer'
+                        const isRefund   = t.type === 'refund'
+                        return (
+                          <div key={t.id} className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${
+                                isTransfer ? 'bg-blue-50' : isRefund ? 'bg-purple-50' : 'bg-gray-50'
+                              }`}>
+                                {isTransfer ? '↔️' : isRefund ? '↩️' : cat?.icon}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm font-medium text-gray-900 truncate">{t.description}</span>
+                                  {isRefund && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md font-medium flex-shrink-0">환급</span>}
+                                </div>
+                                <div className="text-xs text-gray-400 truncate">
+                                  {t.date}{isTransfer ? ` · ${acc?.name} → ${toAcc?.name}` : ` · ${acc?.name}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div className={`text-sm font-semibold tabular-nums flex-shrink-0 ml-2 ${
+                              isTransfer ? 'text-blue-500' :
+                              isRefund   ? 'text-purple-600' :
+                              t.type === 'income' ? 'text-emerald-600' : 'text-red-500'
+                            }`}>
+                              {isTransfer ? '' : (t.type === 'income' || isRefund) ? '+' : '-'}{fmtKRW(t.amount)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <div className="text-3xl mb-2">📭</div>
+                      <p className="text-sm">
+                        {viewMode === 'day' && isToday ? '오늘 거래 내역이 없어요' : `${periodLabel} 거래 내역이 없어요`}
+                      </p>
+                      <Link href="/transactions" className="text-xs text-blue-500 underline mt-1 block">거래 추가하기</Link>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            return null
+          })()
+
+          if (!widgetContent && !editMode) return null
+
+          return (
+            <div
+              key={widgetId}
+              draggable={editMode}
+              onDragStart={() => setDraggingId(widgetId)}
+              onDragOver={e => { e.preventDefault(); setDragOverId(widgetId) }}
+              onDrop={e => {
+                e.preventDefault()
+                if (draggingId && draggingId !== widgetId) moveWidget(draggingId, widgetId)
+                setDraggingId(null)
+                setDragOverId(null)
+              }}
+              onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+              className={`transition-all duration-150 ${
+                isDragging ? 'opacity-40 scale-[0.98]' : ''
+              } ${
+                isDragOver && !isDragging ? 'ring-2 ring-blue-400 ring-offset-2 rounded-2xl' : ''
+              }`}
+            >
+              {/* 편집 모드 핸들 바 */}
+              {editMode && (
+                <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-t-2xl px-3 py-2 cursor-grab select-none">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 text-lg leading-none">⠿</span>
+                    <span className="text-xs font-medium text-gray-500">{WIDGET_LABELS[widgetId]}</span>
+                  </div>
+                  {/* 모바일용 위/아래 버튼 */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => moveWidgetByIndex(widgetId, -1)}
+                      disabled={idx === 0}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-200 text-gray-400 disabled:opacity-20 transition-colors text-xs">
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => moveWidgetByIndex(widgetId, 1)}
+                      disabled={idx === widgetOrder.length - 1}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-200 text-gray-400 disabled:opacity-20 transition-colors text-xs">
+                      ▼
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* 위젯 본체 — 편집 모드에서 상단 라운딩 제거 */}
+              <div className={editMode ? '[&>div]:rounded-t-none' : ''}>
+                {widgetContent ?? (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border-2 border-dashed border-gray-200">
+                    <p className="text-xs text-gray-400 text-center py-2">{WIDGET_LABELS[widgetId]} (내용 없음)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
+
+      {/* 토스트 알림 */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50 animate-fade-in">
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

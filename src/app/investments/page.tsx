@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useApp, DEFAULT_INVESTMENT_ACCOUNT_TYPES } from '@/lib/AppContext'
 import {
   Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend,
@@ -81,10 +81,77 @@ export default function InvestmentsPage() {
   const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
   const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
 
-  // F-04: 종목명 자동완성
+  // F-04 + PRD §10: 종목명 자동완성 (로컬 + 네이버 금융)
   const [nameDropdownOpen, setNameDropdownOpen] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const nameDropdownRef = useRef<HTMLDivElement>(null)
+
+  // PRD §10-1: 네이버 금융 검색 결과
+  type NaverSearchItem = { name: string; ticker: string; market: string }
+  const [naverResults, setNaverResults] = useState<NaverSearchItem[]>([])
+  const [naverLoading, setNaverLoading] = useState(false)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // PRD §10-2: 장중 여부 판단 (09:00~15:30, 월~금)
+  function isMarketOpen(): boolean {
+    const now = new Date()
+    const day = now.getDay() // 0=일, 6=토
+    if (day === 0 || day === 6) return false
+    const h = now.getHours(), m = now.getMinutes()
+    const t = h * 60 + m
+    return t >= 9 * 60 && t <= 15 * 60 + 30
+  }
+
+  // PRD §10-2: 현재가 자동 폴링 (국내주식·ETF, ticker 있는 종목만)
+  const fetchPricesRef = useRef<(() => Promise<void>) | null>(null)
+  fetchPricesRef.current = async () => {
+    const targets = investments.filter(
+      inv => (inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker
+    )
+    if (targets.length === 0) return
+
+    const updated = await Promise.allSettled(
+      targets.map(async inv => {
+        const res = await fetch(`/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`)
+        if (!res.ok) return null
+        const json = await res.json()
+        if (json.error || !json.price) return null
+        return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
+      })
+    )
+
+    const patches: Record<string, { price: number; updatedAt: string }> = {}
+    updated.forEach((r, i) => {
+      if (r.status === 'fulfilled' && r.value) {
+        patches[targets[i].id] = { price: r.value.price, updatedAt: r.value.updatedAt }
+      }
+    })
+    if (Object.keys(patches).length === 0) return
+
+    const next = investments.map(inv =>
+      patches[inv.id]
+        ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
+        : inv
+    )
+    setInvestments(next)
+  }
+
+  useEffect(() => {
+    // 최초 1회 가격 조회
+    fetchPricesRef.current?.()
+
+    const scheduleNext = () => {
+      const interval = isMarketOpen() ? 60_000 : 600_000  // 장중 1분, 장외 10분
+      return setTimeout(async () => {
+        await fetchPricesRef.current?.()
+        pollingTimerRef.current = scheduleNext()
+      }, interval)
+    }
+
+    const pollingTimerRef = { current: scheduleNext() }
+    return () => clearTimeout(pollingTimerRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [investments.length])  // 종목 수가 바뀔 때만 폴링 재설정
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -99,7 +166,8 @@ export default function InvestmentsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const nameSuggestions = useMemo(() => {
+  // 로컬 종목명 자동완성 (기존 등록 종목)
+  const localSuggestions = useMemo(() => {
     const q = investmentForm.name.trim()
     if (!q) return []
     return investments
@@ -108,6 +176,29 @@ export default function InvestmentsPage() {
       .filter((name, idx, arr) => arr.indexOf(name) === idx)
       .slice(0, 5)
   }, [investmentForm.name, investments, editInvestmentId])
+
+  // PRD §10-1: 네이버 금융 검색 (국내주식·ETF만) — 디바운스 300ms
+  const isNaverSearchTarget = investmentForm.assetType === 'domestic_stock' || investmentForm.assetType === 'etf_fund'
+
+  const triggerNaverSearch = useCallback((q: string) => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (!q || q.length < 2 || !isNaverSearchTarget) {
+      setNaverResults([])
+      return
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      setNaverLoading(true)
+      try {
+        const res = await fetch(`/api/stock/search?q=${encodeURIComponent(q)}`)
+        const json = await res.json()
+        setNaverResults(json.items ?? [])
+      } catch {
+        setNaverResults([])
+      } finally {
+        setNaverLoading(false)
+      }
+    }, 300)
+  }, [isNaverSearchTarget])
 
   // 거래 모달
   const [showTradeModal, setShowTradeModal] = useState(false)
@@ -652,6 +743,19 @@ export default function InvestmentsPage() {
           </div>
         )}
 
+        {/* PRD §10-2: 자동 업데이트 상태 표시 */}
+        {(inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker && (
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">🔄 자동 업데이트</span>
+            {inv.currentPriceUpdatedAt ? (
+              <span className="text-[10px] text-gray-400">
+                최종: {new Date(inv.currentPriceUpdatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            ) : (
+              <span className="text-[10px] text-amber-500">⚠ 조회 대기 중</span>
+            )}
+          </div>
+        )}
         <div className="flex gap-2">
           <input type="text" inputMode="numeric"
             placeholder="현재가 입력"
@@ -1458,26 +1562,75 @@ export default function InvestmentsPage() {
                   </button>
                 ))}
               </div>
-              {/* F-04: 종목명 자동완성 */}
+              {/* F-04 + PRD §10-1: 종목명 자동완성 (네이버 금융 검색 통합) */}
               <div className="relative">
-                <input
-                  ref={nameInputRef}
-                  type="text" placeholder="종목명 / 코인명 *"
-                  value={investmentForm.name}
-                  onChange={e => { setInvestmentForm(f => ({ ...f, name: e.target.value })); setNameDropdownOpen(true) }}
-                  onFocus={() => setNameDropdownOpen(true)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {nameDropdownOpen && nameSuggestions.length > 0 && (
+                <div className="relative">
+                  <input
+                    ref={nameInputRef}
+                    type="text"
+                    placeholder={isNaverSearchTarget ? '종목명 또는 종목코드 검색 *' : '종목명 / 코인명 *'}
+                    value={investmentForm.name}
+                    onChange={e => {
+                      const v = e.target.value
+                      setInvestmentForm(f => ({ ...f, name: v }))
+                      setNameDropdownOpen(true)
+                      triggerNaverSearch(v)
+                    }}
+                    onFocus={() => setNameDropdownOpen(true)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-8"
+                  />
+                  {naverLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {nameDropdownOpen && (naverResults.length > 0 || localSuggestions.length > 0) && (
                   <div ref={nameDropdownRef} className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
-                    {nameSuggestions.map((name, idx) => (
-                      <button
-                        key={idx}
-                        onMouseDown={e => { e.preventDefault(); setInvestmentForm(f => ({ ...f, name })); setNameDropdownOpen(false) }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
-                        {name}
-                      </button>
-                    ))}
+                    {/* 네이버 금융 검색 결과 */}
+                    {naverResults.length > 0 && (
+                      <>
+                        {isNaverSearchTarget && (
+                          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100">
+                            🔍 네이버 금융 검색
+                          </div>
+                        )}
+                        {naverResults.map((item, idx) => (
+                          <button
+                            key={`naver-${idx}`}
+                            onMouseDown={e => {
+                              e.preventDefault()
+                              setInvestmentForm(f => ({ ...f, name: item.name, ticker: item.ticker }))
+                              setNaverResults([])
+                              setNameDropdownOpen(false)
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between gap-2">
+                            <span className="text-gray-800 font-medium">{item.name}</span>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-xs text-gray-400 tabular-nums">{item.ticker}</span>
+                              <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">{item.market}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {/* 로컬 기존 종목 */}
+                    {localSuggestions.length > 0 && (
+                      <>
+                        <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100">
+                          📁 등록된 종목
+                        </div>
+                        {localSuggestions.map((name, idx) => (
+                          <button
+                            key={`local-${idx}`}
+                            onMouseDown={e => { e.preventDefault(); setInvestmentForm(f => ({ ...f, name })); setNameDropdownOpen(false) }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
+                            {name}
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>

@@ -99,6 +99,7 @@ interface AppData {
   savingPayments: SavingPayment[]  // PRD 2.2
   categoryHiddenMonths: Record<string, string[]>   // 월별 카테고리 숨김
   categoryExcludeMonths: Record<string, string[]>  // 월별 실소비 제외 토글
+  dashboardWidgetOrder: string[]                   // PRD: 위젯 순서 커스터마이징
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -123,6 +124,7 @@ const INITIAL_DATA: AppData = {
   savingPayments: [],
   categoryHiddenMonths: {},
   categoryExcludeMonths: {},
+  dashboardWidgetOrder: ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -175,6 +177,8 @@ interface AppContextType {
   setCategoryHiddenMonths: (map: Record<string, string[]>) => void
   // 월별 실소비 제외 토글
   setCategoryExcludeMonths: (map: Record<string, string[]>) => void
+  // 대시보드 위젯 순서
+  setDashboardWidgetOrder: (order: string[]) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -268,6 +272,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
+      dashboardWidgetOrder: raw.dashboardWidgetOrder ?? ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
     }
   }
 
@@ -502,6 +507,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, categoryExcludeMonths, lastModified: now() }))
   }, [update])
 
+  const setDashboardWidgetOrder = useCallback((dashboardWidgetOrder: string[]) => {
+    update(d => ({ ...d, dashboardWidgetOrder, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -546,6 +555,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSavingPayments,
       setCategoryHiddenMonths,
       setCategoryExcludeMonths,
+      setDashboardWidgetOrder,
       completeSetup,
       resetAll,
     }}>
