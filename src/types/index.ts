@@ -112,6 +112,7 @@ export interface Saving {
   id: string
   name: string
   bank: string
+  status?: 'active' | 'matured'  // 만기 처리 상태
   type: 'saving' | 'deposit' | 'subscription'
   monthlyAmount: number
   interestRate: number

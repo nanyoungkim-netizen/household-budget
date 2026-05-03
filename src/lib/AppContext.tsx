@@ -100,6 +100,7 @@ interface AppData {
   categoryHiddenMonths: Record<string, string[]>   // 월별 카테고리 숨김
   categoryExcludeMonths: Record<string, string[]>  // 월별 실소비 제외 토글
   dashboardWidgetOrder: string[]                   // PRD: 위젯 순서 커스터마이징
+  budgetCarriedMonths: string[]                    // 예산 자동 이월 완료 월 목록
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -125,6 +126,7 @@ const INITIAL_DATA: AppData = {
   categoryHiddenMonths: {},
   categoryExcludeMonths: {},
   dashboardWidgetOrder: ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
+  budgetCarriedMonths: [],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -179,6 +181,8 @@ interface AppContextType {
   setCategoryExcludeMonths: (map: Record<string, string[]>) => void
   // 대시보드 위젯 순서
   setDashboardWidgetOrder: (order: string[]) => void
+  // 예산 이월 완료 월 목록
+  setBudgetCarriedMonths: (months: string[]) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -272,6 +276,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
+      budgetCarriedMonths: raw.budgetCarriedMonths ?? [],
       dashboardWidgetOrder: (() => {
         const stored = raw.dashboardWidgetOrder ?? null
         const assetWidgets = ['cash_accounts', 'investment_accounts']
@@ -520,6 +525,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, dashboardWidgetOrder, lastModified: now() }))
   }, [update])
 
+  const setBudgetCarriedMonths = useCallback((budgetCarriedMonths: string[]) => {
+    update(d => ({ ...d, budgetCarriedMonths, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -565,6 +574,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCategoryHiddenMonths,
       setCategoryExcludeMonths,
       setDashboardWidgetOrder,
+      setBudgetCarriedMonths,
       completeSetup,
       resetAll,
     }}>

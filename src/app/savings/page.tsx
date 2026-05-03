@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useApp } from '@/lib/AppContext'
-import { Saving, SavingPaymentCycle } from '@/types'
+import { Saving, SavingPaymentCycle, Transaction } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -99,8 +99,8 @@ type PageTab   = 'savings_deposit' | 'subscription'
 type FilterTab = 'all' | 'saving' | 'deposit'
 
 export default function SavingsPage() {
-  const { data, setSavings } = useApp()
-  const { savings } = data
+  const { data, setSavings, addTransaction, setTransactions } = useApp()
+  const { savings, accounts } = data
 
   const [pageTab,  setPageTab]  = useState<PageTab>('savings_deposit')
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
@@ -111,6 +111,69 @@ export default function SavingsPage() {
   const [pendingTab, setPendingTab] = useState<SavingFormType | null>(null)
   const [expandedSavingId, setExpandedSavingId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  // ── 만기 처리 모달 ────────────────────────────────────────────────────────
+  type MaturityModal = { savingId: string; principal: number; interest: number; accountId: string; date: string } | null
+  const [maturityModal, setMaturityModal] = useState<MaturityModal>(null)
+  const [maturityInterest, setMaturityInterest] = useState('')
+  const [maturityAccountId, setMaturityAccountId] = useState('')
+  const [maturityDate, setMaturityDate] = useState('')
+
+  // ── 토스트 ─────────────────────────────────────────────────────────────────
+  const [toast, setToast] = useState<string | null>(null)
+  const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function showToast(msg: string) {
+    setToast(msg)
+    if (toastRef.current) clearTimeout(toastRef.current)
+    toastRef.current = setTimeout(() => setToast(null), 2500)
+  }
+
+  function openMaturityModal(s: Saving, principal: number, interestIncome: number) {
+    const todayStr = today.toISOString().slice(0, 10)
+    setMaturityModal({ savingId: s.id, principal, interest: interestIncome, accountId: accounts[0]?.id || '', date: todayStr })
+    setMaturityInterest(interestIncome > 0 ? String(interestIncome) : '')
+    setMaturityAccountId(accounts[0]?.id || '')
+    setMaturityDate(todayStr)
+  }
+
+  function handleMaturityConfirm() {
+    if (!maturityModal) return
+    const s = savings.find(sv => sv.id === maturityModal.savingId)
+    if (!s) return
+
+    const interestAmt = parseInt(maturityInterest.replace(/[^0-9]/g, '')) || 0
+    const accId = maturityAccountId || accounts[0]?.id || ''
+    const dateStr = maturityDate || today.toISOString().slice(0, 10)
+
+    const tx1: Transaction = {
+      id: `t${Date.now()}_maturity_principal`,
+      date: dateStr,
+      description: `${s.name} 만기원금`,
+      amount: s.currentAmount,
+      type: 'income',
+      accountId: accId,
+      categoryId: 'saving_return',
+      paymentMethod: 'account',
+    }
+    const tx2: Transaction = {
+      id: `t${Date.now()}_maturity_interest`,
+      date: dateStr,
+      description: `${s.name} 이자수입`,
+      amount: interestAmt,
+      type: 'income',
+      accountId: accId,
+      categoryId: 'interest',
+      paymentMethod: 'account',
+    }
+
+    const newTxs = [tx1, ...(interestAmt > 0 ? [tx2] : [])]
+    setTransactions([...data.transactions, ...newTxs])
+
+    // saving status = matured
+    setSavings(savings.map(sv => sv.id === s.id ? { ...sv, status: 'matured' as const } : sv))
+    setMaturityModal(null)
+    showToast('거래내역에 반영되었습니다.')
+  }
 
   // ── D-day ──────────────────────────────────────────────────────────────────
   function getDday(d: string) {
@@ -318,6 +381,11 @@ export default function SavingsPage() {
             {displayedSD.map((s, idx) => {
               const dday = getDday(s.maturityDate)
               const isDone = dday === '만기완료'
+              const isMatured = s.status === 'matured'
+              // 만기처리 버튼 조건: 만기일 도래(daysUntil <= 0) AND 아직 matured 처리 안 됨
+              const maturityDt = s.maturityDate ? new Date(s.maturityDate) : null
+              const daysUntil = maturityDt ? Math.ceil((maturityDt.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null
+              const showMaturityBtn = daysUntil !== null && daysUntil <= 0 && !isMatured
               const totalMonths = s.startDate && s.maturityDate
                 ? (() => {
                     const st = new Date(s.startDate), en = new Date(s.maturityDate)
@@ -362,6 +430,9 @@ export default function SavingsPage() {
                           {s.type === 'saving' ? '적금' : '예금'}
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isDone ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>{dday}</span>
+                        {isMatured && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-600">만기완료</span>
+                        )}
                         {s.interestType && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400">{s.interestType === 'simple' ? '단리' : '월복리'}</span>
                         )}
@@ -386,7 +457,7 @@ export default function SavingsPage() {
                         {s.accountNumber && <span className="ml-1.5 text-gray-300">| {s.accountNumber}</span>}
                       </div>
                     </div>
-                    {/* 순서 변경 + 수정/삭제 */}
+                    {/* 순서 변경 + 만기처리 + 수정/삭제 */}
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                       <div className="flex flex-col gap-0.5">
                         <button onClick={() => moveItem(s.id, -1)} disabled={realIdx === 0}
@@ -394,8 +465,19 @@ export default function SavingsPage() {
                         <button onClick={() => moveItem(s.id, 1)} disabled={realIdx === savings.length - 1}
                           className="text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs leading-none px-1">▼</button>
                       </div>
-                      <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600 ml-1">수정</button>
-                      <button onClick={() => setDeleteConfirmId(s.id)} className="text-xs text-red-500 hover:text-red-700 ml-1">삭제</button>
+                      {showMaturityBtn && (
+                        <button
+                          onClick={() => openMaturityModal(s, totalPrincipal, interestIncome)}
+                          className="text-xs text-emerald-600 font-medium border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg ml-1 transition-colors">
+                          만기처리
+                        </button>
+                      )}
+                      {!isMatured && (
+                        <>
+                          <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600 ml-1">수정</button>
+                          <button onClick={() => setDeleteConfirmId(s.id)} className="text-xs text-red-500 hover:text-red-700 ml-1">삭제</button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -845,6 +927,77 @@ export default function SavingsPage() {
           onConfirm={() => handleDelete(deleteConfirmId)}
           onCancel={() => setDeleteConfirmId(null)}
         />
+      )}
+
+      {/* ── 만기 처리 모달 ─────────────────────────────────────────────────── */}
+      {maturityModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+            <div className="text-center mb-5">
+              <div className="text-3xl mb-2">🎉</div>
+              <h2 className="text-base font-bold text-gray-900 mb-1">만기 처리</h2>
+              <p className="text-sm text-gray-500">원금과 이자를 거래내역에 반영합니다.</p>
+            </div>
+            <div className="space-y-3 mb-5">
+              <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between items-center">
+                <span className="text-sm text-gray-500">원금</span>
+                <span className="font-bold text-gray-900">{fmtKRW(maturityModal.principal)}</span>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">실제 수령 이자 (세후)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="이자 금액 입력 (원)"
+                  value={maturityInterest}
+                  onChange={e => setMaturityInterest(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">입금 계좌</label>
+                <select
+                  value={maturityAccountId}
+                  onChange={e => setMaturityAccountId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.bank})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">입금 날짜</label>
+                <input
+                  type="date"
+                  value={maturityDate}
+                  onChange={e => setMaturityDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMaturityModal(null)}
+                className="flex-1 bg-gray-100 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-200 transition-colors text-sm">
+                취소
+              </button>
+              <button
+                onClick={handleMaturityConfirm}
+                className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl hover:bg-emerald-700 transition-colors text-sm">
+                만기처리
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 토스트 ─────────────────────────────────────────────────────────── */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-2">
+          <span>✅</span>
+          <span>{toast}</span>
+        </div>
       )}
     </div>
   )

@@ -311,10 +311,18 @@ export default function TransactionsPage() {
   function handleSave() {
     if (!form.amount) return
 
+    // 내용 미입력 시 카테고리명 자동 입력
+    let resolvedForm = form
+    if (!form.description.trim() && formType !== 'transfer') {
+      const catName = categories.find(c => c.id === form.categoryId)?.name ?? ''
+      resolvedForm = { ...form, description: catName }
+    }
+    const form2 = resolvedForm
+
     // 적금 연동 금액 합계 검증
     if (savingLinks.length > 0) {
       const totalLinked = savingLinks.reduce((s, l) => s + parseAmt(l.amount), 0)
-      if (totalLinked > parseAmt(form.amount)) {
+      if (totalLinked > parseAmt(form2.amount)) {
         alert('연동 금액의 합계가 거래 금액을 초과할 수 없습니다.')
         return
       }
@@ -323,28 +331,27 @@ export default function TransactionsPage() {
     let tx: Transaction
 
     if (formType === 'transfer') {
-      if (!form.accountId || !form.toAccountId) return
-      if (form.accountId === form.toAccountId) return alert('보내는 계좌와 받는 계좌가 같습니다.')
+      if (!form2.accountId || !form2.toAccountId) return
+      if (form2.accountId === form2.toAccountId) return alert('보내는 계좌와 받는 계좌가 같습니다.')
       tx = {
         id: editingId || `t${Date.now()}`,
-        date: form.date,
-        description: form.description || '계좌 이체',
-        amount: parseAmt(form.amount),
+        date: form2.date,
+        description: form2.description || '계좌 이체',
+        amount: parseAmt(form2.amount),
         type: 'transfer',
-        accountId: form.accountId,
-        toAccountId: form.toAccountId,
+        accountId: form2.accountId,
+        toAccountId: form2.toAccountId,
         categoryId: 'transfer',
         paymentMethod: 'account',
       }
     } else {
-      if (!form.description) return
-      const totalAmount = parseAmt(form.amount)
-      const months = Math.max(1, Number(form.installmentMonths) || 1)
-      const isInstallment = form.paymentMethod === 'card' && months > 1
+      const totalAmount = parseAmt(form2.amount)
+      const months = Math.max(1, Number(form2.installmentMonths) || 1)
+      const isInstallment = form2.paymentMethod === 'card' && months > 1
 
       if (isInstallment && !editingId) {
         // 할부: 월별 분할 거래 생성
-        const baseDate = new Date(form.date)
+        const baseDate = new Date(form2.date)
         const monthlyAmount = Math.floor(totalAmount / months)
         const remainder = totalAmount - monthlyAmount * months  // 나머지는 1회차에 추가
 
@@ -355,36 +362,36 @@ export default function TransactionsPage() {
           addTransaction({
             id: `t${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
             date: dateStr,
-            description: `${form.description} (${i+1}/${months})`,
+            description: `${form2.description} (${i+1}/${months})`,
             amount: amt,
             type: formType as 'expense',
-            accountId: form.accountId,
-            categoryId: form.categoryId,
+            accountId: form2.accountId,
+            categoryId: form2.categoryId,
             paymentMethod: 'card',
-            cardId: form.cardId,
+            cardId: form2.cardId,
           })
         }
         closeModal()
         return
       }
 
-      const resolvedSavingLinks = isSavingCat(form.categoryId) && savingLinks.length > 0
+      const resolvedSavingLinks = isSavingCat(form2.categoryId) && savingLinks.length > 0
         ? savingLinks.filter(l => l.savingId && parseAmt(l.amount) > 0).map(l => ({ savingId: l.savingId, amount: parseAmt(l.amount) }))
         : undefined
 
       tx = {
         id: editingId || `t${Date.now()}`,
-        date: form.date,
-        description: form.description,
+        date: form2.date,
+        description: form2.description,
         amount: totalAmount,
         type: formType,
-        accountId: form.accountId,
-        categoryId: form.categoryId,
-        paymentMethod: form.paymentMethod,
-        cardId: form.paymentMethod === 'card' ? form.cardId : undefined,
+        accountId: form2.accountId,
+        categoryId: form2.categoryId,
+        paymentMethod: form2.paymentMethod,
+        cardId: form2.paymentMethod === 'card' ? form2.cardId : undefined,
         savingLinks: resolvedSavingLinks,
-        billingMonth: isCardPaymentCat(form.categoryId) && form.billingMonth ? form.billingMonth : undefined,
-        consumptionType: formType === 'expense' ? form.consumptionType : undefined,
+        billingMonth: isCardPaymentCat(form2.categoryId) && form2.billingMonth ? form2.billingMonth : undefined,
+        consumptionType: formType === 'expense' ? form2.consumptionType : undefined,
       }
     }
 

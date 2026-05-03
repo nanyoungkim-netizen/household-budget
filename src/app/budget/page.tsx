@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/AppContext'
 import { Budget, Category } from '@/types'
@@ -34,7 +34,7 @@ const PRESET_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6
 type ModalType = 'addChild' | 'addParent' | null
 
 export default function BudgetPage() {
-  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths, setCategoryExcludeMonths } = useApp()
+  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths, setCategoryExcludeMonths, setBudgetCarriedMonths } = useApp()
   const { budgets, transactions, categoryHiddenMonths, categoryExcludeMonths } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
@@ -69,6 +69,16 @@ export default function BudgetPage() {
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC' })
   const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income' })
 
+  // 이월 토스트
+  const [carryOverToast, setCarryOverToast] = useState<string | null>(null)
+  const carryOverToastRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showCarryOverToast(msg: string) {
+    setCarryOverToast(msg)
+    if (carryOverToastRef.current) clearTimeout(carryOverToastRef.current)
+    carryOverToastRef.current = setTimeout(() => setCarryOverToast(null), 2500)
+  }
+
   // 이월 확인 모달
   const [showCarryOver, setShowCarryOver] = useState(false)
 
@@ -81,6 +91,41 @@ export default function BudgetPage() {
     setEditingName(null)
     setUnlocked(false)
   }, [month])
+
+  // 자동 이월: 현재 달에 예산 없고 아직 이월 안 됐으면 전달 예산 자동 복사
+  useEffect(() => {
+    const budgetCarriedMonths = data.budgetCarriedMonths ?? []
+    if (month !== currentMonth) return
+    if (budgetCarriedMonths.includes(month)) return
+    const hasCurrentBudget = budgets.some(b => b.month === month)
+    if (hasCurrentBudget) return
+
+    const prevM = prevMonth(month)
+    const prevBudgets = budgets.filter(b => b.month === prevM)
+    if (prevBudgets.length === 0) return
+
+    // 전달 예산을 현재 달로 복사
+    const copied = prevBudgets.map(b => ({
+      ...b,
+      id: `b${Date.now()}_${b.categoryId}`,
+      month,
+    }))
+    setBudgets([...budgets, ...copied])
+
+    // categoryExcludeMonths 이월: 전달 제외 카테고리들을 현재 달에도 적용
+    const nextExclude = { ...data.categoryExcludeMonths }
+    Object.entries(nextExclude).forEach(([catId, months]) => {
+      if (months.includes(prevM) && !months.includes(month)) {
+        nextExclude[catId] = [...months, month]
+      }
+    })
+    setCategoryExcludeMonths(nextExclude)
+
+    // 이월 완료 마킹
+    setBudgetCarriedMonths([...budgetCarriedMonths, month])
+    showCarryOverToast('전달 예산이 자동 이월되었습니다.')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, budgets, data.budgetCarriedMonths])
 
   // 현재달 이전 → 잠금 (수정 불가), 단 unlocked 상태면 해제
   const isPastMonth = month < currentMonth && !unlocked
@@ -107,9 +152,13 @@ export default function BudgetPage() {
   const accountExpense = allMonthExpense
     .filter(t => t.paymentMethod === 'account' && !isCardPaymentCat(t.categoryId))
     .reduce((s, t) => s + t.amount, 0)
-  const cardExpense = allMonthExpense
+  const cardExpenseRaw = allMonthExpense
     .filter(t => t.paymentMethod === 'card')
     .reduce((s, t) => s + t.amount, 0)
+  const cardExpenseRefund = transactions
+    .filter(t => t.date.startsWith(month) && t.type === 'refund' && t.paymentMethod === 'card')
+    .reduce((s, t) => s + t.amount, 0)
+  const cardExpense = Math.max(0, cardExpenseRaw - cardExpenseRefund)
   const cardPayment = allMonthExpense
     .filter(t => isCardPaymentCat(t.categoryId))
     .reduce((s, t) => s + t.amount, 0)
@@ -331,6 +380,9 @@ export default function BudgetPage() {
     return (categoryHiddenMonths[catId] ?? []).includes(month)
   }
 
+  // 이월된 예산인지 확인 (현재 달이 budgetCarriedMonths에 있고, 예산이 존재)
+  const isCarriedMonth = (data.budgetCarriedMonths ?? []).includes(month) && month === currentMonth
+
   function deleteCategoryGlobal(id: string) {
     // 카테고리 자체 + 모든 달 예산 + 숨김 기록 완전 삭제
     const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
@@ -356,9 +408,21 @@ export default function BudgetPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
+      {/* 자동 이월 토스트 */}
+      {carryOverToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-2 animate-fade-in">
+          <span>📋</span>
+          <span>{carryOverToast}</span>
+        </div>
+      )}
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-5 gap-2 flex-wrap">
-        <h1 className="text-xl font-bold text-gray-900">예산 관리</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-gray-900">예산 관리</h1>
+          {isCarriedMonth && (
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">(이월)</span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {/* 이전달 이월 버튼 */}
           <button

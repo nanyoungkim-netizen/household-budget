@@ -380,7 +380,7 @@ export default function Dashboard() {
     const now = new Date()
     const items: NotifItem[] = []
 
-    // 연회비 알림 (60일 이내)
+    // 연회비 알림 (납부일 2개월 전 1일부터 납부 당월 말일까지)
     cards
       .filter(c => c.annualFeeAmount && c.annualFeeDate)
       .forEach(c => {
@@ -389,7 +389,11 @@ export default function Dashboard() {
         const nextYear = new Date(now.getFullYear() + 1, mm - 1, dd)
         const dueDate  = thisYear >= now ? thisYear : nextYear
         const daysUntil = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        if (daysUntil > 60) return
+        // 납부일 2개월 전 1일
+        const startMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() - 2, 1)
+        // 납부 당월 말일
+        const endMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0)
+        if (now < startMonth || now > endMonth) return
         items.push({
           id: `annual-fee-${c.id}-${dueDate.getFullYear()}`,
           type: 'annual_fee',
