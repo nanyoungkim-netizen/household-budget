@@ -7,14 +7,17 @@ import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/Ap
 import { Transaction, AssetType, InvestmentSubType, INVESTMENT_SUB_LABELS } from '@/types'
 
 // PRD: 위젯 순서 커스터마이징
-type WidgetId = 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
-const DEFAULT_WIDGET_ORDER: WidgetId[] = ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
+type WidgetId = 'cash_accounts' | 'savings_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
+const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'savings_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
 const WIDGET_LABELS: Record<WidgetId, string> = {
-  card_payment:    '카드 사용 현황',
-  savings_summary: '적금·예금 요약',
-  budget:          '예산 현황',
-  goals:           '재무 목표',
-  transactions:    '거래 목록',
+  cash_accounts:       '현금성 자산',
+  savings_accounts:    '예·적금 계좌',
+  investment_accounts: '투자 자산',
+  card_payment:        '카드 사용 현황',
+  savings_summary:     '적금·예금 요약',
+  budget:              '예산 현황',
+  goals:               '재무 목표',
+  transactions:        '거래 목록',
 }
 
 // FR-01: 자산 유형 메타
@@ -81,8 +84,9 @@ export default function Dashboard() {
 
   // PRD: 위젯 순서 커스터마이징 state
   const rawOrder = data.dashboardWidgetOrder ?? DEFAULT_WIDGET_ORDER
-  const widgetOrder = (rawOrder.filter(id => DEFAULT_WIDGET_ORDER.includes(id as WidgetId)) as WidgetId[])
-    .concat(DEFAULT_WIDGET_ORDER.filter(id => !rawOrder.includes(id)))
+  // widgetOrder = visible widgets in stored order (not auto-appending — hidden means hidden)
+  const widgetOrder = rawOrder.filter(id => DEFAULT_WIDGET_ORDER.includes(id as WidgetId)) as WidgetId[]
+  const hiddenWidgets = DEFAULT_WIDGET_ORDER.filter(id => !widgetOrder.includes(id))
   const [editMode, setEditMode] = useState(false)
   const [draggingId, setDraggingId] = useState<WidgetId | null>(null)
   const [dragOverId, setDragOverId] = useState<WidgetId | null>(null)
@@ -119,6 +123,16 @@ export default function Dashboard() {
   function resetWidgetOrder() {
     setDashboardWidgetOrder([...DEFAULT_WIDGET_ORDER])
     showToast('기본 순서로 되돌렸습니다.')
+  }
+
+  function addWidget(id: WidgetId) {
+    setDashboardWidgetOrder([...widgetOrder, id])
+    showToast(`${WIDGET_LABELS[id]} 위젯을 추가했어요.`)
+  }
+
+  function removeWidget(id: WidgetId) {
+    setDashboardWidgetOrder(widgetOrder.filter(w => w !== id))
+    showToast(`${WIDGET_LABELS[id]} 위젯을 숨겼어요.`)
   }
 
   // ── 알림 닫기 (localStorage 지속) ──────────────────────────────────────────
@@ -612,52 +626,36 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* FR-015: 총 자산 라벨 — 날짜 선택 시 "[선택날짜] 기준 자산" */}
-        <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between">
-          <div className="text-xs opacity-70">
+        {/* 오늘 기준 자산 — 계좌잔액/예적금/투자/총잔액 breakdown */}
+        <div className="mt-4 pt-3 border-t border-white/20">
+          <div className="text-[10px] opacity-60 mb-2 uppercase tracking-wide">
             {isHistoricalDay
               ? `${selectedDay} 기준 자산`
               : isHistoricalMonth
               ? `${selectedMonth} 기준 자산`
               : '오늘 기준 자산'}
           </div>
-          <div className="text-lg font-bold tabular-nums">{fmtKRW(totalBalance)}</div>
-        </div>
-      </div>
-
-      {/* PRD 3-1: 자산 요약 섹션 */}
-      <div className="mb-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {/* 계좌잔액 */}
-          <Link href="/accounts" className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow block" style={{ borderTop: '3px solid #3B82F6' }}>
-            <div className="text-xs text-gray-400 mb-1">계좌잔액</div>
-            <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(assetSummary.cashBalance)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">현금성 자산</div>
-          </Link>
-          {/* 예적금 납입원금 */}
-          <Link href="/savings" className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow block" style={{ borderTop: '3px solid #10B981' }}>
-            <div className="text-xs text-gray-400 mb-1">예적금 총액</div>
-            <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(assetSummary.savingsPrincipal)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">납입 원금</div>
-          </Link>
-          {/* 투자잔액 */}
-          <Link href="/investments" className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow block" style={{ borderTop: '3px solid #8B5CF6' }}>
-            <div className="text-xs text-gray-400 mb-1">투자잔액</div>
-            <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">{fmtShort(assetSummary.investmentTotalEval)}</div>
-            {assetSummary.investUpdatedAt ? (
-              <div className="text-[10px] text-gray-400 mt-1">{fmtDate(assetSummary.investUpdatedAt)} 기준</div>
-            ) : (
-              <div className="text-[10px] text-gray-400 mt-1">평가금액 합계</div>
-            )}
-          </Link>
-          {/* 총 잔액 */}
-          <div className="bg-gradient-to-br from-blue-600 to-violet-600 rounded-2xl p-4 shadow-sm text-white">
-            <div className="text-xs opacity-75 mb-1">총 잔액</div>
-            <div className="text-base font-bold tabular-nums leading-tight">{fmtShort(assetSummary.totalAssets)}</div>
-            <div className="text-[10px] opacity-60 mt-1">전체 보유 자산</div>
+          <div className="space-y-1.5">
+            <Link href="/accounts" className="flex items-center justify-between hover:opacity-75 transition-opacity">
+              <span className="text-xs opacity-80">💵 계좌잔액</span>
+              <span className="text-sm font-semibold tabular-nums">{fmtShort(assetSummary.cashBalance)}</span>
+            </Link>
+            <Link href="/savings" className="flex items-center justify-between hover:opacity-75 transition-opacity">
+              <span className="text-xs opacity-80">🏦 예적금 총액 <span className="opacity-60 text-[10px]">(납입원금)</span></span>
+              <span className="text-sm font-semibold tabular-nums">{fmtShort(assetSummary.savingsPrincipal)}</span>
+            </Link>
+            <Link href="/investments" className="flex items-center justify-between hover:opacity-75 transition-opacity">
+              <span className="text-xs opacity-80">📈 투자잔액 <span className="opacity-60 text-[10px]">(평가금액)</span></span>
+              <span className="text-sm font-semibold tabular-nums">{fmtShort(assetSummary.investmentTotalEval)}</span>
+            </Link>
+            <div className="flex items-center justify-between pt-1.5 border-t border-white/20">
+              <span className="text-xs font-bold">총 잔액</span>
+              <span className="text-lg font-bold tabular-nums">{fmtKRW(assetSummary.totalAssets)}</span>
+            </div>
           </div>
         </div>
       </div>
+
 
       {/* PRD 2.1: 이달 비소비 항목 별도 카드 */}
       {viewMode === 'month' && (savingAmt > 0 || excludedAmt > 0) && (
@@ -684,119 +682,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* FR-01: 자산 유형별 섹션으로 계좌 표시 */}
-      {ASSET_SECTIONS.map(section => {
-        const sectionAccounts = accountBalances.filter(a => (a.assetType ?? 'cash') === section.value)
-        if (sectionAccounts.length === 0) return null
-        const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
 
-        // 투자 섹션: 세부 유형별 그룹으로 표시
-        if (section.value === 'investment') {
-          const subGroups: { key: string; label: string; icon: string; accounts: typeof sectionAccounts }[] = [
-            ...(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, { label: string; icon: string }][]).map(([key, meta]) => ({
-              key,
-              label: meta.label,
-              icon: meta.icon,
-              accounts: sectionAccounts.filter(a => a.investmentSubType === key),
-            })),
-            {
-              key: 'other',
-              label: '기타 투자',
-              icon: '💼',
-              accounts: sectionAccounts.filter(a => !a.investmentSubType),
-            },
-          ].filter(g => g.accounts.length > 0)
-
-          return (
-            <div key={section.value} className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">{section.icon}</span>
-                  <span className="text-xs font-bold text-gray-500">{section.label}</span>
-                </div>
-                <span className="text-xs font-semibold" style={{ color: section.color }}>{fmtKRW(subtotal)}</span>
-              </div>
-              <div className="space-y-3">
-                {subGroups.map(group => {
-                  const groupSubtotal = group.accounts.reduce((s, a) => s + a.computed, 0)
-                  return (
-                    <div key={group.key} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm">{group.icon}</span>
-                          <span className="text-xs font-semibold text-gray-600">{group.label}</span>
-                        </div>
-                        <span className="text-xs font-semibold text-violet-600">{fmtKRW(groupSubtotal)}</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-50 sm:divide-y-0 sm:divide-x">
-                        {group.accounts.map(acc => {
-                          const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
-                          const diff = acc.computed - prevBal
-                          return (
-                            <div key={acc.id} className="p-4" style={{ borderTop: `3px solid ${acc.color}` }}>
-                              <div className="mb-2">
-                                {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
-                                <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
-                                {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
-                              </div>
-                              <div className="text-xl font-bold text-gray-900 tabular-nums">
-                                {acc.computed.toLocaleString('ko-KR')}원
-                              </div>
-                              {diff !== 0 && (
-                                <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                                  {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        }
-
-        // 현금성 / 예적금: 기존 플랫 그리드
-        return (
-          <div key={section.value} className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm">{section.icon}</span>
-                <span className="text-xs font-bold text-gray-500">{section.label}</span>
-              </div>
-              <span className="text-xs font-semibold" style={{ color: section.color }}>{fmtKRW(subtotal)}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {sectionAccounts.map(acc => {
-                const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
-                const diff = acc.computed - prevBal
-                return (
-                  <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
-                    <div className="mb-2">
-                      {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
-                      <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
-                      {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
-                    </div>
-                    <div className="text-xl font-bold text-gray-900 tabular-nums">
-                      {acc.computed.toLocaleString('ko-KR')}원
-                    </div>
-                    {diff !== 0 && (
-                      <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                        {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-
-      {/* PRD 3-2: 위젯 순서 편집 바 */}
+      {/* 위젯 편집 바 */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-gray-400 font-medium">위젯 영역</span>
         <div className="flex items-center gap-2">
@@ -811,7 +698,7 @@ export default function Dashboard() {
             className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition-colors ${
               editMode ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}>
-            {editMode ? '✓ 완료' : '순서 변경'}
+            {editMode ? '✓ 완료' : '위젯 편집'}
           </button>
         </div>
       </div>
@@ -823,6 +710,182 @@ export default function Dashboard() {
           const isDragOver = dragOverId === widgetId
 
           const widgetContent = (() => {
+            // ── 현금성 자산 위젯 ────────────────────────────────────────
+            if (widgetId === 'cash_accounts') {
+              const sectionAccounts = accountBalances.filter(a => (a.assetType ?? 'cash') === 'cash')
+              if (sectionAccounts.length === 0 && !editMode) return null
+              const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
+              return (
+                <div className="mb-0">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">💵</span>
+                      <span className="text-xs font-bold text-gray-500">현금성 자산</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-blue-600">{fmtKRW(subtotal)}</span>
+                      <Link href="/accounts" className="text-xs text-blue-500 hover:text-blue-700">관리 →</Link>
+                    </div>
+                  </div>
+                  {sectionAccounts.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {sectionAccounts.map(acc => {
+                        const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
+                        const diff = acc.computed - prevBal
+                        return (
+                          <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
+                            <div className="mb-2">
+                              {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
+                              <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                              {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
+                            </div>
+                            <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>
+                            {diff !== 0 && (
+                              <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                                {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl p-4 shadow-sm text-center text-xs text-gray-400 py-6">
+                      현금성 계좌가 없어요
+                      <Link href="/accounts" className="block text-blue-500 underline mt-1">계좌 추가하기</Link>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            // ── 예·적금 계좌 위젯 ──────────────────────────────────────
+            if (widgetId === 'savings_accounts') {
+              const sectionAccounts = accountBalances.filter(a => a.assetType === 'savings')
+              if (sectionAccounts.length === 0 && !editMode) return null
+              const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
+              return (
+                <div className="mb-0">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">🏦</span>
+                      <span className="text-xs font-bold text-gray-500">예·적금 계좌</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-emerald-600">{fmtKRW(subtotal)}</span>
+                      <Link href="/savings" className="text-xs text-blue-500 hover:text-blue-700">관리 →</Link>
+                    </div>
+                  </div>
+                  {sectionAccounts.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {sectionAccounts.map(acc => {
+                        const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
+                        const diff = acc.computed - prevBal
+                        return (
+                          <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
+                            <div className="mb-2">
+                              {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
+                              <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                              {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
+                            </div>
+                            <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>
+                            {diff !== 0 && (
+                              <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                                {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl p-4 shadow-sm text-center text-xs text-gray-400 py-6">
+                      예·적금 계좌가 없어요
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            // ── 투자 자산 위젯 ────────────────────────────────────────
+            if (widgetId === 'investment_accounts') {
+              const sectionAccounts = accountBalances.filter(a => a.assetType === 'investment')
+              if (sectionAccounts.length === 0 && !editMode) return null
+              const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
+              const subGroups: { key: string; label: string; icon: string; accounts: typeof sectionAccounts }[] = [
+                ...(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, { label: string; icon: string }][]).map(([key, meta]) => ({
+                  key,
+                  label: meta.label,
+                  icon: meta.icon,
+                  accounts: sectionAccounts.filter(a => a.investmentSubType === key),
+                })),
+                {
+                  key: 'other',
+                  label: '기타 투자',
+                  icon: '💼',
+                  accounts: sectionAccounts.filter(a => !a.investmentSubType),
+                },
+              ].filter(g => g.accounts.length > 0)
+              return (
+                <div className="mb-0">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">📈</span>
+                      <span className="text-xs font-bold text-gray-500">투자 자산</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-violet-600">{fmtKRW(subtotal)}</span>
+                      <Link href="/investments" className="text-xs text-blue-500 hover:text-blue-700">관리 →</Link>
+                    </div>
+                  </div>
+                  {subGroups.length > 0 ? (
+                    <div className="space-y-3">
+                      {subGroups.map(group => {
+                        const groupSubtotal = group.accounts.reduce((s, a) => s + a.computed, 0)
+                        return (
+                          <div key={group.key} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">{group.icon}</span>
+                                <span className="text-xs font-semibold text-gray-600">{group.label}</span>
+                              </div>
+                              <span className="text-xs font-semibold text-violet-600">{fmtKRW(groupSubtotal)}</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-50 sm:divide-y-0 sm:divide-x">
+                              {group.accounts.map(acc => {
+                                const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
+                                const diff = acc.computed - prevBal
+                                return (
+                                  <div key={acc.id} className="p-4" style={{ borderTop: `3px solid ${acc.color}` }}>
+                                    <div className="mb-2">
+                                      {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
+                                      <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                                      {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
+                                    </div>
+                                    <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>
+                                    {diff !== 0 && (
+                                      <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                                        {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl p-4 shadow-sm text-center text-xs text-gray-400 py-6">
+                      투자 계좌가 없어요
+                      <Link href="/accounts" className="block text-blue-500 underline mt-1">계좌 추가하기</Link>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
             if (widgetId === 'card_payment') {
               const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
               const paidBillingMonths = new Set<string>(
@@ -1084,8 +1147,8 @@ export default function Dashboard() {
                     <span className="text-gray-400 text-lg leading-none">⠿</span>
                     <span className="text-xs font-medium text-gray-500">{WIDGET_LABELS[widgetId]}</span>
                   </div>
-                  {/* 모바일용 위/아래 버튼 */}
                   <div className="flex items-center gap-1">
+                    {/* 모바일용 위/아래 버튼 */}
                     <button
                       onClick={() => moveWidgetByIndex(widgetId, -1)}
                       disabled={idx === 0}
@@ -1097,6 +1160,13 @@ export default function Dashboard() {
                       disabled={idx === widgetOrder.length - 1}
                       className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-200 text-gray-400 disabled:opacity-20 transition-colors text-xs">
                       ▼
+                    </button>
+                    {/* 숨기기 버튼 */}
+                    <button
+                      onClick={() => removeWidget(widgetId)}
+                      title="위젯 숨기기"
+                      className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-100 text-red-400 hover:text-red-500 transition-colors text-xs ml-1">
+                      ✕
                     </button>
                   </div>
                 </div>
@@ -1113,6 +1183,23 @@ export default function Dashboard() {
           )
         })}
       </div>
+
+      {/* 편집 모드: 숨긴 위젯 추가 */}
+      {editMode && hiddenWidgets.length > 0 && (
+        <div className="mt-3 border-2 border-dashed border-gray-200 rounded-2xl p-4">
+          <div className="text-xs font-semibold text-gray-400 mb-3">숨긴 위젯 — 탭하여 추가</div>
+          <div className="flex flex-wrap gap-2">
+            {hiddenWidgets.map(id => (
+              <button
+                key={id}
+                onClick={() => addWidget(id)}
+                className="flex items-center gap-1 text-xs font-medium px-3 py-2 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-gray-600 hover:text-blue-600 rounded-xl transition-colors shadow-sm">
+                + {WIDGET_LABELS[id]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 토스트 알림 */}
       {toast && (

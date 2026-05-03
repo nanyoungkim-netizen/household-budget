@@ -124,7 +124,7 @@ const INITIAL_DATA: AppData = {
   savingPayments: [],
   categoryHiddenMonths: {},
   categoryExcludeMonths: {},
-  dashboardWidgetOrder: ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
+  dashboardWidgetOrder: ['cash_accounts', 'savings_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -272,7 +272,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
-      dashboardWidgetOrder: raw.dashboardWidgetOrder ?? ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
+      dashboardWidgetOrder: (() => {
+        const stored = raw.dashboardWidgetOrder ?? null
+        const assetWidgets = ['cash_accounts', 'savings_accounts', 'investment_accounts']
+        const legacyWidgets = ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
+        if (!stored) return [...assetWidgets, ...legacyWidgets]
+        // 기존 사용자 마이그레이션: asset 위젯이 없으면 앞에 추가
+        const hasAssetWidgets = stored.some(id => assetWidgets.includes(id))
+        if (!hasAssetWidgets) return [...assetWidgets, ...stored]
+        return stored
+      })(),
     }
   }
 
