@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// PRD §10: 네이버 금융 종목 자동완성 검색 프록시
+// 네이버 금융 종목 자동완성 검색 프록시
 // URL: https://ac.stock.naver.com/ac?q={검색어}&target=index,stock,marketindex
+// 현재 응답 형식: { query, items: [{ code, name, typeCode, typeName, ... }] }
 // 모든 네이버 금융 요청은 서버를 통해 중계 (CORS 우회)
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim()
-  if (!q || q.length < 2) {
+  if (!q || q.length < 1) {
     return NextResponse.json({ items: [] })
   }
 
@@ -24,20 +25,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ items: [] }, { status: 200 })
     }
 
-    const text = await res.text()
+    const json = await res.json() as {
+      query?: string
+      items?: { code?: string; name?: string; typeCode?: string; typeName?: string }[]
+      ac?: string[][]  // 레거시 형식 대비
+    }
 
-    // 네이버 자동완성 응답 파싱
-    // 응답 형식: {"ac":[["삼성전자","005930","KOSPI"],...], "q":"삼성", ...}
-    let parsed: { ac?: string[][] } = {}
-    try { parsed = JSON.parse(text) } catch { /* ignore */ }
+    // 현재 형식: { items: [{ code, name, typeCode, typeName }] }
+    if (Array.isArray(json.items)) {
+      const items = json.items.slice(0, 10).map(row => ({
+        name:   row.name     ?? '',
+        ticker: row.code     ?? '',
+        market: row.typeName ?? row.typeCode ?? '',
+      }))
+      return NextResponse.json({ items })
+    }
 
-    const items = (parsed.ac ?? []).slice(0, 10).map((row: string[]) => ({
-      name:   row[0] ?? '',
-      ticker: row[1] ?? '',
-      market: row[2] ?? '',
-    }))
+    // 레거시 형식: { ac: [["이름", "코드", "시장"]] }
+    if (Array.isArray(json.ac)) {
+      const items = (json.ac as string[][]).slice(0, 10).map(row => ({
+        name:   row[0] ?? '',
+        ticker: row[1] ?? '',
+        market: row[2] ?? '',
+      }))
+      return NextResponse.json({ items })
+    }
 
-    return NextResponse.json({ items })
+    return NextResponse.json({ items: [] })
   } catch {
     return NextResponse.json({ items: [] }, { status: 200 })
   }

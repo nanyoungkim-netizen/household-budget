@@ -4,14 +4,13 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
-import { Transaction, AssetType, InvestmentSubType, INVESTMENT_SUB_LABELS } from '@/types'
+import { Transaction } from '@/types'
 
 // PRD: 위젯 순서 커스터마이징
-type WidgetId = 'cash_accounts' | 'savings_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
-const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'savings_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
+type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
+const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
 const WIDGET_LABELS: Record<WidgetId, string> = {
   cash_accounts:       '현금성 자산',
-  savings_accounts:    '예·적금 계좌',
   investment_accounts: '투자 자산',
   card_payment:        '카드 사용 현황',
   savings_summary:     '적금·예금 요약',
@@ -19,13 +18,6 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   goals:               '재무 목표',
   transactions:        '거래 목록',
 }
-
-// FR-01: 자산 유형 메타
-const ASSET_SECTIONS: { value: AssetType; label: string; icon: string; color: string }[] = [
-  { value: 'cash',       label: '현금성 자산', icon: '💵', color: '#3B82F6' },
-  { value: 'savings',    label: '예·적금',     icon: '🏦', color: '#10B981' },
-  { value: 'investment', label: '투자 자산',   icon: '📈', color: '#8B5CF6' },
-]
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function fmtShort(n: number) {
@@ -285,14 +277,14 @@ export default function Dashboard() {
     return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
   }, [savings, transactions])
 
-  // PRD 3-1: 투자 탭 총 평가금액 (현재가 × 보유수량)
-  const investmentTotalEval = useMemo(() => {
-    const holdingsQty = new Map<string, { qty: number; buyAmt: number }>()
-    investments.forEach(inv => holdingsQty.set(inv.id, { qty: 0, buyAmt: 0 }))
+  // 투자 보유 내역 (종목별 qty·평가금액·손익) — 위젯 + 총평가금액 공유
+  const investmentHoldings = useMemo(() => {
+    const holdingsMap = new Map<string, { qty: number; buyAmt: number }>()
+    investments.forEach(inv => holdingsMap.set(inv.id, { qty: 0, buyAmt: 0 }))
     ;[...investmentTrades]
       .sort((a, b) => a.date.localeCompare(b.date))
       .forEach(trade => {
-        const h = holdingsQty.get(trade.investmentId)
+        const h = holdingsMap.get(trade.investmentId)
         if (!h) return
         if (trade.type === 'buy') {
           h.qty += trade.quantity
@@ -303,13 +295,24 @@ export default function Dashboard() {
           h.buyAmt = h.qty * avgCost
         }
       })
-    let total = 0
-    investments.forEach(inv => {
-      const h = holdingsQty.get(inv.id)
-      if (h && h.qty > 0 && inv.currentPrice) total += h.qty * inv.currentPrice
-    })
-    return total
+    return investments
+      .map(inv => {
+        const h = holdingsMap.get(inv.id)!
+        const holdingQty = h?.qty ?? 0
+        const buyAmt     = h?.buyAmt ?? 0
+        const evalAmount = holdingQty > 0 && inv.currentPrice ? holdingQty * inv.currentPrice : 0
+        const gain       = evalAmount > 0 ? evalAmount - buyAmt : 0
+        const gainRate   = buyAmt > 0 && evalAmount > 0 ? (gain / buyAmt) * 100 : 0
+        return { ...inv, holdingQty, buyAmt, evalAmount, gain, gainRate }
+      })
+      .filter(inv => inv.holdingQty > 0)
   }, [investments, investmentTrades])
+
+  // PRD 3-1: 투자 탭 총 평가금액
+  const investmentTotalEval = useMemo(
+    () => investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0),
+    [investmentHoldings]
+  )
 
   // PRD 3-1: 자산 유형별 요약
   const assetSummary = useMemo(() => {
@@ -759,127 +762,87 @@ export default function Dashboard() {
               )
             }
 
-            // ── 예·적금 계좌 위젯 ──────────────────────────────────────
-            if (widgetId === 'savings_accounts') {
-              const sectionAccounts = accountBalances.filter(a => a.assetType === 'savings')
-              if (sectionAccounts.length === 0 && !editMode) return null
-              const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
+            // ── 투자 자산 위젯 (투자 탭 종목 보유 내역 기반) ────────────
+            if (widgetId === 'investment_accounts') {
+              if (investmentHoldings.length === 0 && !editMode) return null
+              const totalEval = investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0)
+              const totalBuy  = investmentHoldings.reduce((s, inv) => s + inv.buyAmt,     0)
+              const totalGain = totalEval - totalBuy
+              const totalGainRate = totalBuy > 0 ? (totalGain / totalBuy) * 100 : 0
+              const updatedAt = investments.reduce<string | null>((latest, inv) => {
+                if (!inv.currentPriceUpdatedAt) return latest
+                return !latest || inv.currentPriceUpdatedAt > latest ? inv.currentPriceUpdatedAt : latest
+              }, null)
               return (
-                <div className="mb-0">
-                  <div className="flex items-center justify-between mb-2 px-1">
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  {/* 헤더 */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm">🏦</span>
-                      <span className="text-xs font-bold text-gray-500">예·적금 계좌</span>
+                      <span className="text-base">📈</span>
+                      <span className="text-sm font-bold text-gray-700">투자 자산</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-emerald-600">{fmtKRW(subtotal)}</span>
-                      <Link href="/savings" className="text-xs text-blue-500 hover:text-blue-700">관리 →</Link>
-                    </div>
+                    <Link href="/investments" className="text-xs text-blue-600">자세히 →</Link>
                   </div>
-                  {sectionAccounts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {sectionAccounts.map(acc => {
-                        const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
-                        const diff = acc.computed - prevBal
-                        return (
-                          <div key={acc.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ borderTop: `3px solid ${acc.color}` }}>
-                            <div className="mb-2">
-                              {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
-                              <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
-                              {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
+                  {investmentHoldings.length > 0 ? (
+                    <>
+                      {/* 종목 목록 */}
+                      <div className="divide-y divide-gray-50">
+                        {investmentHoldings.map(inv => (
+                          <div key={inv.id} className="flex items-center justify-between px-4 py-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-sm font-medium text-gray-800 truncate">{inv.name}</span>
+                                {inv.ticker && (
+                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{inv.ticker}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {inv.holdingQty.toLocaleString('ko-KR')}주
+                                {inv.currentPrice
+                                  ? ` · ${fmtKRW(inv.currentPrice)}`
+                                  : ' · 현재가 미설정'}
+                              </div>
                             </div>
-                            <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>
-                            {diff !== 0 && (
-                              <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                                {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                            <div className="text-right flex-shrink-0 ml-3">
+                              <div className="text-sm font-bold text-gray-900 tabular-nums">
+                                {inv.evalAmount > 0 ? fmtShort(inv.evalAmount) : '-'}
+                              </div>
+                              {inv.evalAmount > 0 && (
+                                <div className={`text-xs font-medium tabular-nums ${inv.gain >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                  {inv.gain >= 0 ? '+' : ''}{fmtShort(inv.gain)}
+                                  <span className="opacity-70 ml-1">({inv.gainRate >= 0 ? '+' : ''}{inv.gainRate.toFixed(1)}%)</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* 합계 */}
+                      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-gray-500 font-medium">총 평가금액</div>
+                            {updatedAt && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">{fmtDate(updatedAt)} 기준</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-base font-bold text-gray-900 tabular-nums">{fmtKRW(totalEval)}</div>
+                            {totalBuy > 0 && (
+                              <div className={`text-xs font-medium tabular-nums ${totalGain >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                {totalGain >= 0 ? '+' : ''}{fmtShort(totalGain)}
+                                <span className="opacity-70 ml-1">({totalGainRate >= 0 ? '+' : ''}{totalGainRate.toFixed(1)}%)</span>
                               </div>
                             )}
                           </div>
-                        )
-                      })}
-                    </div>
+                        </div>
+                      </div>
+                    </>
                   ) : (
-                    <div className="bg-white rounded-2xl p-4 shadow-sm text-center text-xs text-gray-400 py-6">
-                      예·적금 계좌가 없어요
-                    </div>
-                  )}
-                </div>
-              )
-            }
-
-            // ── 투자 자산 위젯 ────────────────────────────────────────
-            if (widgetId === 'investment_accounts') {
-              const sectionAccounts = accountBalances.filter(a => a.assetType === 'investment')
-              if (sectionAccounts.length === 0 && !editMode) return null
-              const subtotal = sectionAccounts.reduce((s, a) => s + a.computed, 0)
-              const subGroups: { key: string; label: string; icon: string; accounts: typeof sectionAccounts }[] = [
-                ...(Object.entries(INVESTMENT_SUB_LABELS) as [InvestmentSubType, { label: string; icon: string }][]).map(([key, meta]) => ({
-                  key,
-                  label: meta.label,
-                  icon: meta.icon,
-                  accounts: sectionAccounts.filter(a => a.investmentSubType === key),
-                })),
-                {
-                  key: 'other',
-                  label: '기타 투자',
-                  icon: '💼',
-                  accounts: sectionAccounts.filter(a => !a.investmentSubType),
-                },
-              ].filter(g => g.accounts.length > 0)
-              return (
-                <div className="mb-0">
-                  <div className="flex items-center justify-between mb-2 px-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">📈</span>
-                      <span className="text-xs font-bold text-gray-500">투자 자산</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-violet-600">{fmtKRW(subtotal)}</span>
-                      <Link href="/investments" className="text-xs text-blue-500 hover:text-blue-700">관리 →</Link>
-                    </div>
-                  </div>
-                  {subGroups.length > 0 ? (
-                    <div className="space-y-3">
-                      {subGroups.map(group => {
-                        const groupSubtotal = group.accounts.reduce((s, a) => s + a.computed, 0)
-                        return (
-                          <div key={group.key} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm">{group.icon}</span>
-                                <span className="text-xs font-semibold text-gray-600">{group.label}</span>
-                              </div>
-                              <span className="text-xs font-semibold text-violet-600">{fmtKRW(groupSubtotal)}</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-50 sm:divide-y-0 sm:divide-x">
-                              {group.accounts.map(acc => {
-                                const prevBal = prevAccountBalances.find(p => p.id === acc.id)?.computed ?? acc.computed
-                                const diff = acc.computed - prevBal
-                                return (
-                                  <div key={acc.id} className="p-4" style={{ borderTop: `3px solid ${acc.color}` }}>
-                                    <div className="mb-2">
-                                      {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
-                                      <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
-                                      {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
-                                    </div>
-                                    <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>
-                                    {diff !== 0 && (
-                                      <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                                        {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-2xl p-4 shadow-sm text-center text-xs text-gray-400 py-6">
-                      투자 계좌가 없어요
-                      <Link href="/accounts" className="block text-blue-500 underline mt-1">계좌 추가하기</Link>
+                    <div className="text-center py-8 text-gray-400">
+                      <div className="text-2xl mb-2">📊</div>
+                      <p className="text-xs">보유 종목이 없어요</p>
+                      <Link href="/investments" className="text-xs text-blue-500 underline mt-1 block">투자 내역 추가하기</Link>
                     </div>
                   )}
                 </div>
