@@ -65,7 +65,7 @@ function calcStats(txs: Transaction[]) {
 }
 
 export default function Dashboard() {
-  const { data, categories, setDashboardWidgetOrder } = useApp()
+  const { data, categories, setDashboardWidgetOrder, setInvestments } = useApp()
   const router = useRouter()
   const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades } = data
 
@@ -84,6 +84,7 @@ export default function Dashboard() {
   const [dragOverId, setDragOverId] = useState<WidgetId | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [priceRefreshing, setPriceRefreshing] = useState(false)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -115,6 +116,42 @@ export default function Dashboard() {
   function resetWidgetOrder() {
     setDashboardWidgetOrder([...DEFAULT_WIDGET_ORDER])
     showToast('기본 순서로 되돌렸습니다.')
+  }
+
+  async function refreshInvestmentPrices() {
+    const targets = investments.filter(
+      inv => (inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker
+    )
+    if (targets.length === 0) { showToast('티커가 등록된 종목이 없어요.'); return }
+    setPriceRefreshing(true)
+    try {
+      const results = await Promise.allSettled(
+        targets.map(async inv => {
+          const res  = await fetch(`/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`)
+          const json = await res.json()
+          if (json.error || !json.price) return null
+          return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
+        })
+      )
+      const patches: Record<string, { price: number; updatedAt: string }> = {}
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) patches[targets[i].id] = r.value
+      })
+      if (Object.keys(patches).length > 0) {
+        setInvestments(investments.map(inv =>
+          patches[inv.id]
+            ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
+            : inv
+        ))
+        showToast(`${Object.keys(patches).length}개 종목 현재가 갱신 완료`)
+      } else {
+        showToast('가격 조회에 실패했어요.')
+      }
+    } catch {
+      showToast('현재가 조회 중 오류가 발생했어요.')
+    } finally {
+      setPriceRefreshing(false)
+    }
   }
 
   function addWidget(id: WidgetId) {
@@ -762,87 +799,80 @@ export default function Dashboard() {
               )
             }
 
-            // ── 투자 자산 위젯 (투자 탭 종목 보유 내역 기반) ────────────
+            // ── 투자 자산 위젯 (요약: 총투자금액·총평가금액·총수익) ──────
             if (widgetId === 'investment_accounts') {
               if (investmentHoldings.length === 0 && !editMode) return null
-              const totalEval = investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0)
-              const totalBuy  = investmentHoldings.reduce((s, inv) => s + inv.buyAmt,     0)
-              const totalGain = totalEval - totalBuy
+              const totalEval     = investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0)
+              const totalBuy      = investmentHoldings.reduce((s, inv) => s + inv.buyAmt,     0)
+              const totalGain     = totalEval - totalBuy
               const totalGainRate = totalBuy > 0 ? (totalGain / totalBuy) * 100 : 0
-              const updatedAt = investments.reduce<string | null>((latest, inv) => {
+              const updatedAt     = investments.reduce<string | null>((latest, inv) => {
                 if (!inv.currentPriceUpdatedAt) return latest
                 return !latest || inv.currentPriceUpdatedAt > latest ? inv.currentPriceUpdatedAt : latest
               }, null)
+              const hasTicker = investments.some(
+                inv => (inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker
+              )
               return (
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
                   {/* 헤더 */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-1.5">
                       <span className="text-base">📈</span>
                       <span className="text-sm font-bold text-gray-700">투자 자산</span>
+                      {investmentHoldings.length > 0 && (
+                        <span className="text-xs text-gray-400">{investmentHoldings.length}종목</span>
+                      )}
                     </div>
-                    <Link href="/investments" className="text-xs text-blue-600">자세히 →</Link>
+                    <div className="flex items-center gap-2">
+                      {hasTicker && (
+                        <button
+                          onClick={refreshInvestmentPrices}
+                          disabled={priceRefreshing}
+                          className="text-xs text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-40"
+                          title="현재가 새로고침">
+                          {priceRefreshing ? '⏳' : '🔄'}
+                        </button>
+                      )}
+                      <Link href="/investments" className="text-xs text-blue-600">자세히 →</Link>
+                    </div>
                   </div>
+
                   {investmentHoldings.length > 0 ? (
                     <>
-                      {/* 종목 목록 */}
-                      <div className="divide-y divide-gray-50">
-                        {investmentHoldings.map(inv => (
-                          <div key={inv.id} className="flex items-center justify-between px-4 py-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-sm font-medium text-gray-800 truncate">{inv.name}</span>
-                                {inv.ticker && (
-                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{inv.ticker}</span>
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                {inv.holdingQty.toLocaleString('ko-KR')}주
-                                {inv.currentPrice
-                                  ? ` · ${fmtKRW(inv.currentPrice)}`
-                                  : ' · 현재가 미설정'}
-                              </div>
+                      {/* 3칸 요약 */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-gray-50 rounded-xl p-3">
+                          <div className="text-[10px] text-gray-400 mb-1">총 투자금액</div>
+                          <div className="text-sm font-bold text-gray-800 tabular-nums leading-tight">{fmtShort(totalBuy)}</div>
+                        </div>
+                        <div className="bg-violet-50 rounded-xl p-3">
+                          <div className="text-[10px] text-violet-500 mb-1">총 평가금액</div>
+                          <div className="text-sm font-bold text-violet-700 tabular-nums leading-tight">{fmtShort(totalEval)}</div>
+                        </div>
+                        <div className={`rounded-xl p-3 ${totalGain >= 0 ? 'bg-red-50' : 'bg-blue-50'}`}>
+                          <div className={`text-[10px] mb-1 ${totalGain >= 0 ? 'text-red-500' : 'text-blue-500'}`}>총 수익</div>
+                          <div className={`text-sm font-bold tabular-nums leading-tight ${totalGain >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                            {totalGain >= 0 ? '+' : ''}{fmtShort(totalGain)}
+                          </div>
+                          {totalBuy > 0 && (
+                            <div className={`text-[10px] mt-0.5 tabular-nums ${totalGain >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                              {totalGainRate >= 0 ? '+' : ''}{totalGainRate.toFixed(1)}%
                             </div>
-                            <div className="text-right flex-shrink-0 ml-3">
-                              <div className="text-sm font-bold text-gray-900 tabular-nums">
-                                {inv.evalAmount > 0 ? fmtShort(inv.evalAmount) : '-'}
-                              </div>
-                              {inv.evalAmount > 0 && (
-                                <div className={`text-xs font-medium tabular-nums ${inv.gain >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                  {inv.gain >= 0 ? '+' : ''}{fmtShort(inv.gain)}
-                                  <span className="opacity-70 ml-1">({inv.gainRate >= 0 ? '+' : ''}{inv.gainRate.toFixed(1)}%)</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {/* 합계 */}
-                      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs text-gray-500 font-medium">총 평가금액</div>
-                            {updatedAt && (
-                              <div className="text-[10px] text-gray-400 mt-0.5">{fmtDate(updatedAt)} 기준</div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-base font-bold text-gray-900 tabular-nums">{fmtKRW(totalEval)}</div>
-                            {totalBuy > 0 && (
-                              <div className={`text-xs font-medium tabular-nums ${totalGain >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                {totalGain >= 0 ? '+' : ''}{fmtShort(totalGain)}
-                                <span className="opacity-70 ml-1">({totalGainRate >= 0 ? '+' : ''}{totalGainRate.toFixed(1)}%)</span>
-                              </div>
-                            )}
-                          </div>
+                          )}
                         </div>
                       </div>
+                      {/* 기준 시각 */}
+                      {updatedAt && (
+                        <div className="text-[10px] text-gray-400 mt-2 text-right">
+                          {fmtDate(updatedAt)} 기준
+                        </div>
+                      )}
                     </>
                   ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      <div className="text-2xl mb-2">📊</div>
-                      <p className="text-xs">보유 종목이 없어요</p>
-                      <Link href="/investments" className="text-xs text-blue-500 underline mt-1 block">투자 내역 추가하기</Link>
+                    <div className="text-center py-4">
+                      <p className="text-xs text-gray-400 mb-2">보유 종목이 없어요</p>
+                      <Link href="/investments" className="text-xs text-blue-500 underline">투자 내역 추가하기</Link>
                     </div>
                   )}
                 </div>
