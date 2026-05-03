@@ -92,10 +92,11 @@ export default function BudgetPage() {
     setUnlocked(false)
   }, [month])
 
-  // 자동 이월: 현재 달에 예산 없고 아직 이월 안 됐으면 전달 예산 자동 복사
+  // 자동 이월: 해당 달에 예산 없고 아직 이월 안 됐으면 전달 예산 자동 복사
+  // 과거 달은 제외, 현재 달 및 미래 달(탭 이동 시)에 적용
   useEffect(() => {
     const budgetCarriedMonths = data.budgetCarriedMonths ?? []
-    if (month !== currentMonth) return
+    if (month < currentMonth) return  // 과거 달은 이월 안 함
     if (budgetCarriedMonths.includes(month)) return
     const hasCurrentBudget = budgets.some(b => b.month === month)
     if (hasCurrentBudget) return
