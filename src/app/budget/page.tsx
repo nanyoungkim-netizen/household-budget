@@ -92,8 +92,7 @@ export default function BudgetPage() {
     setUnlocked(false)
   }, [month])
 
-  // 자동 이월: 해당 달에 예산 없고 아직 이월 안 됐으면 전달 예산 자동 복사
-  // 과거 달은 제외, 현재 달 및 미래 달(탭 이동 시)에 적용
+  // 자동 이월 ①: 예산 복사 — 해당 달에 예산 없고 아직 이월 안 됐으면 전달 예산 복사 (1회)
   useEffect(() => {
     const budgetCarriedMonths = data.budgetCarriedMonths ?? []
     if (month < currentMonth) return  // 과거 달은 이월 안 함
@@ -113,20 +112,29 @@ export default function BudgetPage() {
     }))
     setBudgets([...budgets, ...copied])
 
-    // categoryExcludeMonths 이월: 전달 제외 카테고리들을 현재 달에도 적용
-    const nextExclude = { ...data.categoryExcludeMonths }
-    Object.entries(nextExclude).forEach(([catId, months]) => {
-      if (months.includes(prevM) && !months.includes(month)) {
-        nextExclude[catId] = [...months, month]
-      }
-    })
-    setCategoryExcludeMonths(nextExclude)
-
     // 이월 완료 마킹
     setBudgetCarriedMonths([...budgetCarriedMonths, month])
     showCarryOverToast('전달 예산이 자동 이월되었습니다.')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, budgets, data.budgetCarriedMonths])
+
+  // 자동 이월 ②: 제외 항목 동기화 — 전달 제외 카테고리를 현재·미래 달에 항상 반영
+  // budgetCarriedMonths 와 독립적으로, 전달 제외 내역이 바뀔 때마다 재동기화
+  useEffect(() => {
+    if (month < currentMonth) return  // 과거 달은 건드리지 않음
+    const prevM = prevMonth(month)
+    const currentExclude = data.categoryExcludeMonths
+    let changed = false
+    const nextExclude = { ...currentExclude }
+    Object.entries(currentExclude).forEach(([catId, months]) => {
+      if ((months as string[]).includes(prevM) && !(months as string[]).includes(month)) {
+        nextExclude[catId] = [...(months as string[]), month]
+        changed = true
+      }
+    })
+    if (changed) setCategoryExcludeMonths(nextExclude)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, data.categoryExcludeMonths])
 
   // 현재달 이전 → 잠금 (수정 불가), 단 unlocked 상태면 해제
   const isPastMonth = month < currentMonth && !unlocked
