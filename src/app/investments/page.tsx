@@ -91,6 +91,7 @@ export default function InvestmentsPage() {
   const [naverResults, setNaverResults] = useState<NaverSearchItem[]>([])
   const [naverLoading, setNaverLoading] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [priceLoadingIds, setPriceLoadingIds] = useState<Set<string>>(new Set())
 
   // PRD §10-2: 장중 여부 판단 (09:00~15:30, 월~금)
   function isMarketOpen(): boolean {
@@ -110,6 +111,9 @@ export default function InvestmentsPage() {
     )
     if (targets.length === 0) return
 
+    // 로딩 중 표시
+    setPriceLoadingIds(new Set(targets.map(t => t.id)))
+
     const updated = await Promise.allSettled(
       targets.map(async inv => {
         const res = await fetch(`/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`)
@@ -126,6 +130,8 @@ export default function InvestmentsPage() {
         patches[targets[i].id] = { price: r.value.price, updatedAt: r.value.updatedAt }
       }
     })
+
+    setPriceLoadingIds(new Set())
     if (Object.keys(patches).length === 0) return
 
     const next = investments.map(inv =>
@@ -747,12 +753,14 @@ export default function InvestmentsPage() {
         {(inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker && (
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-[10px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">🔄 자동 업데이트</span>
-            {inv.currentPriceUpdatedAt ? (
+            {priceLoadingIds.has(inv.id) ? (
+              <span className="text-[10px] text-blue-400 animate-pulse">⏳ 조회 중...</span>
+            ) : inv.currentPriceUpdatedAt ? (
               <span className="text-[10px] text-gray-400">
                 최종: {new Date(inv.currentPriceUpdatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             ) : (
-              <span className="text-[10px] text-amber-500">⚠ 조회 대기 중</span>
+              <span className="text-[10px] text-amber-500">⚠ 첫 조회 대기 중 — 잠시 후 자동 갱신</span>
             )}
           </div>
         )}
