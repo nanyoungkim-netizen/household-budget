@@ -103,31 +103,38 @@ export default function InvestmentsPage() {
     return t >= 9 * 60 && t <= 15 * 60 + 30
   }
 
-  // PRD §10-2: 현재가 자동 폴링 (국내주식·ETF, ticker 있는 종목만)
+  // PRD §10-2: 현재가 자동 폴링 (국내주식·ETF → 네이버, 해외주식 → Yahoo Finance)
   const fetchPricesRef = useRef<(() => Promise<void>) | null>(null)
   fetchPricesRef.current = async () => {
-    const targets = investments.filter(
+    const domesticTargets = investments.filter(
       inv => (inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker
     )
-    if (targets.length === 0) return
-
-    // 로딩 중 표시
-    setPriceLoadingIds(new Set(targets.map(t => t.id)))
-
-    const updated = await Promise.allSettled(
-      targets.map(async inv => {
-        const res = await fetch(`/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`)
-        if (!res.ok) return null
-        const json = await res.json()
-        if (json.error || !json.price) return null
-        return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
-      })
+    const foreignTargets = investments.filter(
+      inv => inv.assetType === 'foreign_stock' && inv.ticker
     )
+    const allTargets = [...domesticTargets, ...foreignTargets]
+    if (allTargets.length === 0) return
+
+    setPriceLoadingIds(new Set(allTargets.map(t => t.id)))
+
+    const fetchPrice = async (inv: typeof investments[0]) => {
+      const isForeign = inv.assetType === 'foreign_stock'
+      const endpoint = isForeign
+        ? `/api/stock/price-foreign?symbol=${encodeURIComponent(inv.ticker!)}`
+        : `/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`
+      const res = await fetch(endpoint)
+      if (!res.ok) return null
+      const json = await res.json()
+      if (json.error || !json.price) return null
+      return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
+    }
+
+    const updated = await Promise.allSettled(allTargets.map(fetchPrice))
 
     const patches: Record<string, { price: number; updatedAt: string }> = {}
     updated.forEach((r, i) => {
       if (r.status === 'fulfilled' && r.value) {
-        patches[targets[i].id] = { price: r.value.price, updatedAt: r.value.updatedAt }
+        patches[allTargets[i].id] = { price: r.value.price, updatedAt: r.value.updatedAt }
       }
     })
 
@@ -758,7 +765,7 @@ export default function InvestmentsPage() {
         )}
 
         {/* PRD §10-2: 자동 업데이트 상태 표시 */}
-        {(inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker && (
+        {(inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund' || inv.assetType === 'foreign_stock') && inv.ticker && (
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-[10px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">🔄 자동 업데이트</span>
             {priceLoadingIds.has(inv.id) ? (

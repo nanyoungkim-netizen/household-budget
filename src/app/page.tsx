@@ -119,15 +119,23 @@ export default function Dashboard() {
   }
 
   async function refreshInvestmentPrices() {
-    const targets = investments.filter(
+    const domesticTargets = investments.filter(
       inv => (inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund') && inv.ticker
     )
+    const foreignTargets = investments.filter(
+      inv => inv.assetType === 'foreign_stock' && inv.ticker
+    )
+    const targets = [...domesticTargets, ...foreignTargets]
     if (targets.length === 0) { showToast('티커가 등록된 종목이 없어요.'); return }
     setPriceRefreshing(true)
     try {
       const results = await Promise.allSettled(
         targets.map(async inv => {
-          const res  = await fetch(`/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`)
+          const isForeign = inv.assetType === 'foreign_stock'
+          const endpoint = isForeign
+            ? `/api/stock/price-foreign?symbol=${encodeURIComponent(inv.ticker!)}`
+            : `/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`
+          const res  = await fetch(endpoint)
           const json = await res.json()
           if (json.error || !json.price) return null
           return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
