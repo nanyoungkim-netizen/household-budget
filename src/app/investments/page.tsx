@@ -92,6 +92,7 @@ export default function InvestmentsPage() {
   const [naverLoading, setNaverLoading] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [priceLoadingIds, setPriceLoadingIds] = useState<Set<string>>(new Set())
+  const [priceRefreshing, setPriceRefreshing] = useState(false)
 
   // PRD §10-2: 장중 여부 판단 (09:00~15:30, 월~금)
   function isMarketOpen(): boolean {
@@ -165,6 +166,42 @@ export default function InvestmentsPage() {
     return () => clearTimeout(pollingTimerRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [investments.length])  // 종목 수가 바뀔 때만 폴링 재설정
+
+  // 전체 종목 현재가 수동 새로고침
+  async function refreshAllPrices() {
+    const targets = investments.filter(inv => inv.ticker)
+    if (targets.length === 0) return
+    setPriceRefreshing(true)
+    setPriceLoadingIds(new Set(targets.map(t => t.id)))
+    try {
+      const results = await Promise.allSettled(
+        targets.map(async inv => {
+          const isForeign = inv.assetType === 'foreign_stock'
+          const endpoint = isForeign
+            ? `/api/stock/price-foreign?symbol=${encodeURIComponent(inv.ticker!)}`
+            : `/api/stock/price?symbol=${encodeURIComponent(inv.ticker!)}`
+          const res = await fetch(endpoint)
+          const json = await res.json()
+          if (json.error || !json.price) return null
+          return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
+        })
+      )
+      const patches: Record<string, { price: number; updatedAt: string }> = {}
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) patches[targets[i].id] = r.value
+      })
+      if (Object.keys(patches).length > 0) {
+        setInvestments(prev => prev.map(inv =>
+          patches[inv.id]
+            ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
+            : inv
+        ))
+      }
+    } catch { /* silent */ } finally {
+      setPriceRefreshing(false)
+      setPriceLoadingIds(new Set())
+    }
+  }
 
   // 단일 종목 현재가 즉시 조회 후 반영 (매수 등록 직후 자동 호출)
   async function fetchAndUpdatePrice(invId: string, ticker: string, assetType: string) {
@@ -842,6 +879,13 @@ export default function InvestmentsPage() {
           <button onClick={() => setShowTypeModal(true)}
             className="bg-gray-100 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-200 transition-colors">
             계좌유형 관리
+          </button>
+          <button
+            onClick={refreshAllPrices}
+            disabled={priceRefreshing}
+            className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">
+            <span className={`inline-block transition-transform ${priceRefreshing ? 'animate-spin' : ''}`}>🔄</span>
+            {priceRefreshing ? '조회 중...' : '현재가'}
           </button>
           <button onClick={() => openAddAccount()}
             className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
