@@ -93,6 +93,7 @@ export default function InvestmentsPage() {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [priceLoadingIds, setPriceLoadingIds] = useState<Set<string>>(new Set())
   const [priceRefreshing, setPriceRefreshing] = useState(false)
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
 
   // PRD §10-2: 장중 여부 판단 (09:00~15:30, 월~금)
   function isMarketOpen(): boolean {
@@ -151,8 +152,9 @@ export default function InvestmentsPage() {
   }
 
   useEffect(() => {
-    // 최초 1회 가격 조회
+    // 최초 1회 가격 조회 + 환율 조회
     fetchPricesRef.current?.()
+    fetchExchangeRates()
 
     const scheduleNext = () => {
       const interval = isMarketOpen() ? 60_000 : 600_000  // 장중 1분, 장외 10분
@@ -167,8 +169,18 @@ export default function InvestmentsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [investments.length])  // 종목 수가 바뀔 때만 폴링 재설정
 
+  // 환율 조회 (해외주식 원화 환산용)
+  async function fetchExchangeRates() {
+    try {
+      const res = await fetch('/api/stock/exchange-rate')
+      const json = await res.json()
+      if (json.rates && Object.keys(json.rates).length > 0) setExchangeRates(json.rates)
+    } catch { /* silent */ }
+  }
+
   // 전체 종목 현재가 수동 새로고침
   async function refreshAllPrices() {
+    fetchExchangeRates()
     const targets = investments.filter(inv => inv.ticker)
     if (targets.length === 0) return
     setPriceRefreshing(true)
@@ -191,11 +203,12 @@ export default function InvestmentsPage() {
         if (r.status === 'fulfilled' && r.value) patches[targets[i].id] = r.value
       })
       if (Object.keys(patches).length > 0) {
-        setInvestments(prev => prev.map(inv =>
+        const next = investments.map(inv =>
           patches[inv.id]
             ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
             : inv
-        ))
+        )
+        setInvestments(next)
       }
     } catch { /* silent */ } finally {
       setPriceRefreshing(false)
@@ -215,7 +228,7 @@ export default function InvestmentsPage() {
       const res = await fetch(endpoint)
       const json = await res.json()
       if (!json.error && json.price) {
-        setInvestments(prev => prev.map(inv =>
+        setInvestments(investments.map(inv =>
           inv.id === invId
             ? { ...inv, currentPrice: json.price, currentPriceUpdatedAt: json.updatedAt }
             : inv
@@ -798,6 +811,9 @@ export default function InvestmentsPage() {
                 return (
                   <>
                     <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
+                    {inv.currency !== 'KRW' && exchangeRates[inv.currency ?? 'USD'] && (
+                      <div className="text-[10px] text-blue-500 mt-0.5">≈ ₩{Math.round(currentPrice * (exchangeRates[inv.currency ?? 'USD'] ?? 0)).toLocaleString()}</div>
+                    )}
                     <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                       {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ({fmtPct(priceRate)})
                     </div>
@@ -812,6 +828,9 @@ export default function InvestmentsPage() {
                   {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
                 </div>
                 <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
+                {inv.currency !== 'KRW' && exchangeRates[inv.currency ?? 'USD'] && (
+                  <div className="text-[10px] text-blue-400 mt-0.5">≈ ₩{Math.round(evalAmt * (exchangeRates[inv.currency ?? 'USD'] ?? 0)).toLocaleString()} 환산</div>
+                )}
               </div>
             </div>
             {(h.totalFee > 0 || totalDividend > 0) && (
