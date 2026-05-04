@@ -183,19 +183,27 @@ export default function InvestmentsPage() {
       .slice(0, 5)
   }, [investmentForm.name, investments, editInvestmentId])
 
-  // PRD §10-1: 네이버 금융 검색 (국내주식·ETF만) — 디바운스 300ms
+  // PRD §10-1: 종목 검색 — 국내주식·ETF는 네이버, 해외주식은 Yahoo Finance (디바운스 300ms)
   const isNaverSearchTarget = investmentForm.assetType === 'domestic_stock' || investmentForm.assetType === 'etf_fund'
+  const isForeignSearchTarget = investmentForm.assetType === 'foreign_stock'
 
   const triggerNaverSearch = useCallback((q: string) => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    if (!q || q.length < 2 || !isNaverSearchTarget) {
+    if (!q || q.length < 1) {
+      setNaverResults([])
+      return
+    }
+    if (!isNaverSearchTarget && !isForeignSearchTarget) {
       setNaverResults([])
       return
     }
     searchTimerRef.current = setTimeout(async () => {
       setNaverLoading(true)
       try {
-        const res = await fetch(`/api/stock/search?q=${encodeURIComponent(q)}`)
+        const endpoint = isForeignSearchTarget
+          ? `/api/stock/search-foreign?q=${encodeURIComponent(q)}`
+          : `/api/stock/search?q=${encodeURIComponent(q)}`
+        const res = await fetch(endpoint)
         const json = await res.json()
         setNaverResults(json.items ?? [])
       } catch {
@@ -204,7 +212,7 @@ export default function InvestmentsPage() {
         setNaverLoading(false)
       }
     }, 300)
-  }, [isNaverSearchTarget])
+  }, [isNaverSearchTarget, isForeignSearchTarget])
 
   // 거래 모달
   const [showTradeModal, setShowTradeModal] = useState(false)
@@ -1599,9 +1607,9 @@ export default function InvestmentsPage() {
                     {/* 네이버 금융 검색 결과 */}
                     {naverResults.length > 0 && (
                       <>
-                        {isNaverSearchTarget && (
+                        {(isNaverSearchTarget || isForeignSearchTarget) && (
                           <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100">
-                            🔍 네이버 금융 검색
+                            {isForeignSearchTarget ? '🌏 Yahoo Finance 검색' : '🔍 네이버 금융 검색'}
                           </div>
                         )}
                         {naverResults.map((item, idx) => (
@@ -1609,7 +1617,12 @@ export default function InvestmentsPage() {
                             key={`naver-${idx}`}
                             onMouseDown={e => {
                               e.preventDefault()
-                              setInvestmentForm(f => ({ ...f, name: item.name, ticker: item.ticker }))
+                              setInvestmentForm(f => ({
+                                ...f,
+                                name: item.name,
+                                ticker: item.ticker,
+                                ...(isForeignSearchTarget ? { currency: 'USD' } : {})
+                              }))
                               setNaverResults([])
                               setNameDropdownOpen(false)
                             }}
