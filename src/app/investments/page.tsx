@@ -166,6 +166,29 @@ export default function InvestmentsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [investments.length])  // 종목 수가 바뀔 때만 폴링 재설정
 
+  // 단일 종목 현재가 즉시 조회 후 반영 (매수 등록 직후 자동 호출)
+  async function fetchAndUpdatePrice(invId: string, ticker: string, assetType: string) {
+    if (!ticker) return
+    setPriceLoadingIds(prev => new Set(prev).add(invId))
+    try {
+      const isForeign = assetType === 'foreign_stock'
+      const endpoint = isForeign
+        ? `/api/stock/price-foreign?symbol=${encodeURIComponent(ticker)}`
+        : `/api/stock/price?symbol=${encodeURIComponent(ticker)}`
+      const res = await fetch(endpoint)
+      const json = await res.json()
+      if (!json.error && json.price) {
+        setInvestments(prev => prev.map(inv =>
+          inv.id === invId
+            ? { ...inv, currentPrice: json.price, currentPriceUpdatedAt: json.updatedAt }
+            : inv
+        ))
+      }
+    } catch { /* silent */ } finally {
+      setPriceLoadingIds(prev => { const s = new Set(prev); s.delete(invId); return s })
+    }
+  }
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -451,6 +474,10 @@ export default function InvestmentsPage() {
         }
       }
       setInvestments([...investments, finalInv])
+      // 티커 있으면 즉시 현재가 조회
+      if (finalInv.ticker) {
+        setTimeout(() => fetchAndUpdatePrice(invId, finalInv.ticker!, finalInv.assetType), 100)
+      }
     }
     setShowInvestmentModal(false)
     setEditInvestmentId(null)
@@ -494,6 +521,11 @@ export default function InvestmentsPage() {
     } else {
       const newTrade: InvestmentTrade = { id: `tr${Date.now()}`, investmentId: tradeInvestmentId, ...tradeForm }
       setInvestmentTrades([...investmentTrades, newTrade])
+    }
+    // 매수/매도 등록 후 해당 종목 현재가 즉시 갱신
+    const parentInv = investments.find(i => i.id === tradeInvestmentId)
+    if (parentInv?.ticker) {
+      setTimeout(() => fetchAndUpdatePrice(parentInv.id, parentInv.ticker!, parentInv.assetType), 100)
     }
     setShowTradeModal(false)
     setEditTradeId(null)
