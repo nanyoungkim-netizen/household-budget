@@ -491,17 +491,25 @@ export default function InvestmentsPage() {
     const byAccount: Record<string, { buy: number; eval: number; divs: number }> = {}
 
     holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalFee: invFee, realizedPnl }) => {
+      const isForeign = investment.currency !== 'KRW'
+      const fxRate = isForeign ? (exchangeRates[investment.currency] ?? 0) : 1
+      const toKRW = (v: number) => isForeign && fxRate > 0 ? Math.round(v * fxRate) : v
+
       const currentPrice = investment.currentPrice ?? 0
-      const evalAmt = holdingQty * currentPrice
-      totalBuy += totalBuyAmt
-      totalEval += evalAmt
-      totalRealized += realizedPnl
-      totalFee += invFee
+      const evalAmt    = toKRW(holdingQty * currentPrice)
+      const buyAmtKRW  = toKRW(totalBuyAmt)
+      const realizedKRW = toKRW(realizedPnl)
+      const feeKRW     = toKRW(invFee)
+
+      totalBuy     += buyAmtKRW
+      totalEval    += evalAmt
+      totalRealized += realizedKRW
+      totalFee     += feeKRW
       const type = investment.assetType
       byType[type] = (byType[type] || 0) + evalAmt
       const aId = investment.accountId ?? '__none__'
       if (!byAccount[aId]) byAccount[aId] = { buy: 0, eval: 0, divs: 0 }
-      byAccount[aId].buy += totalBuyAmt
+      byAccount[aId].buy  += buyAmtKRW
       byAccount[aId].eval += evalAmt
     })
 
@@ -517,7 +525,7 @@ export default function InvestmentsPage() {
     const returnRate = totalBuy > 0 ? (unrealizedPnl / totalBuy) * 100 : 0
     const totalReturn = unrealizedPnl + totalRealized + totalDividend
     return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, totalDividend, totalFee, totalReturn, byType, byAccount }
-  }, [holdingsMap, investmentDividends])
+  }, [holdingsMap, investmentDividends, exchangeRates])
 
   // ── F-03: 계좌 유형 헬퍼 ─────────────────────────────────────────────────
   function getTypeLabel(typeId: string): string {
