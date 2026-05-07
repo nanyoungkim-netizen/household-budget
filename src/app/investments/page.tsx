@@ -25,7 +25,7 @@ const CURRENCIES: InvestmentCurrency[] = ['KRW', 'USD', 'USDT', 'other']
 
 const ACCOUNT_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6']
 
-type PageTab = 'dashboard' | 'holdings' | 'trades' | 'portfolio'
+type PageTab = 'dashboard' | 'holdings' | 'trades' | 'dividends' | 'portfolio'
 
 const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
   assetType: 'domestic_stock',
@@ -343,6 +343,8 @@ export default function InvestmentsPage() {
   const [dividendForm, setDividendForm] = useState<Omit<InvestmentDividend, 'id'>>(EMPTY_DIVIDEND)
   const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
   const [expandedDividendAccId, setExpandedDividendAccId] = useState<string | null>(null)
+  const [dividendFilterAccId, setDividendFilterAccId] = useState<string | null>(null)
+  const [dividendFilterYear, setDividendFilterYear] = useState<string | null>(null)
 
   // F-05: 계좌별 접기/펼치기 — 기본값 접힌 상태 (expandedAccounts에 없으면 접힘)
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
@@ -605,10 +607,11 @@ export default function InvestmentsPage() {
   }
 
   // ── 배당금 CRUD ────────────────────────────────────────────────────────────
-  function openAddDividend(accountId: string) {
-    setDividendAccountId(accountId)
+  function openAddDividend(accountId?: string) {
+    const accId = accountId ?? (investmentAccounts.length === 1 ? investmentAccounts[0].id : '')
+    setDividendAccountId(accId || null)
     setEditDividendId(null)
-    setDividendForm({ ...EMPTY_DIVIDEND, accountId, investmentId: undefined })
+    setDividendForm({ ...EMPTY_DIVIDEND, accountId: accId, investmentId: undefined })
     setShowDividendModal(true)
   }
 
@@ -951,7 +954,7 @@ export default function InvestmentsPage() {
 
       {/* 탭 */}
       <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-1 overflow-x-auto">
-        {([['dashboard','📊 대시보드'],['holdings','💼 보유 종목'],['trades','📋 거래 이력'],['portfolio','🎯 포트폴리오']] as const).map(([key, label]) => (
+        {([['dashboard','📊 대시보드'],['holdings','💼 보유 종목'],['trades','📋 거래 이력'],['dividends','💰 배당 내역'],['portfolio','🎯 포트폴리오']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setPageTab(key)}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pageTab === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
             {label}
@@ -1416,6 +1419,133 @@ export default function InvestmentsPage() {
           )}
         </div>
       )}
+
+      {/* ══ 배당 내역 탭 ══════════════════════════════════════════════════════ */}
+      {pageTab === 'dividends' && (() => {
+        const allYears = [...new Set(investmentDividends.map(d => d.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a))
+        const filtered = investmentDividends
+          .filter(d => !dividendFilterAccId || d.accountId === dividendFilterAccId)
+          .filter(d => !dividendFilterYear || d.date.startsWith(dividendFilterYear))
+          .sort((a, b) => b.date.localeCompare(a.date))
+        const totalGross = filtered.reduce((s, d) => s + d.grossAmount, 0)
+        const totalTax   = filtered.reduce((s, d) => s + d.tax, 0)
+        const totalNet   = filtered.reduce((s, d) => s + d.netAmount, 0)
+
+        return (
+          <div className="space-y-4">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-500">{investmentDividends.length}건 등록됨</div>
+              <button
+                onClick={() => openAddDividend()}
+                className="bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-emerald-700 transition-colors">
+                + 배당 입력
+              </button>
+            </div>
+
+            {/* 필터 */}
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={dividendFilterAccId ?? ''}
+                onChange={e => setDividendFilterAccId(e.target.value || null)}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                <option value="">전체 계좌</option>
+                {investmentAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <select
+                value={dividendFilterYear ?? ''}
+                onChange={e => setDividendFilterYear(e.target.value || null)}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                <option value="">전체 연도</option>
+                {allYears.map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
+            </div>
+
+            {/* 요약 카드 */}
+            {filtered.length > 0 && (
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white">
+                <div className="text-xs opacity-70 mb-3">배당 수익 요약{dividendFilterYear ? ` · ${dividendFilterYear}년` : ''}{dividendFilterAccId ? ` · ${investmentAccounts.find(a => a.id === dividendFilterAccId)?.name}` : ''}</div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white/10 rounded-xl p-3">
+                    <div className="text-xs opacity-70 mb-1">세전 배당금</div>
+                    <div className="text-sm font-bold">{fmtKRW(Math.round(totalGross))}</div>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-3">
+                    <div className="text-xs opacity-70 mb-1">원천징수세</div>
+                    <div className="text-sm font-bold text-red-300">-{fmtKRW(Math.round(totalTax))}</div>
+                  </div>
+                  <div className="bg-white/15 rounded-xl p-3 border border-white/20">
+                    <div className="text-xs opacity-70 mb-1">실수령액</div>
+                    <div className="text-sm font-bold text-emerald-200">+{fmtKRW(Math.round(totalNet))}</div>
+                  </div>
+                </div>
+                {totalGross > 0 && (
+                  <div className="mt-2 text-xs opacity-60 text-right">
+                    실효세율 {((totalTax / totalGross) * 100).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 배당 목록 */}
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <div className="text-4xl mb-2">💰</div>
+                <div className="text-sm mb-1">아직 배당 내역이 없습니다</div>
+                <div className="text-xs text-gray-400 mb-4">보유 종목 탭이나 위의 버튼으로 배당금을 기록해보세요</div>
+                <button onClick={() => openAddDividend()}
+                  className="bg-emerald-600 text-white text-sm px-6 py-2.5 rounded-xl hover:bg-emerald-700 transition-colors">
+                  + 배당 입력
+                </button>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <div className="grid grid-cols-[1fr_auto] text-xs font-semibold text-gray-400 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                  <span>날짜 / 종목 / 계좌</span>
+                  <span className="text-right">금액</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {filtered.map(d => {
+                    const acc = investmentAccounts.find(a => a.id === d.accountId)
+                    const invName = d.investmentId ? investments.find(i => i.id === d.investmentId)?.name : undefined
+                    return (
+                      <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-base flex-shrink-0">💰</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm font-medium text-gray-900">{d.date}</span>
+                            {invName && (
+                              <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">{invName}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {acc && (
+                              <span className="text-xs text-gray-400">{acc.name}</span>
+                            )}
+                            {d.note && <span className="text-xs text-gray-400">· {d.note}</span>}
+                            {d.grossAmount > 0 && d.grossAmount !== d.netAmount && (
+                              <span className="text-xs text-gray-400">세전 {fmtKRW(d.grossAmount)} / 세금 -{fmtKRW(d.tax)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-sm font-bold text-emerald-700">+{fmtKRW(d.netAmount)}</div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button onClick={() => openEditDividend(d)} className="text-gray-400 hover:text-blue-500 p-1 rounded-lg hover:bg-blue-50 transition-colors text-xs">✏️</button>
+                          <button onClick={() => setDeleteDividendId(d.id)} className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors text-xs">🗑️</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ══ 포트폴리오 관리 탭 (F-05) ══════════════════════════════════════════ */}
       {pageTab === 'portfolio' && (
@@ -1941,11 +2071,21 @@ export default function InvestmentsPage() {
               <button onClick={() => { setShowDividendModal(false); setEditDividendId(null) }} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
-              {dividendAccountId && (
-                <div className="bg-emerald-50 rounded-xl px-3 py-2 text-xs text-emerald-700 font-medium">
-                  계좌: {investmentAccounts.find(a => a.id === dividendAccountId)?.name ?? dividendAccountId}
-                </div>
-              )}
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">계좌 *</label>
+                <select
+                  value={dividendAccountId ?? ''}
+                  onChange={e => {
+                    setDividendAccountId(e.target.value || null)
+                    setDividendForm(f => ({ ...f, accountId: e.target.value, investmentId: undefined }))
+                  }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                  <option value="">계좌 선택</option>
+                  {investmentAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">배당 종목 (선택)</label>
                 <select
@@ -2008,7 +2148,7 @@ export default function InvestmentsPage() {
                   </button>
                 )}
                 <button onClick={handleSaveDividend}
-                  disabled={!dividendAccountId || dividendForm.netAmount <= 0}
+                  disabled={!dividendAccountId || !dividendForm.accountId || dividendForm.netAmount <= 0}
                   className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                   {editDividendId ? '수정 완료' : '저장'}
                 </button>
