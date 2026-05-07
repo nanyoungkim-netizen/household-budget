@@ -182,6 +182,8 @@ export interface InvestmentTrade {
   exchangeRate?: number   // 환율 (외화 거래 시)
   fee?: number            // 수수료
   note?: string
+  cashAccountId?: string   // 자금 출처/입금 현금 계좌 (Account.id)
+  linkedTxId?: string      // 자동 생성된 Transaction.id
 }
 
 // F-03: 투자 계좌 유형
@@ -222,11 +224,13 @@ export interface Investment {
 // PRD: 배당금 기록
 export interface InvestmentDividend {
   id: string
-  accountId: string      // 소속 계좌 ID
+  accountId: string      // 소속 투자계좌 ID (InvestmentAccount)
   investmentId?: string  // 배당 발생 종목 (선택사항, 기존 호환용)
   date: string          // 입금일 (YYYY-MM-DD)
   grossAmount: number   // 세전 배당금
   tax: number           // 원천징수세액
   netAmount: number     // 실수령액
   note?: string
+  cashAccountId?: string  // 배당금 입금 현금 계좌 (Account.id)
+  linkedTxId?: string     // 자동 생성된 Transaction.id
 }
