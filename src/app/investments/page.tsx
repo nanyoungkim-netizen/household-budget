@@ -380,7 +380,12 @@ export default function InvestmentsPage() {
   function handleSaveDeposit() {
     const amount = parseAmt(depositAmount)
     if (!depositAccountId || amount <= 0) return
-    if (editDepositId) {
+    if (editDepositId?.startsWith('__legacy__')) {
+      // 기존잔액 수정 → cashDeposits 직접 업데이트
+      setInvestmentAccounts(investmentAccounts.map(a =>
+        a.id === depositAccountId ? { ...a, cashDeposits: amount } : a
+      ))
+    } else if (editDepositId) {
       setInvestmentCashDeposits(investmentCashDeposits.map(d =>
         d.id === editDepositId ? { ...d, amount, date: depositDate, note: depositNote || undefined } : d
       ))
@@ -1276,29 +1281,57 @@ export default function InvestmentsPage() {
                                 + 입금
                               </button>
                             </div>
-                            {accDeposits.length === 0 ? (
-                              <div className="text-xs text-amber-500 text-center py-2">입금 내역이 없습니다</div>
-                            ) : (
-                              <div className="space-y-1.5">
-                                {accDeposits.map(dep => (
-                                  <div key={dep.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400">{dep.date}</span>
-                                        {dep.note && <span className="text-xs text-gray-500 truncate">{dep.note}</span>}
+                            {(() => {
+                              const legacy = acc.cashDeposits ?? 0
+                              const hasLegacy = legacy > 0
+                              const hasNew = accDeposits.length > 0
+                              if (!hasLegacy && !hasNew) {
+                                return <div className="text-xs text-amber-500 text-center py-2">입금 내역이 없습니다</div>
+                              }
+                              return (
+                                <div className="space-y-1.5">
+                                  {hasLegacy && (
+                                    <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">기존잔액</span>
+                                        </div>
+                                        <div className="text-sm font-semibold text-amber-700">{fmtKRW(legacy)}</div>
                                       </div>
-                                      <div className="text-sm font-semibold text-amber-700">{fmtKRW(dep.amount)}</div>
+                                      <div className="flex gap-1 flex-shrink-0 ml-2">
+                                        <button
+                                          onClick={() => {
+                                            setDepositAccountId(acc.id)
+                                            setDepositAmount(String(legacy))
+                                            setDepositDate(today)
+                                            setDepositNote('기존잔액수정')
+                                            setEditDepositId('__legacy__' + acc.id)
+                                            setShowDepositModal(true)
+                                          }}
+                                          className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
+                                      </div>
                                     </div>
-                                    <div className="flex gap-1 flex-shrink-0 ml-2">
-                                      <button onClick={() => openEditDeposit(dep)}
-                                        className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
-                                      <button onClick={() => setDeleteDepositId(dep.id)}
-                                        className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded hover:bg-red-50">🗑️</button>
+                                  )}
+                                  {accDeposits.map(dep => (
+                                    <div key={dep.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">{dep.date}</span>
+                                          {dep.note && <span className="text-xs text-gray-500 truncate">{dep.note}</span>}
+                                        </div>
+                                        <div className="text-sm font-semibold text-amber-700">{fmtKRW(dep.amount)}</div>
+                                      </div>
+                                      <div className="flex gap-1 flex-shrink-0 ml-2">
+                                        <button onClick={() => openEditDeposit(dep)}
+                                          className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
+                                        <button onClick={() => setDeleteDepositId(dep.id)}
+                                          className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded hover:bg-red-50">🗑️</button>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                  ))}
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       })()}
