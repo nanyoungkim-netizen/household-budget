@@ -1361,89 +1361,99 @@ export default function InvestmentsPage() {
       {pageTab === 'trades' && (
         <div>
           {/* 타입 필터 */}
-          <div className="flex gap-2 mb-3">
-            {([['trade', '📋 매수/매도'], ['deposit', '💵 예수금 입금'], ['dividend', '💰 배당']] as const).map(([type, label]) => (
+          <div className="flex gap-1.5 mb-4 bg-gray-100 rounded-2xl p-1">
+            {([['trade', '매수/매도'], ['deposit', '예수금'], ['dividend', '배당']] as const).map(([type, label]) => (
               <button key={type} onClick={() => setTradeTypeFilter(type)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${tradeTypeFilter === type ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${tradeTypeFilter === type ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'}`}>
                 {label}
               </button>
             ))}
           </div>
 
-          {/* ── 예수금 입금 목록 ── */}
+          {/* 계좌 필터 — 전탭 공통 */}
+          {investmentAccounts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              <button onClick={() => setSelectedTradeAccountId(null)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!selectedTradeAccountId ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                전체
+              </button>
+              {investmentAccounts.map(acc => (
+                <button key={acc.id} onClick={() => setSelectedTradeAccountId(prev => prev === acc.id ? null : acc.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${selectedTradeAccountId === acc.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                  {acc.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── 예수금 변동 내역 ── */}
           {tradeTypeFilter === 'deposit' && (() => {
-            const legacyRows = investmentAccounts
-              .filter(a => Number(a.cashDeposits ?? 0) !== 0)
-              .map(a => ({ id: '__legacy__' + a.id, accountId: a.id, date: '', amount: Number(a.cashDeposits), note: '기존잔액', isLegacy: true }))
-            const newRows = investmentCashDeposits
+            const rows = investmentCashDeposits
+              .filter(d => !selectedTradeAccountId || d.accountId === selectedTradeAccountId)
               .slice()
               .sort((a, b) => b.date.localeCompare(a.date))
-              .map(d => ({ ...d, isLegacy: false }))
-            const allRows = [...legacyRows, ...newRows]
+            const totalIn  = rows.filter(d => d.amount > 0).reduce((s, d) => s + d.amount, 0)
+            const totalOut = rows.filter(d => d.amount < 0).reduce((s, d) => s + d.amount, 0)
+            const net = totalIn + totalOut
             return (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-xs text-gray-400">{allRows.length}건</div>
-                  <div className="flex gap-2">
-                    {investmentAccounts.length > 0 && (
-                      <select value={depositAccountId ?? ''} onChange={e => setDepositAccountId(e.target.value || null)}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
-                        <option value="">전체 계좌</option>
-                        {investmentAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                    )}
-                    <button onClick={() => openDeposit(investmentAccounts[0]?.id ?? '')}
-                      className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-xl hover:bg-amber-600 transition-colors font-medium">
-                      + 입금
-                    </button>
-                  </div>
-                </div>
-                {allRows.length === 0 && (
-                  <div className="text-center py-12 text-gray-400">
-                    <div className="text-3xl mb-2">💵</div>
-                    <div className="text-sm">예수금 입금 내역이 없습니다</div>
+              <div className="space-y-3">
+                {/* 요약 카드 */}
+                {rows.length > 0 && (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">입금 합계</div>
+                      <div className="text-sm font-bold text-emerald-600">+{totalIn.toLocaleString('ko-KR')}원</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">차감 합계</div>
+                      <div className="text-sm font-bold text-red-500">{totalOut.toLocaleString('ko-KR')}원</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">순 변동</div>
+                      <div className={`text-sm font-bold ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
+                        {net >= 0 ? '+' : ''}{net.toLocaleString('ko-KR')}원
+                      </div>
+                    </div>
                   </div>
                 )}
-                {allRows.filter(r => !depositAccountId || r.accountId === depositAccountId).map(row => {
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-400">{rows.length}건</div>
+                  <button onClick={() => openDeposit(selectedTradeAccountId ?? investmentAccounts[0]?.id ?? '')}
+                    className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-xl hover:bg-amber-600 transition-colors font-medium">
+                    + 입금
+                  </button>
+                </div>
+                {rows.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <div className="text-3xl mb-2">💵</div>
+                    <div className="text-sm">예수금 변동 내역이 없습니다</div>
+                  </div>
+                )}
+                {rows.map(row => {
                   const accName = investmentAccounts.find(a => a.id === row.accountId)?.name ?? ''
+                  const isIn = row.amount > 0
                   return (
                     <div key={row.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-base flex-shrink-0">💵</div>
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${isIn ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                        {isIn ? '⬆' : '⬇'}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between">
-                          <span className="text-sm font-semibold text-gray-900">{fmtKRW(row.amount)}</span>
-                          {row.isLegacy && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-2">기존잔액</span>}
+                          <span className={`text-sm font-bold ${isIn ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {isIn ? '+' : ''}{row.amount.toLocaleString('ko-KR')}원
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                          {row.date && <span>{row.date}</span>}
+                          <span>{row.date}</span>
                           <span className="text-indigo-400">{accName}</span>
-                          {!row.isLegacy && row.note && <span>{row.note}</span>}
+                          {row.note && <span>{row.note}</span>}
                         </div>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
-                        {!row.isLegacy ? (
-                          <>
-                            <button onClick={() => openEditDeposit(investmentCashDeposits.find(d => d.id === row.id)!)}
-                              className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
-                            <button onClick={() => setDeleteDepositId(row.id)}
-                              className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => {
-                              const acc = investmentAccounts.find(a => a.id === row.accountId)!
-                              setDepositAccountId(acc.id)
-                              setDepositAmount(String(Math.abs(row.amount)))
-                              setDepositDate(today)
-                              setDepositNote('')
-                              setEditDepositId(row.id)
-                              setShowDepositModal(true)
-                            }} className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
-                            <button onClick={() => setInvestmentAccounts(investmentAccounts.map(a =>
-                              a.id === row.accountId ? { ...a, cashDeposits: 0 } : a
-                            ))} className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
-                          </>
-                        )}
+                        <button onClick={() => openEditDeposit(row)}
+                          className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
+                        <button onClick={() => setDeleteDepositId(row.id)}
+                          className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
                       </div>
                     </div>
                   )
@@ -1454,25 +1464,45 @@ export default function InvestmentsPage() {
 
           {/* ── 배당 내역 목록 ── */}
           {tradeTypeFilter === 'dividend' && (() => {
-            const sorted = investmentDividends.slice().sort((a, b) => b.date.localeCompare(a.date))
-            const totalGross = sorted.reduce((s, d) => s + d.grossAmount, 0)
-            const totalNet   = sorted.reduce((s, d) => s + d.netAmount, 0)
+            const rows = investmentDividends
+              .filter(d => !selectedTradeAccountId || d.accountId === selectedTradeAccountId)
+              .slice().sort((a, b) => b.date.localeCompare(a.date))
+            const totalGross = rows.reduce((s, d) => s + d.grossAmount, 0)
+            const totalTax   = rows.reduce((s, d) => s + d.tax, 0)
+            const totalNet   = rows.reduce((s, d) => s + d.netAmount, 0)
             return (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-xs text-gray-400">{sorted.length}건 · 실수령 합계 {fmtKRW(totalNet)}</div>
-                  <button onClick={() => openAddDividend(investmentAccounts[0]?.id)}
+              <div className="space-y-3">
+                {/* 요약 카드 */}
+                {rows.length > 0 && (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">세전 합계</div>
+                      <div className="text-sm font-bold text-gray-800">{fmtKRW(totalGross)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">원천징수세</div>
+                      <div className="text-sm font-bold text-red-400">-{fmtKRW(totalTax)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">실수령 합계</div>
+                      <div className="text-sm font-bold text-emerald-600">+{fmtKRW(totalNet)}</div>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-400">{rows.length}건</div>
+                  <button onClick={() => openAddDividend(selectedTradeAccountId ?? investmentAccounts[0]?.id)}
                     className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl hover:bg-emerald-700 transition-colors font-medium">
                     + 배당 입력
                   </button>
                 </div>
-                {sorted.length === 0 && (
+                {rows.length === 0 && (
                   <div className="text-center py-12 text-gray-400">
                     <div className="text-3xl mb-2">💰</div>
                     <div className="text-sm">배당 내역이 없습니다</div>
                   </div>
                 )}
-                {sorted.map(d => {
+                {rows.map(d => {
                   const accName = investmentAccounts.find(a => a.id === d.accountId)?.name ?? ''
                   const inv = d.investmentId ? investments.find(i => i.id === d.investmentId) : null
                   return (
@@ -1480,8 +1510,10 @@ export default function InvestmentsPage() {
                       <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-base flex-shrink-0">💰</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between">
-                          <span className="text-sm font-semibold text-emerald-700">+{fmtKRW(d.netAmount)}</span>
-                          <span className="text-xs text-gray-400 ml-2">세전 {fmtKRW(d.grossAmount)}</span>
+                          <span className="text-sm font-bold text-emerald-700">+{fmtKRW(d.netAmount)}</span>
+                          {d.grossAmount !== d.netAmount && (
+                            <span className="text-xs text-gray-400">세전 {fmtKRW(d.grossAmount)}</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
                           <span>{d.date}</span>
@@ -1491,7 +1523,7 @@ export default function InvestmentsPage() {
                         </div>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
-                        <button onClick={() => openEditDividend(investmentDividends.find(x => x.id === d.id)!)}
+                        <button onClick={() => openEditDividend(d)}
                           className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
                         <button onClick={() => setDeleteDividendId(d.id)}
                           className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
@@ -1505,23 +1537,34 @@ export default function InvestmentsPage() {
 
           {/* ── 매수/매도 거래 목록 ── */}
           {tradeTypeFilter === 'trade' && <>
-          {/* 계좌 필터 (Row 1) */}
-          {investmentAccounts.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              <button onClick={() => { setSelectedTradeAccountId(null); setSelectedTradeInvName(null) }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!selectedTradeAccountId ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
-                전체 계좌
-              </button>
-              {investmentAccounts.map(acc => (
-                <button key={acc.id} onClick={() => { setSelectedTradeAccountId(prev => prev === acc.id ? null : acc.id); setSelectedTradeInvName(null) }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${selectedTradeAccountId === acc.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
-                  {acc.name}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* 요약 카드 */}
+          {(() => {
+            const filtered = selectedTradeAccountId
+              ? investmentTrades.filter(t => investments.find(i => i.id === t.investmentId)?.accountId === selectedTradeAccountId)
+              : investmentTrades
+            if (filtered.length === 0) return null
+            const buyAmt  = filtered.filter(t => t.type === 'buy').reduce((s, t) => s + t.quantity * t.price, 0)
+            const sellAmt = filtered.filter(t => t.type === 'sell').reduce((s, t) => s + t.quantity * t.price, 0)
+            const feeAmt  = filtered.reduce((s, t) => s + (t.fee ?? 0), 0)
+            return (
+              <div className="bg-white rounded-2xl p-4 shadow-sm grid grid-cols-3 gap-3 text-center mb-4">
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">매수 합계</div>
+                  <div className="text-sm font-bold text-red-500">-{fmtKRW(Math.round(buyAmt))}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">매도 합계</div>
+                  <div className="text-sm font-bold text-emerald-600">+{fmtKRW(Math.round(sellAmt))}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">총 수수료</div>
+                  <div className="text-sm font-bold text-gray-500">{fmtKRW(Math.round(feeAmt))}</div>
+                </div>
+              </div>
+            )
+          })()}
 
-          {/* 종목 필터 (Row 2) — 이름 기준 중복 제거 */}
+          {/* 종목 필터 — 이름 기준 중복 제거 */}
           {tradeInvNames.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={() => setSelectedTradeInvName(null)}
