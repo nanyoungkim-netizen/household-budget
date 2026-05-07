@@ -325,6 +325,7 @@ export default function InvestmentsPage() {
   const [selectedTradeAccountId, setSelectedTradeAccountId] = useState<string | null>(null)
   const [selectedTradeInvName, setSelectedTradeInvName] = useState<string | null>(null)
   const [collapsedTradeInvIds, setCollapsedTradeInvIds] = useState<Set<string>>(new Set())
+  const [tradeTypeFilter, setTradeTypeFilter] = useState<'trade' | 'deposit' | 'dividend'>('trade')
 
   // 계좌 모달
   const [showAccountModal, setShowAccountModal] = useState(false)
@@ -1224,10 +1225,6 @@ export default function InvestmentsPage() {
                       className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-medium">
                       입금
                     </button>
-                    <button onClick={() => setShowDepositHistoryAccId(prev => prev === acc.id ? null : acc.id)}
-                      className="text-xs bg-gray-50 text-gray-500 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors font-medium">
-                      내역
-                    </button>
                     <button onClick={() => openAddInvestment(acc.id)}
                       className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
                       + 종목
@@ -1267,119 +1264,6 @@ export default function InvestmentsPage() {
                         </div>
                       )}
 
-                      {/* ── 예수금 입금 내역 ── */}
-                      {showDepositHistoryAccId === acc.id && (() => {
-                        const accDeposits = investmentCashDeposits
-                          .filter(d => d.accountId === acc.id)
-                          .sort((a, b) => b.date.localeCompare(a.date))
-                        return (
-                          <div className="bg-amber-50 rounded-xl p-3 mb-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-xs font-semibold text-amber-700">💵 예수금 입금 내역</div>
-                              <button onClick={() => openDeposit(acc.id)}
-                                className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600 transition-colors">
-                                + 입금
-                              </button>
-                            </div>
-                            {(() => {
-                              const legacy = Number(acc.cashDeposits ?? 0)
-                              const hasNew = accDeposits.length > 0
-                              if (legacy === 0 && !hasNew) {
-                                return <div className="text-xs text-amber-500 text-center py-2">입금 내역이 없습니다</div>
-                              }
-                              return (
-                                <div className="space-y-1.5">
-                                  {/* 기존잔액: 0보다 크거나, 내역이 없을 때도 표시 */}
-                                  {legacy !== 0 && (
-                                    <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                                      <div className="min-w-0 flex-1">
-                                        <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">기존잔액</span>
-                                        <div className="text-sm font-semibold text-amber-700 mt-0.5">{fmtKRW(legacy)}</div>
-                                      </div>
-                                      <div className="flex gap-1 flex-shrink-0 ml-2">
-                                        <button
-                                          onClick={() => {
-                                            setDepositAccountId(acc.id)
-                                            setDepositAmount(String(Math.abs(legacy)))
-                                            setDepositDate(today)
-                                            setDepositNote('')
-                                            setEditDepositId('__legacy__' + acc.id)
-                                            setShowDepositModal(true)
-                                          }}
-                                          className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
-                                        <button
-                                          onClick={() => setInvestmentAccounts(investmentAccounts.map(a =>
-                                            a.id === acc.id ? { ...a, cashDeposits: 0 } : a
-                                          ))}
-                                          className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded hover:bg-red-50">🗑️</button>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {accDeposits.map(dep => (
-                                    <div key={dep.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-gray-400">{dep.date}</span>
-                                          {dep.note && <span className="text-xs text-gray-500 truncate">{dep.note}</span>}
-                                        </div>
-                                        <div className="text-sm font-semibold text-amber-700">{fmtKRW(dep.amount)}</div>
-                                      </div>
-                                      <div className="flex gap-1 flex-shrink-0 ml-2">
-                                        <button onClick={() => openEditDeposit(dep)}
-                                          className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
-                                        <button onClick={() => setDeleteDepositId(dep.id)}
-                                          className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded hover:bg-red-50">🗑️</button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )
-                            })()}
-                          </div>
-                        )
-                      })()}
-
-                      {accDividends.length > 0 && (
-                        <div className="bg-emerald-50 rounded-xl p-3 mt-2 mb-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div>
-                              <div className="text-xs font-semibold text-emerald-700">💰 예수금 잔고 (배당 누계)</div>
-                              <div className="text-base font-bold text-emerald-700">
-                                +{fmtKRW(accDividends.reduce((s, d) => s + d.netAmount, 0))}
-                              </div>
-                            </div>
-                            <div className="text-xs text-emerald-500">{accDividends.length}건</div>
-                          </div>
-                          <div className="space-y-1">
-                            {displayDividends.map(d => {
-                              const invName = d.investmentId ? investments.find(i => i.id === d.investmentId)?.name : undefined
-                              return (
-                                <div key={d.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs text-gray-700 font-medium">{d.date}</div>
-                                    {invName && <div className="text-xs text-gray-400">{invName}</div>}
-                                    {d.note && <div className="text-xs text-gray-400">{d.note}</div>}
-                                  </div>
-                                  <div className="text-right text-xs text-gray-400 flex-shrink-0">
-                                    세후 <span className="text-emerald-600 font-semibold">{fmtKRW(d.netAmount)}</span>
-                                  </div>
-                                  <div className="flex gap-1 flex-shrink-0">
-                                    <button onClick={() => openEditDividend(d)} className="text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded text-xs">✏️</button>
-                                    <button onClick={() => setDeleteDividendId(d.id)} className="text-red-400 hover:text-red-600 px-1 py-0.5 rounded text-xs">🗑️</button>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                          {accDividends.length > 3 && (
-                            <button
-                              onClick={() => setExpandedDividendAccId(prev => prev === acc.id ? null : acc.id)}
-                              className="mt-2 w-full text-xs text-emerald-600 hover:text-emerald-700 font-medium">
-                              {isAccDivExpanded ? '접기 ▲' : `더보기 (${accDividends.length - 3}건 더) ▼`}
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </>
                   )
                 })()}
@@ -1414,6 +1298,151 @@ export default function InvestmentsPage() {
       {/* ══ 거래 이력 탭 ══════════════════════════════════════════════════════ */}
       {pageTab === 'trades' && (
         <div>
+          {/* 타입 필터 */}
+          <div className="flex gap-2 mb-3">
+            {([['trade', '📋 매수/매도'], ['deposit', '💵 예수금 입금'], ['dividend', '💰 배당']] as const).map(([type, label]) => (
+              <button key={type} onClick={() => setTradeTypeFilter(type)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${tradeTypeFilter === type ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── 예수금 입금 목록 ── */}
+          {tradeTypeFilter === 'deposit' && (() => {
+            const legacyRows = investmentAccounts
+              .filter(a => Number(a.cashDeposits ?? 0) !== 0)
+              .map(a => ({ id: '__legacy__' + a.id, accountId: a.id, date: '', amount: Number(a.cashDeposits), note: '기존잔액', isLegacy: true }))
+            const newRows = investmentCashDeposits
+              .slice()
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .map(d => ({ ...d, isLegacy: false }))
+            const allRows = [...legacyRows, ...newRows]
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-gray-400">{allRows.length}건</div>
+                  <div className="flex gap-2">
+                    {investmentAccounts.length > 0 && (
+                      <select value={depositAccountId ?? ''} onChange={e => setDepositAccountId(e.target.value || null)}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+                        <option value="">전체 계좌</option>
+                        {investmentAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    )}
+                    <button onClick={() => openDeposit(investmentAccounts[0]?.id ?? '')}
+                      className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-xl hover:bg-amber-600 transition-colors font-medium">
+                      + 입금
+                    </button>
+                  </div>
+                </div>
+                {allRows.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <div className="text-3xl mb-2">💵</div>
+                    <div className="text-sm">예수금 입금 내역이 없습니다</div>
+                  </div>
+                )}
+                {allRows.filter(r => !depositAccountId || r.accountId === depositAccountId).map(row => {
+                  const accName = investmentAccounts.find(a => a.id === row.accountId)?.name ?? ''
+                  return (
+                    <div key={row.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-base flex-shrink-0">💵</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-sm font-semibold text-gray-900">{fmtKRW(row.amount)}</span>
+                          {row.isLegacy && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-2">기존잔액</span>}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                          {row.date && <span>{row.date}</span>}
+                          <span className="text-indigo-400">{accName}</span>
+                          {!row.isLegacy && row.note && <span>{row.note}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        {!row.isLegacy ? (
+                          <>
+                            <button onClick={() => openEditDeposit(investmentCashDeposits.find(d => d.id === row.id)!)}
+                              className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
+                            <button onClick={() => setDeleteDepositId(row.id)}
+                              className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => {
+                              const acc = investmentAccounts.find(a => a.id === row.accountId)!
+                              setDepositAccountId(acc.id)
+                              setDepositAmount(String(Math.abs(row.amount)))
+                              setDepositDate(today)
+                              setDepositNote('')
+                              setEditDepositId(row.id)
+                              setShowDepositModal(true)
+                            }} className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
+                            <button onClick={() => setInvestmentAccounts(investmentAccounts.map(a =>
+                              a.id === row.accountId ? { ...a, cashDeposits: 0 } : a
+                            ))} className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
+          {/* ── 배당 내역 목록 ── */}
+          {tradeTypeFilter === 'dividend' && (() => {
+            const sorted = investmentDividends.slice().sort((a, b) => b.date.localeCompare(a.date))
+            const totalGross = sorted.reduce((s, d) => s + d.grossAmount, 0)
+            const totalNet   = sorted.reduce((s, d) => s + d.netAmount, 0)
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-gray-400">{sorted.length}건 · 실수령 합계 {fmtKRW(totalNet)}</div>
+                  <button onClick={() => openAddDividend(investmentAccounts[0]?.id)}
+                    className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl hover:bg-emerald-700 transition-colors font-medium">
+                    + 배당 입력
+                  </button>
+                </div>
+                {sorted.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <div className="text-3xl mb-2">💰</div>
+                    <div className="text-sm">배당 내역이 없습니다</div>
+                  </div>
+                )}
+                {sorted.map(d => {
+                  const accName = investmentAccounts.find(a => a.id === d.accountId)?.name ?? ''
+                  const inv = d.investmentId ? investments.find(i => i.id === d.investmentId) : null
+                  return (
+                    <div key={d.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-base flex-shrink-0">💰</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-sm font-semibold text-emerald-700">+{fmtKRW(d.netAmount)}</span>
+                          <span className="text-xs text-gray-400 ml-2">세전 {fmtKRW(d.grossAmount)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
+                          <span>{d.date}</span>
+                          <span className="text-indigo-400">{accName}</span>
+                          {inv && <span>{inv.name}</span>}
+                          {d.note && <span>{d.note}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => openEditDividend(investmentDividends.find(x => x.id === d.id)!)}
+                          className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 text-xs">✏️</button>
+                        <button onClick={() => setDeleteDividendId(d.id)}
+                          className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 text-xs">🗑️</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
+          {/* ── 매수/매도 거래 목록 ── */}
+          {tradeTypeFilter === 'trade' && <>
           {/* 계좌 필터 (Row 1) */}
           {investmentAccounts.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
@@ -1591,6 +1620,7 @@ export default function InvestmentsPage() {
               )}
             </div>
           )}
+          </>}
         </div>
       )}
 
