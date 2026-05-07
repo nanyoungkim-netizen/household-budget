@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -94,6 +94,7 @@ interface AppData {
   investmentTrades: InvestmentTrade[]  // PRD 2.6
   investmentAccounts: InvestmentAccount[]   // PRD 2.6 계좌
   investmentDividends: InvestmentDividend[] // PRD: 배당금
+  investmentCashDeposits: InvestmentCashDeposit[] // 예수금 입금 내역
   investmentAccountTypes: InvestmentAccountType[]  // F-03
   investmentTargetAllocations: InvestmentTargetAllocation[]  // F-05
   savingPayments: SavingPayment[]  // PRD 2.2
@@ -120,6 +121,7 @@ const INITIAL_DATA: AppData = {
   investmentTrades: [],
   investmentAccounts: [],
   investmentDividends: [],
+  investmentCashDeposits: [],
   investmentAccountTypes: DEFAULT_INVESTMENT_ACCOUNT_TYPES,
   investmentTargetAllocations: [],
   savingPayments: [],
@@ -171,6 +173,7 @@ interface AppContextType {
   setInvestmentTrades: (trades: InvestmentTrade[]) => void
   setInvestmentAccounts: (accounts: InvestmentAccount[]) => void
   setInvestmentDividends: (dividends: InvestmentDividend[]) => void
+  setInvestmentCashDeposits: (deposits: InvestmentCashDeposit[]) => void
   setInvestmentAccountTypes: (types: InvestmentAccountType[]) => void
   setInvestmentTargetAllocations: (allocations: InvestmentTargetAllocation[]) => void
   // PRD 2.2: 납입 이력
@@ -271,6 +274,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       investmentTrades: raw.investmentTrades ?? [],
       investmentAccounts: migrateInvestmentAccounts(raw.investmentAccounts ?? []),
       investmentDividends: migrateDividends(raw.investmentDividends ?? [], raw.investments ?? []),
+      investmentCashDeposits: raw.investmentCashDeposits ?? [],
       investmentAccountTypes: raw.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES,
       investmentTargetAllocations: raw.investmentTargetAllocations ?? [],
       savingPayments: raw.savingPayments ?? [],
@@ -501,6 +505,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, investmentDividends, lastModified: now() }))
   }, [update])
 
+  const setInvestmentCashDeposits = useCallback((investmentCashDeposits: InvestmentCashDeposit[]) => {
+    update(d => ({ ...d, investmentCashDeposits, lastModified: now() }))
+  }, [update])
+
   const setInvestmentAccountTypes = useCallback((investmentAccountTypes: InvestmentAccountType[]) => {
     update(d => ({ ...d, investmentAccountTypes, lastModified: now() }))
   }, [update])
@@ -568,6 +576,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestmentTrades,
       setInvestmentAccounts,
       setInvestmentDividends,
+      setInvestmentCashDeposits,
       setInvestmentAccountTypes,
       setInvestmentTargetAllocations,
       setSavingPayments,

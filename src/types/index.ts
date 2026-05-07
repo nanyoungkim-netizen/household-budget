@@ -222,6 +222,15 @@ export interface Investment {
   currentPriceUpdatedAt?: string  // 현재가 업데이트 일시
 }
 
+// 예수금 입금 내역
+export interface InvestmentCashDeposit {
+  id: string
+  accountId: string  // 소속 투자계좌 ID
+  date: string       // 입금일 (YYYY-MM-DD)
+  amount: number     // 입금액 (양수) 또는 출금액 (음수)
+  note?: string
+}
+
 // PRD: 배당금 기록
 export interface InvestmentDividend {
   id: string

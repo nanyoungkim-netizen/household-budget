@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useApp, DEFAULT_INVESTMENT_ACCOUNT_TYPES } from '@/lib/AppContext'
 import {
-  Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend,
+  Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit,
   InvestmentAssetType, InvestmentCurrency, InvestmentAccountType, InvestmentTargetAllocation,
 } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
@@ -68,8 +68,9 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentAccountTypes, setInvestmentTargetAllocations } = useApp()
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations } = useApp()
   const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
+  const investmentCashDeposits: InvestmentCashDeposit[] = data.investmentCashDeposits ?? []
   const investmentAccountTypes: InvestmentAccountType[] = data.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES
   const investmentTargetAllocations: InvestmentTargetAllocation[] = data.investmentTargetAllocations ?? []
 
@@ -352,22 +353,54 @@ export default function InvestmentsPage() {
   const [showDepositModal, setShowDepositModal] = useState(false)
   const [depositAccountId, setDepositAccountId] = useState<string | null>(null)
   const [depositAmount, setDepositAmount] = useState('')
+  const [depositDate, setDepositDate] = useState(today)
+  const [depositNote, setDepositNote] = useState('')
+  const [editDepositId, setEditDepositId] = useState<string | null>(null)
+  const [showDepositHistoryAccId, setShowDepositHistoryAccId] = useState<string | null>(null)
+  const [deleteDepositId, setDeleteDepositId] = useState<string | null>(null)
 
   function openDeposit(accId: string) {
     setDepositAccountId(accId)
     setDepositAmount('')
+    setDepositDate(today)
+    setDepositNote('')
+    setEditDepositId(null)
+    setShowDepositModal(true)
+  }
+
+  function openEditDeposit(dep: InvestmentCashDeposit) {
+    setDepositAccountId(dep.accountId)
+    setDepositAmount(String(Math.abs(dep.amount)))
+    setDepositDate(dep.date)
+    setDepositNote(dep.note ?? '')
+    setEditDepositId(dep.id)
     setShowDepositModal(true)
   }
 
   function handleSaveDeposit() {
     const amount = parseAmt(depositAmount)
     if (!depositAccountId || amount <= 0) return
-    const acc = investmentAccounts.find(a => a.id === depositAccountId)
-    if (!acc) return
-    setInvestmentAccounts(investmentAccounts.map(a =>
-      a.id === depositAccountId ? { ...a, cashDeposits: (a.cashDeposits ?? 0) + amount } : a
-    ))
+    if (editDepositId) {
+      setInvestmentCashDeposits(investmentCashDeposits.map(d =>
+        d.id === editDepositId ? { ...d, amount, date: depositDate, note: depositNote || undefined } : d
+      ))
+    } else {
+      const newDep: InvestmentCashDeposit = {
+        id: `dep${Date.now()}`,
+        accountId: depositAccountId,
+        date: depositDate,
+        amount,
+        note: depositNote || undefined,
+      }
+      setInvestmentCashDeposits([...investmentCashDeposits, newDep])
+    }
     setShowDepositModal(false)
+    setEditDepositId(null)
+  }
+
+  function handleDeleteDeposit(id: string) {
+    setInvestmentCashDeposits(investmentCashDeposits.filter(d => d.id !== id))
+    setDeleteDepositId(null)
   }
 
   // F-05: 계좌별 접기/펼치기 — 기본값 접힌 상태 (expandedAccounts에 없으면 접힘)
@@ -427,25 +460,19 @@ export default function InvestmentsPage() {
     return map
   }, [investments, investmentTrades])
 
-  // ── 투자계좌별 예수금 계산 ─────────────────────────────────────────────────
-  // 예수금 = 입금 누계 + 배당(net) + 매도(gross-fee) - 매수(gross+fee)
+  // ── 투자계좌별 예수금 (입금 내역 합산) ────────────────────────────────────
+  // 기존 cashDeposits(레거시) + 신규 내역 합산
   const cashBalanceMap = useMemo(() => {
     const map = new Map<string, number>()
     investmentAccounts.forEach(acc => {
-      const base = acc.cashDeposits ?? 0
-      const divs = investmentDividends
+      const legacy = acc.cashDeposits ?? 0
+      const fromHistory = investmentCashDeposits
         .filter(d => d.accountId === acc.id)
-        .reduce((s, d) => s + d.netAmount, 0)
-      const trades = investmentTrades.filter(t => {
-        const inv = investments.find(i => i.id === t.investmentId)
-        return inv?.accountId === acc.id
-      })
-      const buyTotal  = trades.filter(t => t.type === 'buy' ).reduce((s, t) => s + t.quantity * t.price + (t.fee ?? 0), 0)
-      const sellTotal = trades.filter(t => t.type === 'sell').reduce((s, t) => s + t.quantity * t.price - (t.fee ?? 0), 0)
-      map.set(acc.id, base + divs + sellTotal - buyTotal)
+        .reduce((s, d) => s + d.amount, 0)
+      map.set(acc.id, legacy + fromHistory)
     })
     return map
-  }, [investmentAccounts, investmentDividends, investmentTrades, investments])
+  }, [investmentAccounts, investmentCashDeposits])
 
   // ── 포트폴리오 요약 ────────────────────────────────────────────────────────
   const portfolio = useMemo(() => {
@@ -853,7 +880,14 @@ export default function InvestmentsPage() {
           </div>
         </div>
 
-        {h && h.holdingQty > 0 && (
+        {h && h.holdingQty > 0 && (() => {
+          const isForeign = inv.currency !== 'KRW'
+          const fxRate = isForeign ? (exchangeRates[inv.currency] ?? 0) : 1
+          const hasFx = fxRate > 0
+          const fmtNative = (v: number) => inv.currency === 'USD'
+            ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${isForeign ? ` ${inv.currency}` : '원'}`
+          return (
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">보유수량</div>
@@ -861,37 +895,25 @@ export default function InvestmentsPage() {
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">총 매수금액</div>
-              <div className="text-sm font-semibold text-gray-900">{fmtKRW(Math.round(h.totalBuyAmt))}</div>
+              <div className="text-sm font-semibold text-gray-900">{fmtNative(h.totalBuyAmt)}</div>
+              {isForeign && hasFx && <div className="text-xs text-blue-400 mt-0.5">≈ {fmtKRW(Math.round(h.totalBuyAmt * fxRate))}</div>}
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">평균매수단가</div>
-              <div className="text-sm font-semibold text-gray-900">{h.avgPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
+              <div className="text-sm font-semibold text-gray-900">{fmtNative(h.avgPrice)}</div>
+              {isForeign && hasFx && <div className="text-xs text-blue-400 mt-0.5">≈ {fmtKRW(Math.round(h.avgPrice * fxRate))}</div>}
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">현재가</div>
               {currentPrice > 0 ? (() => {
                 const priceDiff = currentPrice - h.avgPrice
                 const priceRate = h.avgPrice > 0 ? (priceDiff / h.avgPrice) * 100 : 0
-                const isForeignCcy = inv.currency !== 'KRW'
-                const krwPrice = isForeignCcy && exchangeRates[inv.currency ?? 'USD']
-                  ? Math.round(currentPrice * exchangeRates[inv.currency ?? 'USD'])
-                  : null
                 return (
                   <>
-                    {isForeignCcy ? (
-                      <>
-                        <div className="text-sm font-semibold text-gray-900">
-                          {inv.currency === 'USD' ? '$' : ''}{currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{inv.currency !== 'USD' ? ` ${inv.currency}` : ''}
-                        </div>
-                        {krwPrice !== null && (
-                          <div className="text-xs text-blue-500 mt-0.5">약 ₩{krwPrice.toLocaleString()}원</div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</div>
-                    )}
+                    <div className="text-sm font-semibold text-gray-900">{fmtNative(currentPrice)}</div>
+                    {isForeign && hasFx && <div className="text-xs text-blue-400 mt-0.5">≈ {fmtKRW(Math.round(currentPrice * fxRate))}</div>}
                     <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ({fmtPct(priceRate)})
+                      {priceDiff >= 0 ? '+' : ''}{fmtNative(priceDiff)} ({fmtPct(priceRate)})
                     </div>
                   </>
                 )
@@ -899,15 +921,29 @@ export default function InvestmentsPage() {
             </div>
             <div className={`col-span-2 rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익 (총 평가금액)</div>
-              <div className="flex items-baseline justify-between">
-                <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+              {isForeign ? (
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
+                      {isProfit ? '+' : ''}{fmtNative(evalPnl)} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+                    </div>
+                    <div className="text-xs text-gray-500">{fmtNative(evalAmt)}</div>
+                  </div>
+                  {hasFx && (
+                    <div className="mt-1 text-xs text-blue-500">
+                      ≈ {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl * fxRate))} / 평가 {fmtKRW(Math.round(evalAmt * fxRate))}
+                      <span className="ml-1 text-gray-400">(환율 {fxRate.toLocaleString()})</span>
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
-                {inv.currency !== 'KRW' && exchangeRates[inv.currency ?? 'USD'] && (
-                  <div className="text-[10px] text-blue-400 mt-0.5">≈ ₩{Math.round(evalAmt * (exchangeRates[inv.currency ?? 'USD'] ?? 0)).toLocaleString()} 환산</div>
-                )}
-              </div>
+              ) : (
+                <div className="flex items-baseline justify-between">
+                  <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+                  </div>
+                  <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
+                </div>
+              )}
             </div>
             {(h.totalFee > 0 || totalDividend > 0) && (
               <div className="col-span-2 flex gap-2">
@@ -926,7 +962,8 @@ export default function InvestmentsPage() {
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* PRD §10-2: 자동 업데이트 상태 표시 */}
         {(inv.assetType === 'domestic_stock' || inv.assetType === 'etf_fund' || inv.assetType === 'foreign_stock') && inv.ticker && (
@@ -1182,6 +1219,10 @@ export default function InvestmentsPage() {
                       className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-medium">
                       입금
                     </button>
+                    <button onClick={() => setShowDepositHistoryAccId(prev => prev === acc.id ? null : acc.id)}
+                      className="text-xs bg-gray-50 text-gray-500 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors font-medium">
+                      내역
+                    </button>
                     <button onClick={() => openAddInvestment(acc.id)}
                       className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
                       + 종목
@@ -1220,6 +1261,47 @@ export default function InvestmentsPage() {
                           {accInvestments.map(inv => renderInvestmentCard(inv))}
                         </div>
                       )}
+
+                      {/* ── 예수금 입금 내역 ── */}
+                      {showDepositHistoryAccId === acc.id && (() => {
+                        const accDeposits = investmentCashDeposits
+                          .filter(d => d.accountId === acc.id)
+                          .sort((a, b) => b.date.localeCompare(a.date))
+                        return (
+                          <div className="bg-amber-50 rounded-xl p-3 mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs font-semibold text-amber-700">💵 예수금 입금 내역</div>
+                              <button onClick={() => openDeposit(acc.id)}
+                                className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600 transition-colors">
+                                + 입금
+                              </button>
+                            </div>
+                            {accDeposits.length === 0 ? (
+                              <div className="text-xs text-amber-500 text-center py-2">입금 내역이 없습니다</div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {accDeposits.map(dep => (
+                                  <div key={dep.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">{dep.date}</span>
+                                        {dep.note && <span className="text-xs text-gray-500 truncate">{dep.note}</span>}
+                                      </div>
+                                      <div className="text-sm font-semibold text-amber-700">{fmtKRW(dep.amount)}</div>
+                                    </div>
+                                    <div className="flex gap-1 flex-shrink-0 ml-2">
+                                      <button onClick={() => openEditDeposit(dep)}
+                                        className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
+                                      <button onClick={() => setDeleteDepositId(dep.id)}
+                                        className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded hover:bg-red-50">🗑️</button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
 
                       {accDividends.length > 0 && (
                         <div className="bg-emerald-50 rounded-xl p-3 mt-2 mb-4">
@@ -2219,16 +2301,21 @@ export default function InvestmentsPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">예수금 입금</h2>
-              <button onClick={() => setShowDepositModal(false)} className="text-gray-400 text-xl">×</button>
+              <h2 className="text-base font-bold">{editDepositId ? '입금 내역 수정' : '예수금 입금'}</h2>
+              <button onClick={() => { setShowDepositModal(false); setEditDepositId(null) }} className="text-gray-400 text-xl">×</button>
             </div>
-            <div className="bg-emerald-50 rounded-xl px-3 py-2 text-xs text-emerald-700 font-medium mb-3">
+            <div className="bg-amber-50 rounded-xl px-3 py-2 text-xs text-amber-700 font-medium mb-3">
               {investmentAccounts.find(a => a.id === depositAccountId)?.name}
-              <span className="ml-2 text-emerald-500">현재 예수금 {fmtKRW(Math.round(cashBalanceMap.get(depositAccountId) ?? 0))}</span>
+              <span className="ml-2 text-amber-500">현재 예수금 {fmtKRW(Math.round(cashBalanceMap.get(depositAccountId) ?? 0))}</span>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">입금 금액 *</label>
+                <label className="text-xs text-gray-400 block mb-1">입금일 *</label>
+                <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">금액 *</label>
                 <input
                   type="text" inputMode="numeric"
                   placeholder="0"
@@ -2237,17 +2324,18 @@ export default function InvestmentsPage() {
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
                   autoFocus
                 />
-                {depositAmount && (
-                  <div className="mt-1.5 text-xs text-amber-600 font-medium px-1">
-                    입금 후 예수금: {fmtKRW(Math.round((cashBalanceMap.get(depositAccountId) ?? 0) + parseAmt(depositAmount)))}
-                  </div>
-                )}
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">메모</label>
+                <input type="text" placeholder="메모 (선택)" value={depositNote}
+                  onChange={e => setDepositNote(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <button
                 onClick={handleSaveDeposit}
                 disabled={!depositAmount || parseAmt(depositAmount) <= 0}
                 className="w-full bg-amber-500 text-white font-semibold py-3 rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-40">
-                입금하기
+                {editDepositId ? '수정하기' : '입금 등록'}
               </button>
             </div>
           </div>
@@ -2279,6 +2367,13 @@ export default function InvestmentsPage() {
           message="배당금 기록을 삭제합니다."
           onConfirm={() => handleDeleteDividend(deleteDividendId)}
           onCancel={() => setDeleteDividendId(null)}
+        />
+      )}
+      {deleteDepositId && (
+        <DeleteConfirmModal
+          message="예수금 입금 내역을 삭제합니다."
+          onConfirm={() => handleDeleteDeposit(deleteDepositId)}
+          onCancel={() => setDeleteDepositId(null)}
         />
       )}
     </div>
