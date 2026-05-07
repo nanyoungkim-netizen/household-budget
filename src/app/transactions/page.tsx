@@ -85,6 +85,13 @@ export default function TransactionsPage() {
     if (monthParam) setMonth(monthParam)
     const labelParam = params.get('catLabel')
     if (labelParam) setFromBudgetLabel(decodeURIComponent(labelParam))
+    // F-06: 대시보드 거래추가 버튼 연동 — ?action=add 시 모달 자동 오픈
+    if (params.get('action') === 'add') {
+      setEditingId(null)
+      setShowModal(true)
+      params.delete('action')
+      history.replaceState(null, '', window.location.pathname + (params.toString() ? '?' + params.toString() : ''))
+    }
   }, [])
 
   // 카테고리 필터 변경 시 URL 동기화

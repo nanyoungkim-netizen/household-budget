@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
 import { Account, Card, Category, CategoryRole, MappingRule, INVESTMENT_SUB_LABELS } from '@/types'
 
@@ -78,6 +78,12 @@ export default function SettingsPage() {
 
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState<'child' | 'parent' | 'edit' | null>(null)
+
+  // F-07/F-08: 드래그앤드롭 순서 변경
+  const [dragCatId, setDragCatId] = useState<string | null>(null)
+  const [dragOverCatId, setDragOverCatId] = useState<string | null>(null)
+  const touchDragIdRef = useRef<string | null>(null)
+  const touchDragOverIdRef = useRef<string | null>(null)
   const [catParentId, setCatParentId] = useState('')
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC', savingId: '', role: '' })
   const [newParent, setNewParent] = useState({ name: '', icon: '📦', color: '#CFD8DC', type: 'expense' as 'expense' | 'income', role: '' })
@@ -251,6 +257,59 @@ export default function SettingsPage() {
 
   function getChildren(parentId: string) {
     return categories.filter(c => c.parentId === parentId)
+  }
+
+  // F-07/F-08: 카테고리 배열 내 순서 변경
+  function reorderCategory(fromId: string, toId: string) {
+    if (fromId === toId) return
+    const next = [...categories]
+    const fi = next.findIndex(c => c.id === fromId)
+    const ti = next.findIndex(c => c.id === toId)
+    if (fi < 0 || ti < 0) return
+    const [item] = next.splice(fi, 1)
+    next.splice(ti, 0, item)
+    setCategories(next)
+  }
+
+  // HTML5 DnD 핸들러
+  function onCatDragStart(id: string) { setDragCatId(id) }
+  function onCatDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    if (id !== dragCatId) setDragOverCatId(id)
+  }
+  function onCatDrop(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    if (dragCatId && dragCatId !== id) reorderCategory(dragCatId, id)
+    setDragCatId(null)
+    setDragOverCatId(null)
+  }
+  function onCatDragEnd() { setDragCatId(null); setDragOverCatId(null) }
+
+  // 터치 DnD 핸들러
+  function onCatTouchStart(e: React.TouchEvent, id: string) {
+    touchDragIdRef.current = id
+    touchDragOverIdRef.current = null
+    setDragCatId(id)
+  }
+  function onCatTouchMove(e: React.TouchEvent) {
+    if (!touchDragIdRef.current) return
+    e.preventDefault()
+    const touch = e.touches[0]
+    const el = document.elementFromPoint(touch.clientX, touch.clientY)
+    const item = el?.closest('[data-cat-id]') as HTMLElement | null
+    if (item?.dataset.catId && item.dataset.catId !== touchDragIdRef.current) {
+      touchDragOverIdRef.current = item.dataset.catId
+      setDragOverCatId(item.dataset.catId)
+    }
+  }
+  function onCatTouchEnd() {
+    if (touchDragIdRef.current && touchDragOverIdRef.current) {
+      reorderCategory(touchDragIdRef.current, touchDragOverIdRef.current)
+    }
+    touchDragIdRef.current = null
+    touchDragOverIdRef.current = null
+    setDragCatId(null)
+    setDragOverCatId(null)
   }
 
   function addChild() {
@@ -549,97 +608,92 @@ export default function SettingsPage() {
       {/* ── 카테고리 탭 ──────────────────────────────────────────────────── */}
       {tab === '카테고리' && (
         <div className="space-y-4">
-          <div>
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">지출 카테고리</div>
-            <div className="space-y-2">
-              {expenseParents.map(parent => {
-                const children = getChildren(parent.id)
-                return (
-                  <div key={parent.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3" style={{ borderLeft: `4px solid ${parent.color}` }}>
-                      <div className="flex items-center gap-2">
-                        <span>{parent.icon}</span>
-                        <span className="text-sm font-bold text-gray-900">{parent.name}</span>
-                        <span className="text-xs text-gray-400">({children.length})</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
-                        <button onClick={() => openEditCat(parent)}
-                          className="text-xs text-gray-400 hover:text-blue-500">수정</button>
-                        <button onClick={() => deleteCategory(parent.id)}
-                          className="text-xs text-gray-300 hover:text-red-400">삭제</button>
-                      </div>
-                    </div>
-                    {children.length > 0 && (
-                      <div className="border-t border-gray-50 divide-y divide-gray-50">
-                        {children.map(child => (
-                          <div key={child.id} className="flex items-center justify-between px-5 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">{child.icon}</span>
-                              <span className="text-sm text-gray-700">{child.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => openEditCat(child)}
-                                className="text-xs text-gray-400 hover:text-blue-500">수정</button>
-                              <button onClick={() => deleteCategory(child.id)}
-                                className="text-xs text-gray-300 hover:text-red-400">삭제</button>
-                            </div>
+          {(['expense', 'income'] as const).map(catType => {
+            const parents = catType === 'expense' ? expenseParents : incomeParents
+            return (
+              <div key={catType}>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
+                  {catType === 'expense' ? '지출 카테고리' : '수입 카테고리'}
+                </div>
+                <div className="space-y-2">
+                  {parents.map(parent => {
+                    const children = getChildren(parent.id)
+                    const isParentDragging = dragCatId === parent.id
+                    const isParentDragOver = dragOverCatId === parent.id && dragCatId !== parent.id
+                    return (
+                      <div
+                        key={parent.id}
+                        data-cat-id={parent.id}
+                        draggable
+                        onDragStart={() => onCatDragStart(parent.id)}
+                        onDragOver={e => onCatDragOver(e, parent.id)}
+                        onDrop={e => onCatDrop(e, parent.id)}
+                        onDragEnd={onCatDragEnd}
+                        onTouchStart={e => onCatTouchStart(e, parent.id)}
+                        onTouchMove={onCatTouchMove}
+                        onTouchEnd={onCatTouchEnd}
+                        style={{ touchAction: 'none', opacity: isParentDragging ? 0.4 : 1 }}
+                        className={`bg-white rounded-2xl shadow-sm overflow-hidden transition-all ${isParentDragOver ? 'ring-2 ring-blue-400' : ''}`}
+                      >
+                        <div className="flex items-center justify-between px-4 py-3" style={{ borderLeft: `4px solid ${parent.color}` }}>
+                          <div className="flex items-center gap-2">
+                            <span className="cursor-grab text-gray-300 hover:text-gray-500 px-0.5 select-none text-base leading-none" title="드래그하여 순서 변경">≡</span>
+                            <span>{parent.icon}</span>
+                            <span className="text-sm font-bold text-gray-900">{parent.name}</span>
+                            <span className="text-xs text-gray-400">({children.length})</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">수입 카테고리</div>
-            <div className="space-y-2">
-              {incomeParents.map(parent => {
-                const children = getChildren(parent.id)
-                return (
-                  <div key={parent.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3" style={{ borderLeft: `4px solid ${parent.color}` }}>
-                      <div className="flex items-center gap-2">
-                        <span>{parent.icon}</span>
-                        <span className="text-sm font-bold text-gray-900">{parent.name}</span>
-                        <span className="text-xs text-gray-400">({children.length})</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
-                        <button onClick={() => openEditCat(parent)}
-                          className="text-xs text-gray-400 hover:text-blue-500">수정</button>
-                        <button onClick={() => deleteCategory(parent.id)}
-                          className="text-xs text-gray-300 hover:text-red-400">삭제</button>
-                      </div>
-                    </div>
-                    {children.length > 0 && (
-                      <div className="border-t border-gray-50 divide-y divide-gray-50">
-                        {children.map(child => (
-                          <div key={child.id} className="flex items-center justify-between px-5 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">{child.icon}</span>
-                              <span className="text-sm text-gray-700">{child.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => openEditCat(child)}
-                                className="text-xs text-gray-400 hover:text-blue-500">수정</button>
-                              <button onClick={() => deleteCategory(child.id)}
-                                className="text-xs text-gray-300 hover:text-red-400">삭제</button>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => { setCatParentId(parent.id); setCatModal('child') }}
+                              className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ 소분류</button>
+                            <button onClick={() => openEditCat(parent)}
+                              className="text-xs text-gray-400 hover:text-blue-500">수정</button>
+                            <button onClick={() => deleteCategory(parent.id)}
+                              className="text-xs text-gray-300 hover:text-red-400">삭제</button>
                           </div>
-                        ))}
+                        </div>
+                        {children.length > 0 && (
+                          <div className="border-t border-gray-50 divide-y divide-gray-50">
+                            {children.map(child => {
+                              const isChildDragging = dragCatId === child.id
+                              const isChildDragOver = dragOverCatId === child.id && dragCatId !== child.id
+                              return (
+                                <div
+                                  key={child.id}
+                                  data-cat-id={child.id}
+                                  draggable
+                                  onDragStart={e => { e.stopPropagation(); onCatDragStart(child.id) }}
+                                  onDragOver={e => { e.stopPropagation(); onCatDragOver(e, child.id) }}
+                                  onDrop={e => { e.stopPropagation(); onCatDrop(e, child.id) }}
+                                  onDragEnd={e => { e.stopPropagation(); onCatDragEnd() }}
+                                  onTouchStart={e => { e.stopPropagation(); onCatTouchStart(e, child.id) }}
+                                  onTouchMove={e => { e.stopPropagation(); onCatTouchMove(e) }}
+                                  onTouchEnd={e => { e.stopPropagation(); onCatTouchEnd() }}
+                                  style={{ touchAction: 'none', opacity: isChildDragging ? 0.4 : 1 }}
+                                  className={`flex items-center justify-between px-5 py-2 transition-all ${isChildDragOver ? 'ring-2 ring-inset ring-blue-300 bg-blue-50' : ''}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="cursor-grab text-gray-300 hover:text-gray-500 px-0.5 select-none text-sm leading-none" title="드래그하여 순서 변경">≡</span>
+                                    <span className="text-sm">{child.icon}</span>
+                                    <span className="text-sm text-gray-700">{child.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => openEditCat(child)}
+                                      className="text-xs text-gray-400 hover:text-blue-500">수정</button>
+                                    <button onClick={() => deleteCategory(child.id)}
+                                      className="text-xs text-gray-300 hover:text-red-400">삭제</button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
 
           <button onClick={() => setCatModal('parent')}
             className="w-full bg-white rounded-2xl shadow-sm py-4 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-2 border-dashed border-blue-200 flex items-center justify-center gap-2">

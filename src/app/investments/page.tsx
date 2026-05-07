@@ -87,13 +87,22 @@ export default function InvestmentsPage() {
   const nameDropdownRef = useRef<HTMLDivElement>(null)
 
   // PRD §10-1: 네이버 금융 검색 결과
-  type NaverSearchItem = { name: string; ticker: string; market: string }
+  type NaverSearchItem = { name: string; ticker: string; market: string; isForeign?: boolean }
   const [naverResults, setNaverResults] = useState<NaverSearchItem[]>([])
   const [naverLoading, setNaverLoading] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [priceLoadingIds, setPriceLoadingIds] = useState<Set<string>>(new Set())
   const [priceRefreshing, setPriceRefreshing] = useState(false)
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
+
+  // F-03: 주가 업데이트 토스트
+  const [refreshToast, setRefreshToast] = useState<string | null>(null)
+  const refreshToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function showRefreshToast(msg: string) {
+    setRefreshToast(msg)
+    if (refreshToastTimerRef.current) clearTimeout(refreshToastTimerRef.current)
+    refreshToastTimerRef.current = setTimeout(() => setRefreshToast(null), 3000)
+  }
 
   // PRD §10-2: 장중 여부 판단 (09:00~15:30, 월~금)
   function isMarketOpen(): boolean {
@@ -178,13 +187,14 @@ export default function InvestmentsPage() {
     } catch { /* silent */ }
   }
 
-  // 전체 종목 현재가 수동 새로고침
+  // F-03: 전체 종목 현재가 수동 새로고침 — 완료 후 성공/실패 토스트
   async function refreshAllPrices() {
     fetchExchangeRates()
     const targets = investments.filter(inv => inv.ticker)
-    if (targets.length === 0) return
+    if (targets.length === 0) { showRefreshToast('조회할 종목이 없습니다'); return }
     setPriceRefreshing(true)
     setPriceLoadingIds(new Set(targets.map(t => t.id)))
+    const patches: Record<string, { price: number; updatedAt: string }> = {}
     try {
       const results = await Promise.allSettled(
         targets.map(async inv => {
@@ -198,21 +208,26 @@ export default function InvestmentsPage() {
           return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
         })
       )
-      const patches: Record<string, { price: number; updatedAt: string }> = {}
       results.forEach((r, i) => {
         if (r.status === 'fulfilled' && r.value) patches[targets[i].id] = r.value
       })
       if (Object.keys(patches).length > 0) {
-        const next = investments.map(inv =>
+        setInvestments(investments.map(inv =>
           patches[inv.id]
             ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
             : inv
-        )
-        setInvestments(next)
+        ))
       }
     } catch { /* silent */ } finally {
       setPriceRefreshing(false)
       setPriceLoadingIds(new Set())
+      const successCount = Object.keys(patches).length
+      const failCount = targets.length - successCount
+      if (failCount === 0) {
+        showRefreshToast(`✅ ${successCount}개 종목 현재가 갱신 완료`)
+      } else {
+        showRefreshToast(`⚠ ${successCount}개 갱신 완료, ${failCount}개 실패`)
+      }
     }
   }
 
@@ -263,36 +278,39 @@ export default function InvestmentsPage() {
       .slice(0, 5)
   }, [investmentForm.name, investments, editInvestmentId])
 
-  // PRD §10-1: 종목 검색 — 국내주식·ETF는 네이버, 해외주식은 Yahoo Finance (디바운스 300ms)
-  const isNaverSearchTarget = investmentForm.assetType === 'domestic_stock' || investmentForm.assetType === 'etf_fund'
-  const isForeignSearchTarget = investmentForm.assetType === 'foreign_stock'
-
+  // F-01: 국내·해외 통합 종목 검색 (두 API 병렬 호출, 디바운스 300ms)
   const triggerNaverSearch = useCallback((q: string) => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    if (!q || q.length < 1) {
-      setNaverResults([])
-      return
-    }
-    if (!isNaverSearchTarget && !isForeignSearchTarget) {
-      setNaverResults([])
-      return
-    }
+    if (!q || q.length < 1) { setNaverResults([]); return }
     searchTimerRef.current = setTimeout(async () => {
       setNaverLoading(true)
       try {
-        const endpoint = isForeignSearchTarget
-          ? `/api/stock/search-foreign?q=${encodeURIComponent(q)}`
-          : `/api/stock/search?q=${encodeURIComponent(q)}`
-        const res = await fetch(endpoint)
-        const json = await res.json()
-        setNaverResults(json.items ?? [])
+        const [domRes, forRes] = await Promise.allSettled([
+          fetch(`/api/stock/search?q=${encodeURIComponent(q)}`).then(r => r.json()),
+          fetch(`/api/stock/search-foreign?q=${encodeURIComponent(q)}`).then(r => r.json()),
+        ])
+        const domItems: NaverSearchItem[] = ((domRes.status === 'fulfilled' ? domRes.value.items : []) ?? []).map(
+          (i: NaverSearchItem) => ({ ...i, isForeign: false })
+        )
+        const forItems: NaverSearchItem[] = ((forRes.status === 'fulfilled' ? forRes.value.items : []) ?? []).map(
+          (i: NaverSearchItem) => ({ ...i, isForeign: true })
+        )
+        const seen = new Set<string>()
+        const merged: NaverSearchItem[] = []
+        for (const item of [...domItems, ...forItems]) {
+          if (item.ticker && !seen.has(item.ticker)) {
+            seen.add(item.ticker)
+            merged.push(item)
+          }
+        }
+        setNaverResults(merged.slice(0, 15))
       } catch {
         setNaverResults([])
       } finally {
         setNaverLoading(false)
       }
     }, 300)
-  }, [isNaverSearchTarget, isForeignSearchTarget])
+  }, [])
 
   // 거래 모달
   const [showTradeModal, setShowTradeModal] = useState(false)
@@ -326,10 +344,10 @@ export default function InvestmentsPage() {
   const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
   const [expandedDividendAccId, setExpandedDividendAccId] = useState<string | null>(null)
 
-  // 계좌별 접기/펼치기
-  const [collapsedAccounts, setCollapsedAccounts] = useState<Set<string>>(new Set())
+  // F-05: 계좌별 접기/펼치기 — 기본값 접힌 상태 (expandedAccounts에 없으면 접힘)
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
   function toggleCollapse(id: string) {
-    setCollapsedAccounts(prev => {
+    setExpandedAccounts(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
@@ -808,11 +826,23 @@ export default function InvestmentsPage() {
               {currentPrice > 0 ? (() => {
                 const priceDiff = currentPrice - h.avgPrice
                 const priceRate = h.avgPrice > 0 ? (priceDiff / h.avgPrice) * 100 : 0
+                const isForeignCcy = inv.currency !== 'KRW'
+                const krwPrice = isForeignCcy && exchangeRates[inv.currency ?? 'USD']
+                  ? Math.round(currentPrice * exchangeRates[inv.currency ?? 'USD'])
+                  : null
                 return (
                   <>
-                    <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}</div>
-                    {inv.currency !== 'KRW' && exchangeRates[inv.currency ?? 'USD'] && (
-                      <div className="text-[10px] text-blue-500 mt-0.5">≈ ₩{Math.round(currentPrice * (exchangeRates[inv.currency ?? 'USD'] ?? 0)).toLocaleString()}</div>
+                    {isForeignCcy ? (
+                      <>
+                        <div className="text-sm font-semibold text-gray-900">
+                          {inv.currency === 'USD' ? '$' : ''}{currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{inv.currency !== 'USD' ? ` ${inv.currency}` : ''}
+                        </div>
+                        {krwPrice !== null && (
+                          <div className="text-xs text-blue-500 mt-0.5">약 ₩{krwPrice.toLocaleString()}원</div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-sm font-semibold text-gray-900">{currentPrice.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</div>
                     )}
                     <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                       {priceDiff >= 0 ? '+' : ''}{priceDiff.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ({fmtPct(priceRate)})
@@ -892,6 +922,12 @@ export default function InvestmentsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      {/* F-03: 주가 업데이트 토스트 */}
+      {refreshToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl animate-fade-in">
+          {refreshToast}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">투자 내역 관리</h1>
         <div className="flex items-center gap-2">
@@ -904,7 +940,7 @@ export default function InvestmentsPage() {
             disabled={priceRefreshing}
             className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">
             <span className={`inline-block transition-transform ${priceRefreshing ? 'animate-spin' : ''}`}>🔄</span>
-            {priceRefreshing ? '조회 중...' : '현재가'}
+            {priceRefreshing ? '갱신 중...' : '주가 업데이트'}
           </button>
           <button onClick={() => openAddAccount()}
             className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
@@ -1063,7 +1099,7 @@ export default function InvestmentsPage() {
           {investmentAccounts.map(acc => {
             const accInvestments = investmentsByAccount.get(acc.id) ?? []
             const stats = portfolio.byAccount[acc.id]
-            const isCollapsed = collapsedAccounts.has(acc.id)
+            const isCollapsed = !expandedAccounts.has(acc.id)
             return (
               <div key={acc.id}>
                 <div className="flex items-center gap-3 mb-3 cursor-pointer select-none"
@@ -1680,13 +1716,13 @@ export default function InvestmentsPage() {
                   </button>
                 ))}
               </div>
-              {/* F-04 + PRD §10-1: 종목명 자동완성 (네이버 금융 검색 통합) */}
+              {/* F-01: 국내·해외 통합 종목 자동완성 검색 */}
               <div className="relative">
                 <div className="relative">
                   <input
                     ref={nameInputRef}
                     type="text"
-                    placeholder={isNaverSearchTarget ? '종목명 또는 종목코드 검색 *' : '종목명 / 코인명 *'}
+                    placeholder="종목명 또는 티커 검색 *"
                     value={investmentForm.name}
                     onChange={e => {
                       const v = e.target.value
@@ -1706,14 +1742,12 @@ export default function InvestmentsPage() {
 
                 {nameDropdownOpen && (naverResults.length > 0 || localSuggestions.length > 0) && (
                   <div ref={nameDropdownRef} className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
-                    {/* 네이버 금융 검색 결과 */}
+                    {/* F-01: 네이버 금융 통합 검색 결과 (국내·해외) */}
                     {naverResults.length > 0 && (
                       <>
-                        {(isNaverSearchTarget || isForeignSearchTarget) && (
-                          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100">
-                            {isForeignSearchTarget ? '🌏 Yahoo Finance 검색' : '🔍 네이버 금융 검색'}
-                          </div>
-                        )}
+                        <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100">
+                          🔍 네이버 금융 검색 (국내·해외)
+                        </div>
                         {naverResults.map((item, idx) => (
                           <button
                             key={`naver-${idx}`}
@@ -1723,7 +1757,7 @@ export default function InvestmentsPage() {
                                 ...f,
                                 name: item.name,
                                 ticker: item.ticker,
-                                ...(isForeignSearchTarget ? { currency: 'USD' } : {})
+                                ...(item.isForeign ? { currency: 'USD' } : {})
                               }))
                               setNaverResults([])
                               setNameDropdownOpen(false)
@@ -1733,6 +1767,9 @@ export default function InvestmentsPage() {
                             <div className="flex items-center gap-1.5 flex-shrink-0">
                               <span className="text-xs text-gray-400 tabular-nums">{item.ticker}</span>
                               <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">{item.market}</span>
+                              {item.isForeign && (
+                                <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-medium">해외</span>
+                              )}
                             </div>
                           </button>
                         ))}

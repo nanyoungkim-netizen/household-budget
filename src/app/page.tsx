@@ -452,7 +452,7 @@ export default function Dashboard() {
             <p className="text-xs text-gray-400 mt-0.5">마지막 수정 {fmtDate(lastModified)}</p>
           )}
         </div>
-        <Link href="/transactions"
+        <Link href="/transactions?action=add"
           className="flex items-center gap-1.5 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">
           + 거래 추가
         </Link>
@@ -1114,7 +1114,7 @@ export default function Dashboard() {
                       <p className="text-sm">
                         {viewMode === 'day' && isToday ? '오늘 거래 내역이 없어요' : `${periodLabel} 거래 내역이 없어요`}
                       </p>
-                      <Link href="/transactions" className="text-xs text-blue-500 underline mt-1 block">거래 추가하기</Link>
+                      <Link href="/transactions?action=add" className="text-xs text-blue-500 underline mt-1 block">거래 추가하기</Link>
                     </div>
                   )}
                 </div>
