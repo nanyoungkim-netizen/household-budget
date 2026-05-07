@@ -259,16 +259,47 @@ export default function SettingsPage() {
     return categories.filter(c => c.parentId === parentId)
   }
 
-  // F-07/F-08: 카테고리 배열 내 순서 변경
-  function reorderCategory(fromId: string, toId: string) {
+  // F-07/F-08: 드롭 처리 — 순서 변경 + 소분류 대분류 간 이동
+  function applyDrop(fromId: string, toId: string) {
     if (fromId === toId) return
-    const next = [...categories]
-    const fi = next.findIndex(c => c.id === fromId)
-    const ti = next.findIndex(c => c.id === toId)
-    if (fi < 0 || ti < 0) return
-    const [item] = next.splice(fi, 1)
-    next.splice(ti, 0, item)
-    setCategories(next)
+    const fromCat = categories.find(c => c.id === fromId)
+    const toCat   = categories.find(c => c.id === toId)
+    if (!fromCat || !toCat) return
+
+    const fromIsChild = fromCat.parentId !== null
+    const toIsParent  = toCat.parentId === null
+
+    if (fromIsChild && toIsParent) {
+      // 소분류 → 대분류 헤더에 드롭: parentId 변경
+      if (fromCat.parentId === toId) return // 이미 같은 부모
+      setCategories(categories.map(c =>
+        c.id === fromId ? { ...c, parentId: toId, type: toCat.type } : c
+      ))
+    } else if (fromIsChild && !toIsParent) {
+      // 소분류 → 다른 소분류에 드롭: 같은 부모면 순서 변경, 다른 부모면 이동 + 위치 조정
+      const next = [...categories]
+      const fi = next.findIndex(c => c.id === fromId)
+      const ti = next.findIndex(c => c.id === toId)
+      if (fi < 0 || ti < 0) return
+      if (fromCat.parentId !== toCat.parentId) {
+        // 부모 변경 + 위치 이동
+        next[fi] = { ...next[fi], parentId: toCat.parentId!, type: toCat.type }
+      }
+      const [item] = next.splice(fi, 1)
+      const newTi = next.findIndex(c => c.id === toId)
+      next.splice(newTi, 0, item)
+      setCategories(next)
+    } else if (!fromIsChild && toIsParent) {
+      // 대분류 → 대분류: 순서 변경
+      const next = [...categories]
+      const fi = next.findIndex(c => c.id === fromId)
+      const ti = next.findIndex(c => c.id === toId)
+      if (fi < 0 || ti < 0) return
+      const [item] = next.splice(fi, 1)
+      next.splice(ti, 0, item)
+      setCategories(next)
+    }
+    // 대분류 → 소분류: 무시
   }
 
   // HTML5 DnD 핸들러
@@ -279,7 +310,7 @@ export default function SettingsPage() {
   }
   function onCatDrop(e: React.DragEvent, id: string) {
     e.preventDefault()
-    if (dragCatId && dragCatId !== id) reorderCategory(dragCatId, id)
+    if (dragCatId && dragCatId !== id) applyDrop(dragCatId, id)
     setDragCatId(null)
     setDragOverCatId(null)
   }
@@ -304,13 +335,16 @@ export default function SettingsPage() {
   }
   function onCatTouchEnd() {
     if (touchDragIdRef.current && touchDragOverIdRef.current) {
-      reorderCategory(touchDragIdRef.current, touchDragOverIdRef.current)
+      applyDrop(touchDragIdRef.current, touchDragOverIdRef.current)
     }
     touchDragIdRef.current = null
     touchDragOverIdRef.current = null
     setDragCatId(null)
     setDragOverCatId(null)
   }
+
+  // 드래그 중인 항목이 소분류인지 여부 (시각 피드백용)
+  const isDraggingChild = dragCatId ? (categories.find(c => c.id === dragCatId)?.parentId !== null) : false
 
   function addChild() {
     if (!newCat.name || !catParentId) return
@@ -620,6 +654,10 @@ export default function SettingsPage() {
                     const children = getChildren(parent.id)
                     const isParentDragging = dragCatId === parent.id
                     const isParentDragOver = dragOverCatId === parent.id && dragCatId !== parent.id
+                    // 소분류를 이 대분류 헤더 위에 드래그 중: 녹색(이동), 대분류끼리: 파란색(순서)
+                    const parentRingColor = isParentDragOver
+                      ? (isDraggingChild ? 'ring-2 ring-emerald-400' : 'ring-2 ring-blue-400')
+                      : ''
                     return (
                       <div
                         key={parent.id}
@@ -633,7 +671,7 @@ export default function SettingsPage() {
                         onTouchMove={onCatTouchMove}
                         onTouchEnd={onCatTouchEnd}
                         style={{ touchAction: 'none', opacity: isParentDragging ? 0.4 : 1 }}
-                        className={`bg-white rounded-2xl shadow-sm overflow-hidden transition-all ${isParentDragOver ? 'ring-2 ring-blue-400' : ''}`}
+                        className={`bg-white rounded-2xl shadow-sm overflow-hidden transition-all ${parentRingColor}`}
                       >
                         <div className="flex items-center justify-between px-4 py-3" style={{ borderLeft: `4px solid ${parent.color}` }}>
                           <div className="flex items-center gap-2">
@@ -656,6 +694,11 @@ export default function SettingsPage() {
                             {children.map(child => {
                               const isChildDragging = dragCatId === child.id
                               const isChildDragOver = dragOverCatId === child.id && dragCatId !== child.id
+                              const draggingFromOtherParent = isChildDragOver && isDraggingChild &&
+                                categories.find(c => c.id === dragCatId)?.parentId !== parent.id
+                              const childHighlight = isChildDragOver
+                                ? (draggingFromOtherParent ? 'ring-2 ring-inset ring-emerald-400 bg-emerald-50' : 'ring-2 ring-inset ring-blue-300 bg-blue-50')
+                                : ''
                               return (
                                 <div
                                   key={child.id}
@@ -669,7 +712,7 @@ export default function SettingsPage() {
                                   onTouchMove={e => { e.stopPropagation(); onCatTouchMove(e) }}
                                   onTouchEnd={e => { e.stopPropagation(); onCatTouchEnd() }}
                                   style={{ touchAction: 'none', opacity: isChildDragging ? 0.4 : 1 }}
-                                  className={`flex items-center justify-between px-5 py-2 transition-all ${isChildDragOver ? 'ring-2 ring-inset ring-blue-300 bg-blue-50' : ''}`}
+                                  className={`flex items-center justify-between px-5 py-2 transition-all ${childHighlight}`}
                                 >
                                   <div className="flex items-center gap-2">
                                     <span className="cursor-grab text-gray-300 hover:text-gray-500 px-0.5 select-none text-sm leading-none" title="드래그하여 순서 변경">≡</span>
