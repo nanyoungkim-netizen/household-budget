@@ -466,8 +466,7 @@ export default function InvestmentsPage() {
     return map
   }, [investments, investmentTrades])
 
-  // ── 투자계좌별 예수금 (입금 내역 합산) ────────────────────────────────────
-  // 기존 cashDeposits(레거시) + 신규 내역 합산
+  // ── 투자계좌별 예수금 (입금 내역 + 배당 실수령 합산) ─────────────────────
   const cashBalanceMap = useMemo(() => {
     const map = new Map<string, number>()
     investmentAccounts.forEach(acc => {
@@ -475,10 +474,13 @@ export default function InvestmentsPage() {
       const fromHistory = investmentCashDeposits
         .filter(d => d.accountId === acc.id)
         .reduce((s, d) => s + d.amount, 0)
-      map.set(acc.id, legacy + fromHistory)
+      const fromDividends = investmentDividends
+        .filter(d => d.accountId === acc.id)
+        .reduce((s, d) => s + d.netAmount, 0)
+      map.set(acc.id, legacy + fromHistory + fromDividends)
     })
     return map
-  }, [investmentAccounts, investmentCashDeposits])
+  }, [investmentAccounts, investmentCashDeposits, investmentDividends])
 
   // ── 포트폴리오 요약 ────────────────────────────────────────────────────────
   const portfolio = useMemo(() => {
