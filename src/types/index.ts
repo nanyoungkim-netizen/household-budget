@@ -182,8 +182,9 @@ export interface InvestmentTrade {
   exchangeRate?: number   // 환율 (외화 거래 시)
   fee?: number            // 수수료
   note?: string
-  cashAccountId?: string   // 자금 출처/입금 현금 계좌 (Account.id)
-  linkedTxId?: string      // 자동 생성된 Transaction.id
+  cashAccountId?: string    // 자금 출처/입금 현금 계좌 (Account.id)
+  linkedTxId?: string       // 자동 생성된 Transaction.id
+  linkedDepositId?: string  // 예수금 연동 시 자동 생성된 InvestmentCashDeposit.id
 }
 
 // F-03: 투자 계좌 유형

@@ -320,6 +320,8 @@ export default function InvestmentsPage() {
   const [editTradeId, setEditTradeId] = useState<string | null>(null)
   const [tradeInvestmentId, setTradeInvestmentId] = useState<string | null>(null)
   const [tradeForm, setTradeForm] = useState<Omit<InvestmentTrade, 'id' | 'investmentId'>>(EMPTY_TRADE)
+  const [tradeUsesCash, setTradeUsesCash] = useState(false)
+  const [tradeModalAccountId, setTradeModalAccountId] = useState<string | undefined>(undefined)
   const [deleteTradeId, setDeleteTradeId] = useState<string | null>(null)
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
   const [selectedTradeAccountId, setSelectedTradeAccountId] = useState<string | null>(null)
@@ -650,27 +652,81 @@ export default function InvestmentsPage() {
 
   // ── 거래 CRUD ──────────────────────────────────────────────────────────────
   function openAddTrade(investmentId: string) {
+    const inv = investments.find(i => i.id === investmentId)
     setTradeInvestmentId(investmentId)
     setEditTradeId(null)
-    setTradeForm({ ...EMPTY_TRADE, currency: investments.find(i => i.id === investmentId)?.currency ?? 'KRW' })
+    setTradeUsesCash(false)
+    setTradeModalAccountId(inv?.accountId)
+    setTradeForm({ ...EMPTY_TRADE, currency: inv?.currency ?? 'KRW' })
     setShowTradeModal(true)
   }
 
   function openEditTrade(trade: InvestmentTrade) {
+    const inv = investments.find(i => i.id === trade.investmentId)
     setTradeInvestmentId(trade.investmentId)
     setEditTradeId(trade.id)
+    setTradeUsesCash(!!trade.linkedDepositId)
+    setTradeModalAccountId(inv?.accountId)
     setTradeForm({ type: trade.type, date: trade.date, quantity: trade.quantity, price: trade.price, currency: trade.currency, exchangeRate: trade.exchangeRate, fee: trade.fee, note: trade.note, cashAccountId: trade.cashAccountId })
     setShowTradeModal(true)
   }
 
   function handleSaveTrade() {
     if (!tradeInvestmentId || !tradeForm.quantity || !tradeForm.price) return
+    const inv = investments.find(i => i.id === tradeInvestmentId)
+    const accountId = tradeModalAccountId
+    // 계좌가 변경됐으면 종목도 업데이트
+    if (inv && tradeModalAccountId !== inv.accountId) {
+      setInvestments(investments.map(i => i.id === tradeInvestmentId ? { ...i, accountId: tradeModalAccountId } : i))
+    }
+
+    const baseAmt = tradeForm.quantity * tradeForm.price
+    const feeAmt = tradeForm.fee ?? 0
+    const rate = tradeForm.currency !== 'KRW' ? (tradeForm.exchangeRate ?? 1) : 1
+    const krwAmt = Math.round(baseAmt * rate)
+    const depositAmt = tradeForm.type === 'buy' ? -(krwAmt + feeAmt) : (krwAmt - feeAmt)
+
+    let linkedDepositId: string | undefined
+
     if (editTradeId) {
-      setInvestmentTrades(investmentTrades.map(t => t.id === editTradeId ? { ...t, ...tradeForm } : t))
+      const oldTrade = investmentTrades.find(t => t.id === editTradeId)
+      if (accountId) {
+        if (oldTrade?.linkedDepositId) {
+          setInvestmentCashDeposits(investmentCashDeposits.map(d =>
+            d.id === oldTrade.linkedDepositId ? { ...d, amount: depositAmt, date: tradeForm.date } : d
+          ))
+          linkedDepositId = oldTrade.linkedDepositId
+        } else {
+          const newDep: InvestmentCashDeposit = {
+            id: `dep${Date.now()}`,
+            accountId,
+            date: tradeForm.date,
+            amount: depositAmt,
+            note: `거래 연동: ${inv?.name ?? ''}`,
+          }
+          setInvestmentCashDeposits([...investmentCashDeposits, newDep])
+          linkedDepositId = newDep.id
+        }
+      } else {
+        linkedDepositId = oldTrade?.linkedDepositId
+      }
+      setInvestmentTrades(investmentTrades.map(t => t.id === editTradeId ? { ...t, ...tradeForm, linkedDepositId } : t))
     } else {
-      const newTrade: InvestmentTrade = { id: `tr${Date.now()}`, investmentId: tradeInvestmentId, ...tradeForm }
+      if (accountId) {
+        const newDep: InvestmentCashDeposit = {
+          id: `dep${Date.now()}`,
+          accountId,
+          date: tradeForm.date,
+          amount: depositAmt,
+          note: `거래 연동: ${inv?.name ?? ''}`,
+        }
+        setInvestmentCashDeposits([...investmentCashDeposits, newDep])
+        linkedDepositId = newDep.id
+      }
+      const newTrade: InvestmentTrade = { id: `tr${Date.now()}`, investmentId: tradeInvestmentId, ...tradeForm, linkedDepositId }
       setInvestmentTrades([...investmentTrades, newTrade])
     }
+
     const parentInv = investments.find(i => i.id === tradeInvestmentId)
     if (parentInv?.ticker) {
       setTimeout(() => fetchAndUpdatePrice(parentInv.id, parentInv.ticker!, parentInv.assetType), 100)
@@ -680,6 +736,10 @@ export default function InvestmentsPage() {
   }
 
   function handleDeleteTrade(id: string) {
+    const trade = investmentTrades.find(t => t.id === id)
+    if (trade?.linkedDepositId) {
+      setInvestmentCashDeposits(investmentCashDeposits.filter(d => d.id !== trade.linkedDepositId))
+    }
     setInvestmentTrades(investmentTrades.filter(t => t.id !== id))
     setDeleteTradeId(null)
   }
@@ -2211,6 +2271,20 @@ export default function InvestmentsPage() {
               <button onClick={() => { setShowTradeModal(false); setEditTradeId(null) }} className="text-gray-400 text-xl">×</button>
             </div>
             <div className="space-y-3">
+              {investmentAccounts.length > 0 && (
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">소속 계좌 (예수금 연동)</label>
+                  <select
+                    value={tradeModalAccountId ?? ''}
+                    onChange={e => setTradeModalAccountId(e.target.value || undefined)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="">계좌 미지정 (예수금 미연동)</option>
+                    {investmentAccounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex bg-gray-100 rounded-xl p-1">
                 {(['buy','sell'] as const).map(type => (
                   <button key={type} onClick={() => setTradeForm(f => ({ ...f, type }))}
@@ -2259,6 +2333,31 @@ export default function InvestmentsPage() {
               <input type="text" placeholder="메모 (선택)" value={tradeForm.note ?? ''}
                 onChange={e => setTradeForm(f => ({ ...f, note: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {/* 예수금 자동 반영 안내 */}
+              {(() => {
+                if (!tradeModalAccountId || !tradeForm.quantity || !tradeForm.price) return null
+                const cashBal = cashBalanceMap.get(tradeModalAccountId) ?? 0
+                const baseAmt = tradeForm.quantity * tradeForm.price
+                const feeAmt = tradeForm.fee ?? 0
+                const rate = tradeForm.currency !== 'KRW' ? (tradeForm.exchangeRate ?? 1) : 1
+                const krwAmt = Math.round(baseAmt * rate)
+                const depositAmt = tradeForm.type === 'buy' ? -(krwAmt + feeAmt) : (krwAmt - feeAmt)
+                const afterBal = cashBal + depositAmt
+                return (
+                  <div className="rounded-xl p-3 bg-indigo-50 border border-indigo-100 text-xs text-gray-600 space-y-0.5">
+                    <div className="font-medium text-indigo-700 mb-1">예수금 자동 반영</div>
+                    <div>현재: <span className="font-semibold text-gray-700">{cashBal.toLocaleString('ko-KR')}원</span></div>
+                    <div>
+                      변동: <span className={`font-semibold ${depositAmt < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {depositAmt > 0 ? '+' : ''}{depositAmt.toLocaleString('ko-KR')}원
+                      </span>
+                      {' → '}등록 후: <span className={`font-semibold ${afterBal < 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                        {afterBal.toLocaleString('ko-KR')}원
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
               <button onClick={handleSaveTrade}
                 className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">
                 {editTradeId ? '수정 완료' : '거래 등록'}
