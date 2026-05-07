@@ -1309,6 +1309,11 @@ export default function InvestmentsPage() {
                                             setShowDepositModal(true)
                                           }}
                                           className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50">✏️</button>
+                                        <button
+                                          onClick={() => setInvestmentAccounts(investmentAccounts.map(a =>
+                                            a.id === acc.id ? { ...a, cashDeposits: 0 } : a
+                                          ))}
+                                          className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded hover:bg-red-50">🗑️</button>
                                       </div>
                                     </div>
                                   )}
