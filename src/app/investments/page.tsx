@@ -1550,7 +1550,7 @@ export default function InvestmentsPage() {
               <div className="bg-white rounded-2xl p-4 shadow-sm grid grid-cols-3 gap-3 text-center mb-4">
                 <div>
                   <div className="text-xs text-gray-400 mb-1">매수 합계</div>
-                  <div className="text-sm font-bold text-red-500">-{fmtKRW(Math.round(buyAmt))}</div>
+                  <div className="text-sm font-bold text-blue-600">{fmtKRW(Math.round(buyAmt))}</div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-400 mb-1">매도 합계</div>
