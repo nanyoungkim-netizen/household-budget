@@ -68,8 +68,8 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentAccountTypes, setInvestmentTargetAllocations, addTransaction, updateTransaction, deleteTransaction } = useApp()
-  const { investments, investmentTrades, investmentAccounts, investmentDividends, accounts, categories } = data
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentAccountTypes, setInvestmentTargetAllocations } = useApp()
+  const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
   const investmentAccountTypes: InvestmentAccountType[] = data.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES
   const investmentTargetAllocations: InvestmentTargetAllocation[] = data.investmentTargetAllocations ?? []
 
@@ -348,6 +348,28 @@ export default function InvestmentsPage() {
   const [dividendFilterAccId, setDividendFilterAccId] = useState<string | null>(null)
   const [dividendFilterYear, setDividendFilterYear] = useState<string | null>(null)
 
+  // 예수금 입금 모달
+  const [showDepositModal, setShowDepositModal] = useState(false)
+  const [depositAccountId, setDepositAccountId] = useState<string | null>(null)
+  const [depositAmount, setDepositAmount] = useState('')
+
+  function openDeposit(accId: string) {
+    setDepositAccountId(accId)
+    setDepositAmount('')
+    setShowDepositModal(true)
+  }
+
+  function handleSaveDeposit() {
+    const amount = parseAmt(depositAmount)
+    if (!depositAccountId || amount <= 0) return
+    const acc = investmentAccounts.find(a => a.id === depositAccountId)
+    if (!acc) return
+    setInvestmentAccounts(investmentAccounts.map(a =>
+      a.id === depositAccountId ? { ...a, cashDeposits: (a.cashDeposits ?? 0) + amount } : a
+    ))
+    setShowDepositModal(false)
+  }
+
   // F-05: 계좌별 접기/펼치기 — 기본값 접힌 상태 (expandedAccounts에 없으면 접힘)
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
   function toggleCollapse(id: string) {
@@ -404,6 +426,26 @@ export default function InvestmentsPage() {
     })
     return map
   }, [investments, investmentTrades])
+
+  // ── 투자계좌별 예수금 계산 ─────────────────────────────────────────────────
+  // 예수금 = 입금 누계 + 배당(net) + 매도(gross-fee) - 매수(gross+fee)
+  const cashBalanceMap = useMemo(() => {
+    const map = new Map<string, number>()
+    investmentAccounts.forEach(acc => {
+      const base = acc.cashDeposits ?? 0
+      const divs = investmentDividends
+        .filter(d => d.accountId === acc.id)
+        .reduce((s, d) => s + d.netAmount, 0)
+      const trades = investmentTrades.filter(t => {
+        const inv = investments.find(i => i.id === t.investmentId)
+        return inv?.accountId === acc.id
+      })
+      const buyTotal  = trades.filter(t => t.type === 'buy' ).reduce((s, t) => s + t.quantity * t.price + (t.fee ?? 0), 0)
+      const sellTotal = trades.filter(t => t.type === 'sell').reduce((s, t) => s + t.quantity * t.price - (t.fee ?? 0), 0)
+      map.set(acc.id, base + divs + sellTotal - buyTotal)
+    })
+    return map
+  }, [investmentAccounts, investmentDividends, investmentTrades, investments])
 
   // ── 포트폴리오 요약 ────────────────────────────────────────────────────────
   const portfolio = useMemo(() => {
@@ -588,58 +630,12 @@ export default function InvestmentsPage() {
 
   function handleSaveTrade() {
     if (!tradeInvestmentId || !tradeForm.quantity || !tradeForm.price) return
-
-    const invName = investments.find(i => i.id === tradeInvestmentId)?.name ?? '종목'
-    const tradeAmt = tradeForm.quantity * tradeForm.price
-    const fee = tradeForm.fee ?? 0
-    const txType = tradeForm.type === 'buy' ? 'expense' as const : 'income' as const
-    const cashTotal = tradeAmt + (tradeForm.type === 'buy' ? fee : -fee)
-
-    function makeLinkedTx(txId?: string) {
-      const catId = categories.find(c => c.type === txType &&
-        (c.name.includes('투자') || c.name.includes('주식') || c.name.includes('매수') || c.name.includes('매도'))
-      )?.id ?? categories.find(c => c.type === txType)?.id ?? ''
-      return {
-        id: txId ?? `inv_tx_${Date.now()}`,
-        date: tradeForm.date,
-        description: `${invName} ${tradeForm.type === 'buy' ? '매수' : '매도'} (투자)`,
-        amount: Math.max(0, cashTotal),
-        type: txType,
-        accountId: tradeForm.cashAccountId!,
-        categoryId: catId,
-        paymentMethod: 'account' as const,
-      }
-    }
-
     if (editTradeId) {
-      const oldTrade = investmentTrades.find(t => t.id === editTradeId)
-      const oldLinkedTxId = oldTrade?.linkedTxId
-      let newLinkedTxId: string | undefined
-
-      if (tradeForm.cashAccountId) {
-        if (oldLinkedTxId) {
-          updateTransaction(oldLinkedTxId, makeLinkedTx(oldLinkedTxId))
-          newLinkedTxId = oldLinkedTxId
-        } else {
-          const tx = makeLinkedTx()
-          addTransaction(tx)
-          newLinkedTxId = tx.id
-        }
-      } else {
-        if (oldLinkedTxId) deleteTransaction(oldLinkedTxId)
-      }
-      setInvestmentTrades(investmentTrades.map(t => t.id === editTradeId ? { ...t, ...tradeForm, linkedTxId: newLinkedTxId } : t))
+      setInvestmentTrades(investmentTrades.map(t => t.id === editTradeId ? { ...t, ...tradeForm } : t))
     } else {
-      let newLinkedTxId: string | undefined
-      if (tradeForm.cashAccountId) {
-        const tx = makeLinkedTx()
-        addTransaction(tx)
-        newLinkedTxId = tx.id
-      }
-      const newTrade: InvestmentTrade = { id: `tr${Date.now()}`, investmentId: tradeInvestmentId, ...tradeForm, linkedTxId: newLinkedTxId }
+      const newTrade: InvestmentTrade = { id: `tr${Date.now()}`, investmentId: tradeInvestmentId, ...tradeForm }
       setInvestmentTrades([...investmentTrades, newTrade])
     }
-
     const parentInv = investments.find(i => i.id === tradeInvestmentId)
     if (parentInv?.ticker) {
       setTimeout(() => fetchAndUpdatePrice(parentInv.id, parentInv.ticker!, parentInv.assetType), 100)
@@ -649,8 +645,6 @@ export default function InvestmentsPage() {
   }
 
   function handleDeleteTrade(id: string) {
-    const trade = investmentTrades.find(t => t.id === id)
-    if (trade?.linkedTxId) deleteTransaction(trade.linkedTxId)
     setInvestmentTrades(investmentTrades.filter(t => t.id !== id))
     setDeleteTradeId(null)
   }
@@ -673,61 +667,17 @@ export default function InvestmentsPage() {
 
   function handleSaveDividend() {
     if (!dividendAccountId || !dividendForm.accountId || dividendForm.netAmount <= 0) return
-
-    const invName = dividendForm.investmentId ? investments.find(i => i.id === dividendForm.investmentId)?.name : undefined
     const formWithAccount = { ...dividendForm, accountId: dividendAccountId }
-
-    function makeLinkedTx(txId?: string) {
-      const catId = categories.find(c => c.type === 'income' &&
-        (c.name.includes('투자') || c.name.includes('배당') || c.name.includes('주식'))
-      )?.id ?? categories.find(c => c.type === 'income')?.id ?? ''
-      return {
-        id: txId ?? `div_tx_${Date.now()}`,
-        date: dividendForm.date,
-        description: `배당금 수령${invName ? ` (${invName})` : ''}`,
-        amount: dividendForm.netAmount,
-        type: 'income' as const,
-        accountId: dividendForm.cashAccountId!,
-        categoryId: catId,
-        paymentMethod: 'account' as const,
-      }
-    }
-
     if (editDividendId) {
-      const oldDiv = investmentDividends.find(d => d.id === editDividendId)
-      const oldLinkedTxId = oldDiv?.linkedTxId
-      let newLinkedTxId: string | undefined
-
-      if (dividendForm.cashAccountId) {
-        if (oldLinkedTxId) {
-          updateTransaction(oldLinkedTxId, makeLinkedTx(oldLinkedTxId))
-          newLinkedTxId = oldLinkedTxId
-        } else {
-          const tx = makeLinkedTx()
-          addTransaction(tx)
-          newLinkedTxId = tx.id
-        }
-      } else {
-        if (oldLinkedTxId) deleteTransaction(oldLinkedTxId)
-      }
-      setInvestmentDividends(investmentDividends.map(d => d.id === editDividendId ? { ...d, ...formWithAccount, linkedTxId: newLinkedTxId } : d))
+      setInvestmentDividends(investmentDividends.map(d => d.id === editDividendId ? { ...d, ...formWithAccount } : d))
     } else {
-      let newLinkedTxId: string | undefined
-      if (dividendForm.cashAccountId) {
-        const tx = makeLinkedTx()
-        addTransaction(tx)
-        newLinkedTxId = tx.id
-      }
-      setInvestmentDividends([...investmentDividends, { id: `div${Date.now()}`, ...formWithAccount, linkedTxId: newLinkedTxId }])
+      setInvestmentDividends([...investmentDividends, { id: `div${Date.now()}`, ...formWithAccount }])
     }
-
     setShowDividendModal(false)
     setEditDividendId(null)
   }
 
   function handleDeleteDividend(id: string) {
-    const div = investmentDividends.find(d => d.id === id)
-    if (div?.linkedTxId) deleteTransaction(div.linkedTxId)
     setInvestmentDividends(investmentDividends.filter(d => d.id !== id))
     setDeleteDividendId(null)
   }
@@ -1133,12 +1083,10 @@ export default function InvestmentsPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-gray-900">
-                          {fmtKRW(Math.round(stats.eval + (stats.divs ?? 0)))}
+                          {fmtKRW(Math.round(stats.eval + Math.max(0, cashBalanceMap.get(acc.id) ?? 0)))}
                         </div>
                         <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))} ({fmtPct(rate)})</div>
-                        {(stats.divs ?? 0) > 0 && (
-                          <div className="text-xs text-emerald-500">예수금 {fmtKRW(Math.round(stats.divs ?? 0))}</div>
-                        )}
+                        <div className="text-xs text-emerald-500">예수금 {fmtKRW(Math.round(cashBalanceMap.get(acc.id) ?? 0))}</div>
                       </div>
                     </div>
                   )
@@ -1210,22 +1158,30 @@ export default function InvestmentsPage() {
                     </div>
                     <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)} · {accInvestments.length}종목</div>
                   </div>
-                  {stats && (
-                    <div className="text-right mr-1">
-                      <div className="text-sm font-semibold text-gray-900">
-                        {fmtKRW(Math.round(stats.eval + (stats.divs ?? 0)))}
-                      </div>
-                      <div className={`text-xs ${stats.eval - stats.buy >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {stats.eval - stats.buy >= 0 ? '+' : ''}{fmtKRW(Math.round(stats.eval - stats.buy))}
-                      </div>
-                      {(stats.divs ?? 0) > 0 && (
-                        <div className="text-xs text-emerald-500 font-medium">
-                          예수금 {fmtKRW(Math.round(stats.divs ?? 0))}
+                  {(() => {
+                    const cash = cashBalanceMap.get(acc.id) ?? 0
+                    const pnl = stats ? stats.eval - stats.buy : 0
+                    return (
+                      <div className="text-right mr-1">
+                        <div className="text-sm font-semibold text-gray-900">
+                          {fmtKRW(Math.round((stats?.eval ?? 0) + Math.max(0, cash)))}
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {stats && (
+                          <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))}
+                          </div>
+                        )}
+                        <div className={`text-xs font-medium ${cash < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                          예수금 {fmtKRW(Math.round(cash))}
+                        </div>
+                      </div>
+                    )
+                  })()}
                   <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => openDeposit(acc.id)}
+                      className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-medium">
+                      입금
+                    </button>
                     <button onClick={() => openAddInvestment(acc.id)}
                       className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
                       + 종목
@@ -1433,37 +1389,33 @@ export default function InvestmentsPage() {
                     {!isCollapsed && (
                       <div className="border-t border-gray-100 divide-y divide-gray-50">
                         {trades.map(trade => {
-                          const tradeInv = investments.find(i => i.id === trade.investmentId)
-                          const tradeAcc = tradeInv?.accountId ? investmentAccounts.find(a => a.id === tradeInv.accountId) : null
-                          const tradeCashAcc = trade.cashAccountId ? accounts.find(a => a.id === trade.cashAccountId) : null
                           const isBuy = trade.type === 'buy'
                           const tradeAmt = trade.quantity * trade.price
+                          const fee = trade.fee ?? 0
+                          const totalCash = isBuy ? tradeAmt + fee : tradeAmt - fee
                           return (
-                            <div key={trade.id} className="flex items-center gap-3 px-4 py-3">
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${isBuy ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-500'}`}>
+                            <div key={trade.id} className="flex items-center gap-2 px-4 py-2.5">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${isBuy ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-500'}`}>
                                 {isBuy ? '매수' : '매도'}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs text-gray-500">
-                                  {trade.date} · {trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}
-                                  {tradeAcc && <span className="ml-1 text-indigo-400">· {tradeAcc.name}</span>}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-medium text-gray-700">{trade.date}</span>
+                                  <span className="text-xs text-gray-400">{trade.quantity.toLocaleString()}주</span>
+                                  <span className="text-xs text-gray-400">@{trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}</span>
                                 </div>
-                                {tradeCashAcc && (
-                                  <div className={`text-xs mt-0.5 font-medium ${isBuy ? 'text-red-500' : 'text-emerald-600'}`}>
-                                    {isBuy ? '💸' : '💵'} {tradeCashAcc.name} {isBuy ? '차감' : '입금'}
+                                {(fee > 0 || trade.note) && (
+                                  <div className="text-[11px] text-gray-400 mt-0.5">
+                                    {fee > 0 && `수수료 ${fmtKRW(fee)}`}{fee > 0 && trade.note && ' · '}{trade.note}
                                   </div>
                                 )}
-                                {trade.note && <div className="text-xs text-gray-400">{trade.note}</div>}
                               </div>
-                              <div className="text-right flex-shrink-0">
-                                <div className={`text-sm font-semibold ${isBuy ? 'text-red-500' : 'text-emerald-600'}`}>
-                                  {isBuy ? '-' : '+'}{fmtKRW(Math.round(tradeAmt))}
-                                </div>
-                                {trade.fee ? <div className="text-xs text-gray-400">수수료 {fmtKRW(trade.fee)}</div> : null}
+                              <div className={`text-sm font-bold flex-shrink-0 ${isBuy ? 'text-red-500' : 'text-emerald-600'}`}>
+                                {isBuy ? '-' : '+'}{fmtKRW(Math.round(totalCash))}
                               </div>
-                              <div className="flex gap-1 flex-shrink-0">
-                                <button onClick={() => openEditTrade(trade)} className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors">✏️</button>
-                                <button onClick={() => setDeleteTradeId(trade.id)} className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors">🗑️</button>
+                              <div className="flex gap-0.5 flex-shrink-0">
+                                <button onClick={() => openEditTrade(trade)} className="text-gray-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 transition-colors text-xs">✏️</button>
+                                <button onClick={() => setDeleteTradeId(trade.id)} className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors text-xs">🗑️</button>
                               </div>
                             </div>
                           )
@@ -1480,36 +1432,35 @@ export default function InvestmentsPage() {
               {selectedTrades.map(trade => {
                 const inv = investments.find(i => i.id === trade.investmentId)
                 const acc = inv?.accountId ? investmentAccounts.find(a => a.id === inv.accountId) : null
-                const cashAcc = trade.cashAccountId ? accounts.find(a => a.id === trade.cashAccountId) : null
                 const isBuy = trade.type === 'buy'
                 const tradeAmt = trade.quantity * trade.price
+                const totalAmt = isBuy ? tradeAmt + (trade.fee ?? 0) : tradeAmt - (trade.fee ?? 0)
                 return (
-                  <div key={trade.id} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold ${isBuy ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-500'}`}>
-                      {isBuy ? '매수' : '매도'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-gray-900">{inv?.name ?? '-'}</div>
-                      <div className="text-xs text-gray-400">
-                        {trade.date} · {trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}
-                        {acc && <span className="ml-1 text-indigo-400">· {acc.name}</span>}
+                  <div key={trade.id} className="bg-white rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${isBuy ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-500'}`}>
+                        {isBuy ? '매수' : '매도'}
                       </div>
-                      {cashAcc && (
-                        <div className={`text-xs mt-0.5 font-medium ${isBuy ? 'text-red-500' : 'text-emerald-600'}`}>
-                          {isBuy ? '💸' : '💵'} {cashAcc.name} {isBuy ? '차감' : '입금'}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-semibold text-gray-900 truncate">{inv?.name ?? '-'}</span>
+                          <span className={`text-sm font-bold flex-shrink-0 ${isBuy ? 'text-red-500' : 'text-emerald-600'}`}>
+                            {isBuy ? '-' : '+'}{trade.currency !== 'KRW' ? `$${totalAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : fmtKRW(Math.round(totalAmt))}
+                          </span>
                         </div>
-                      )}
-                      {trade.note && <div className="text-xs text-gray-400">{trade.note}</div>}
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className={`text-sm font-semibold ${isBuy ? 'text-red-500' : 'text-emerald-600'}`}>
-                        {isBuy ? '-' : '+'}{fmtKRW(Math.round(tradeAmt))}
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+                          <span>{trade.date}</span>
+                          <span>·</span>
+                          <span>{trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}</span>
+                          {trade.fee ? <><span>·</span><span>수수료 {trade.fee.toLocaleString()}원</span></> : null}
+                          {acc && <><span>·</span><span className="text-indigo-400">{acc.name}</span></>}
+                        </div>
+                        {trade.note && <div className="text-xs text-gray-400 mt-0.5">{trade.note}</div>}
                       </div>
-                      {trade.fee ? <div className="text-xs text-gray-400">수수료 {fmtKRW(trade.fee)}</div> : null}
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <button onClick={() => openEditTrade(trade)} className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors">✏️</button>
-                      <button onClick={() => setDeleteTradeId(trade.id)} className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors">🗑️</button>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => openEditTrade(trade)} className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors">✏️</button>
+                        <button onClick={() => setDeleteTradeId(trade.id)} className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors">🗑️</button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -2155,34 +2106,6 @@ export default function InvestmentsPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">
-                  {tradeForm.type === 'buy' ? '💸 자금 출처 계좌' : '💵 입금 계좌'} <span className="text-gray-300">(선택)</span>
-                </label>
-                <select
-                  value={tradeForm.cashAccountId ?? ''}
-                  onChange={e => setTradeForm(f => ({ ...f, cashAccountId: e.target.value || undefined }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                  <option value="">연결 안함</option>
-                  {accounts
-                    .slice()
-                    .sort((a, b) => {
-                      const order = ['cash', 'savings', 'investment']
-                      return (order.indexOf(a.assetType ?? 'cash') - order.indexOf(b.assetType ?? 'cash'))
-                    })
-                    .map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.assetType === 'cash' ? '💵' : a.assetType === 'savings' ? '🏦' : '📈'} {a.name}{a.bank ? ` (${a.bank})` : ''}
-                      </option>
-                    ))}
-                </select>
-                {tradeForm.cashAccountId && tradeForm.quantity > 0 && tradeForm.price > 0 && (
-                  <div className={`mt-1.5 text-xs font-medium px-3 py-1.5 rounded-lg ${tradeForm.type === 'buy' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
-                    {accounts.find(a => a.id === tradeForm.cashAccountId)?.name} 잔액에서&nbsp;
-                    {tradeForm.type === 'buy' ? '-' : '+'}{fmtKRW(Math.round(tradeForm.quantity * tradeForm.price + (tradeForm.type === 'buy' ? (tradeForm.fee ?? 0) : -(tradeForm.fee ?? 0))))} 반영
-                  </div>
-                )}
-              </div>
               <input type="text" placeholder="메모 (선택)" value={tradeForm.note ?? ''}
                 onChange={e => setTradeForm(f => ({ ...f, note: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -2264,30 +2187,6 @@ export default function InvestmentsPage() {
                   onChange={e => setDividendForm(f => ({ ...f, netAmount: parseFloat(e.target.value) || 0 }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">
-                  💵 배당금 입금 계좌 <span className="text-gray-300">(선택 — 잔액 자동 반영)</span>
-                </label>
-                <select
-                  value={dividendForm.cashAccountId ?? ''}
-                  onChange={e => setDividendForm(f => ({ ...f, cashAccountId: e.target.value || undefined }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
-                  <option value="">연결 안함</option>
-                  {accounts
-                    .slice()
-                    .sort((a, b) => (a.assetType === 'cash' ? -1 : b.assetType === 'cash' ? 1 : 0))
-                    .map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.assetType === 'cash' ? '💵' : a.assetType === 'savings' ? '🏦' : '📈'} {a.name}{a.bank ? ` (${a.bank})` : ''}
-                      </option>
-                    ))}
-                </select>
-                {dividendForm.cashAccountId && dividendForm.netAmount > 0 && (
-                  <div className="mt-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700">
-                    {accounts.find(a => a.id === dividendForm.cashAccountId)?.name} 잔액에 +{fmtKRW(dividendForm.netAmount)} 반영
-                  </div>
-                )}
-              </div>
               <input type="text" placeholder="메모 (선택)" value={dividendForm.note ?? ''}
                 onChange={e => setDividendForm(f => ({ ...f, note: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -2310,6 +2209,46 @@ export default function InvestmentsPage() {
                   {editDividendId ? '수정 완료' : '저장'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 예수금 입금 모달 ─────────────────────────────────────────────────── */}
+      {showDepositModal && depositAccountId && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">예수금 입금</h2>
+              <button onClick={() => setShowDepositModal(false)} className="text-gray-400 text-xl">×</button>
+            </div>
+            <div className="bg-emerald-50 rounded-xl px-3 py-2 text-xs text-emerald-700 font-medium mb-3">
+              {investmentAccounts.find(a => a.id === depositAccountId)?.name}
+              <span className="ml-2 text-emerald-500">현재 예수금 {fmtKRW(Math.round(cashBalanceMap.get(depositAccountId) ?? 0))}</span>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">입금 금액 *</label>
+                <input
+                  type="text" inputMode="numeric"
+                  placeholder="0"
+                  value={depositAmount}
+                  onChange={e => setDepositAmount(e.target.value.replace(/[^0-9]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  autoFocus
+                />
+                {depositAmount && (
+                  <div className="mt-1.5 text-xs text-amber-600 font-medium px-1">
+                    입금 후 예수금: {fmtKRW(Math.round((cashBalanceMap.get(depositAccountId) ?? 0) + parseAmt(depositAmount)))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleSaveDeposit}
+                disabled={!depositAmount || parseAmt(depositAmount) <= 0}
+                className="w-full bg-amber-500 text-white font-semibold py-3 rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-40">
+                입금하기
+              </button>
             </div>
           </div>
         </div>
