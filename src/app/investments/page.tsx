@@ -1282,29 +1282,27 @@ export default function InvestmentsPage() {
                               </button>
                             </div>
                             {(() => {
-                              const legacy = acc.cashDeposits ?? 0
-                              const hasLegacy = legacy > 0
+                              const legacy = Number(acc.cashDeposits ?? 0)
                               const hasNew = accDeposits.length > 0
-                              if (!hasLegacy && !hasNew) {
+                              if (legacy === 0 && !hasNew) {
                                 return <div className="text-xs text-amber-500 text-center py-2">입금 내역이 없습니다</div>
                               }
                               return (
                                 <div className="space-y-1.5">
-                                  {hasLegacy && (
+                                  {/* 기존잔액: 0보다 크거나, 내역이 없을 때도 표시 */}
+                                  {legacy !== 0 && (
                                     <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
                                       <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">기존잔액</span>
-                                        </div>
-                                        <div className="text-sm font-semibold text-amber-700">{fmtKRW(legacy)}</div>
+                                        <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">기존잔액</span>
+                                        <div className="text-sm font-semibold text-amber-700 mt-0.5">{fmtKRW(legacy)}</div>
                                       </div>
                                       <div className="flex gap-1 flex-shrink-0 ml-2">
                                         <button
                                           onClick={() => {
                                             setDepositAccountId(acc.id)
-                                            setDepositAmount(String(legacy))
+                                            setDepositAmount(String(Math.abs(legacy)))
                                             setDepositDate(today)
-                                            setDepositNote('기존잔액수정')
+                                            setDepositNote('')
                                             setEditDepositId('__legacy__' + acc.id)
                                             setShowDepositModal(true)
                                           }}
