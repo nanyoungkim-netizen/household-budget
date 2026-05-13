@@ -440,7 +440,7 @@ export default function InvestmentsPage() {
     investments.forEach(inv => {
       const trades = investmentTrades
         .filter(t => t.investmentId === inv.id)
-        .sort((a, b) => a.date.localeCompare(b.date))
+        .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
 
       let holdingQty = 0
       let totalBuyAmt = 0
@@ -701,14 +701,14 @@ export default function InvestmentsPage() {
       if (accountId) {
         if (oldTrade?.linkedDepositId) {
           setInvestmentCashDeposits(investmentCashDeposits.map(d =>
-            d.id === oldTrade.linkedDepositId ? { ...d, amount: depositAmt, date: tradeForm.date } : d
+            d.id === oldTrade.linkedDepositId ? { ...d, amount: depositAmt, date: tradeForm.date ?? '' } : d
           ))
           linkedDepositId = oldTrade.linkedDepositId
         } else {
           const newDep: InvestmentCashDeposit = {
             id: `dep${Date.now()}`,
             accountId,
-            date: tradeForm.date,
+            date: tradeForm.date ?? '',
             amount: depositAmt,
             note: `거래 연동: ${inv?.name ?? ''}`,
           }
@@ -724,7 +724,7 @@ export default function InvestmentsPage() {
         const newDep: InvestmentCashDeposit = {
           id: `dep${Date.now()}`,
           accountId,
-          date: tradeForm.date,
+          date: tradeForm.date ?? '',
           amount: depositAmt,
           note: `거래 연동: ${inv?.name ?? ''}`,
         }
@@ -899,7 +899,7 @@ export default function InvestmentsPage() {
         return inv?.name === selectedTradeInvName
       })
     : tradeFilteredByAccount
-  ).slice().sort((a, b) => b.date.localeCompare(a.date))
+  ).slice().sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
   // 거래 이력 - 계좌 필터에 맞는 종목 이름 (중복 제거)
   const tradeInvNames = (() => {
