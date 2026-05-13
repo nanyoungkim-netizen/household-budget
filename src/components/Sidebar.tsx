@@ -13,6 +13,7 @@ const navItems = [
   { href: '/goals', icon: '🎯', label: '재무 목표' },
   { href: '/investments', icon: '📈', label: '투자 내역' },
   { href: '/history', icon: '📚', label: '이전 가계부' },
+  { href: '/backup', icon: '💾', label: '백업 & 복구' },
   { href: '/settings', icon: '⚙️', label: '기초 설정' },
 ]
 

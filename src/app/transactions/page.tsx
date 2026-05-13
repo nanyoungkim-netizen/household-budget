@@ -70,6 +70,7 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
+  const [quickDateKey, setQuickDateKey] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [catParentFilter, setCatParentFilter] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
@@ -141,9 +142,71 @@ export default function TransactionsPage() {
 
   const [form, setForm] = useState<FormState>(defaultForm)
 
+  // ── 빠른 날짜 헬퍼 ─────────────────────────────────────────────────────────
+  function applyQuickDate(key: string) {
+    const d = new Date()
+    const fmt = (dt: Date) => dt.toISOString().slice(0, 10)
+    const fmtM = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`
+    let from = '', to = '', newMonth = ''
+    if (key === 'today') { from = to = fmt(d); newMonth = fmtM(d) }
+    else if (key === 'yesterday') { const y = new Date(d); y.setDate(d.getDate()-1); from = to = fmt(y); newMonth = fmtM(y) }
+    else if (key === 'this_week') {
+      const start = new Date(d); start.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay()-1))
+      from = fmt(start); to = fmt(d)
+    }
+    else if (key === 'last_week') {
+      const end = new Date(d); end.setDate(d.getDate() - (d.getDay() === 0 ? 0 : d.getDay()))
+      const start = new Date(end); start.setDate(end.getDate()-6)
+      from = fmt(start); to = fmt(end)
+    }
+    else if (key === 'this_month') { from = `${fmtM(d)}-01`; to = fmt(d); newMonth = fmtM(d) }
+    else if (key === 'last_month') {
+      const lm = new Date(d); lm.setDate(1); lm.setMonth(d.getMonth()-1)
+      const lastDay = new Date(lm.getFullYear(), lm.getMonth()+1, 0)
+      from = `${fmtM(lm)}-01`; to = fmt(lastDay); newMonth = fmtM(lm)
+    }
+    else if (key === 'last_3m') { const s = new Date(d); s.setDate(d.getDate()-89); from = fmt(s); to = fmt(d) }
+    else if (key === 'this_year') { from = `${d.getFullYear()}-01-01`; to = fmt(d) }
+    setQuickDateKey(key)
+    setFilterDateFrom(from)
+    setFilterDateTo(to)
+    if (newMonth) setMonth(newMonth)
+  }
+
+  function resetAllFilters() {
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    setQuickDateKey('')
+    setMonth(currentMonth)
+    setFilterCategories([])
+    setCatParentFilter('')
+    setFilterType('all')
+    setFilterAccount('all')
+    setFilterCard('all')
+    setSearchQuery('')
+    setRealConsumptionFilter(false)
+  }
+
+  // 금액 축약 표시 (100만 이상 → '150.0만')
+  function fmtDailyAmt(n: number): string {
+    if (n >= 1000000) return `${(n / 10000).toFixed(1)}만`
+    return n.toLocaleString('ko-KR')
+  }
+
+  // 활성 필터 수
+  const activeFilterCount = [
+    filterDateFrom || filterDateTo || quickDateKey ? 1 : 0,
+    filterType !== 'all' ? 1 : 0,
+    filterCategories.length > 0 ? 1 : 0,
+    (paymentTab === 'all' && filterAccount !== 'all') || (paymentTab === 'account' && filterAccount !== 'all') ? 1 : 0,
+    filterCard !== 'all' ? 1 : 0,
+    searchQuery.trim() ? 1 : 0,
+    realConsumptionFilter ? 1 : 0,
+  ].reduce((s, v) => s + v, 0)
+
   // ── 필터링 ──────────────────────────────────────────────────────────────────
   const filtered = transactions
-    .filter(t => t.date.startsWith(month))
+    .filter(t => (filterDateFrom && filterDateTo) ? true : t.date.startsWith(month))
     .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
     .filter(t => {
@@ -638,11 +701,22 @@ export default function TransactionsPage() {
                 </button>
                 {parentCats.map(p => {
                   const isActive = catParentFilter === p.id
+                  const parentSubIds = leafCats.filter(c => c.parentId === p.id).map(c => c.id)
+                  const selectedCount = parentSubIds.filter(id => filterCategories.includes(id)).length
+                  const isPartial = !isActive && selectedCount > 0
                   return (
                     <button key={p.id}
-                      onClick={() => { setCatParentFilter(prev => prev === p.id ? '' : p.id); setFilterCategories([]) }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                      style={isActive ? { backgroundColor: p.color || '#4B5563' } : {}}>
+                      onClick={() => {
+                        if (catParentFilter === p.id) {
+                          setCatParentFilter('')
+                          setFilterCategories([])
+                        } else {
+                          setCatParentFilter(p.id)
+                          setFilterCategories(parentSubIds)
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : isPartial ? 'text-white opacity-60' : 'text-gray-500 hover:bg-gray-100'}`}
+                      style={isActive || isPartial ? { backgroundColor: p.color || '#4B5563' } : {}}>
                       {p.icon} {p.name}
                     </button>
                   )
@@ -674,6 +748,54 @@ export default function TransactionsPage() {
           </div>
         )
       })()}
+
+      {/* 빠른 날짜 필터 */}
+      <div className="bg-white rounded-2xl shadow-sm mb-3 overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+          <span className="text-xs font-semibold text-gray-500 flex-shrink-0">빠른 날짜</span>
+          {activeFilterCount > 0 && (
+            <span className="flex-shrink-0 text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
+          <div className="flex-1" />
+          <button
+            onClick={resetAllFilters}
+            disabled={activeFilterCount === 0}
+            className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-all flex-shrink-0 ${
+              activeFilterCount > 0
+                ? 'text-red-500 hover:bg-red-50 bg-red-50/50'
+                : 'text-gray-300 cursor-not-allowed'
+            }`}>
+            필터 초기화 ✕
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <div className="flex gap-1.5 px-3 py-2" style={{ minWidth: 'max-content' }}>
+            {([
+              ['this_month', '이번 달'],
+              ['last_month', '전월'],
+              ['this_year',  '올해'],
+              ['today',      '오늘'],
+              ['yesterday',  '어제'],
+              ['this_week',  '이번 주'],
+              ['last_week',  '지난 주'],
+              ['last_3m',    '최근 3개월'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => quickDateKey === key ? (setQuickDateKey(''), setFilterDateFrom(''), setFilterDateTo('')) : applyQuickDate(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex-shrink-0 ${
+                  quickDateKey === key
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* 필터 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
@@ -799,10 +921,27 @@ export default function TransactionsPage() {
 
       {/* 거래 목록 */}
       <div className="space-y-3">
-        {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
+        {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => {
+          const dayTxs = grouped[date]
+          const dayIncome = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+          const dayRefund = dayTxs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
+          const dayExpense = Math.max(0, dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0) - dayRefund)
+          const dayTransfer = dayTxs.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
+          return (
           <div key={date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-gray-500">{date}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {dayIncome > 0 && (
+                  <span className="text-[11px] font-medium text-blue-500">+{fmtDailyAmt(dayIncome)}</span>
+                )}
+                {dayExpense > 0 && (
+                  <span className="text-[11px] font-medium text-red-500">-{fmtDailyAmt(dayExpense)}</span>
+                )}
+                {dayTransfer > 0 && (
+                  <span className="text-[11px] font-medium text-gray-400">{fmtDailyAmt(dayTransfer)}</span>
+                )}
+              </div>
             </div>
             {grouped[date].map(t => {
               const cat = categories.find(c => c.id === t.categoryId)
@@ -900,7 +1039,8 @@ export default function TransactionsPage() {
               )
             })}
           </div>
-        ))}
+          )
+        })}
         {Object.keys(grouped).length === 0 && (
           <div className="text-center py-16 text-gray-400">
             <div className="text-4xl mb-2">📭</div>
