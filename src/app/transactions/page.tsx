@@ -723,16 +723,24 @@ export default function TransactionsPage() {
                   return (
                     <button key={p.id}
                       onClick={() => {
-                        // 대분류 토글: 소분류 자동 체크 없이 대분류 전체 필터
                         if (catParentFilter === p.id) {
                           setCatParentFilter('')
+                          setFilterCategories([])
                         } else {
                           setCatParentFilter(p.id)
-                          setFilterCategories([])  // 소분류 선택 초기화
+                          setFilterCategories([])
                         }
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                      style={isActive ? { backgroundColor: p.color || '#4B5563' } : {}}>
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${
+                        isActive && filterCategories.length === 0 ? 'text-white' :
+                        isActive && filterCategories.length > 0 ? 'border border-current bg-white' :
+                        'text-gray-500 hover:bg-gray-100'
+                      }`}
+                      style={
+                        isActive && filterCategories.length === 0 ? { backgroundColor: p.color || '#4B5563' } :
+                        isActive && filterCategories.length > 0 ? { color: p.color || '#4B5563' } :
+                        {}
+                      }>
                       {p.icon} {p.name}
                     </button>
                   )
@@ -748,8 +756,7 @@ export default function TransactionsPage() {
                     return (
                       <button key={cat.id}
                         onClick={() => {
-                          // 소분류 클릭 시 대분류 필터 해제 후 해당 소분류만 적용
-                          setCatParentFilter('')
+                          // 소분류 클릭 시 catParentFilter는 유지 (행이 계속 보이도록)
                           setFilterCategories(prev =>
                             prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [cat.id]
                           )

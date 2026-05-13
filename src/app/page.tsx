@@ -310,7 +310,10 @@ export default function Dashboard() {
     let totalPrincipal = 0
     let totalExpected = 0
     let totalInterest = 0
+    let count = 0
     for (const s of savings) {
+      // 만기 완료된 상품은 납입금 합계에서 제외 (savings/page.tsx와 동일 기준)
+      if (s.status === 'matured' || (s.maturityDate && new Date(s.maturityDate) < today)) continue
       const linkedPaid = transactions
         .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
         .reduce((acc, t) => acc + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
@@ -318,8 +321,9 @@ export default function Dashboard() {
       totalPrincipal += principal
       totalExpected  += s.expectedAmount ?? 0
       totalInterest  += Math.max(0, (s.expectedAmount ?? 0) - principal)
+      count++
     }
-    return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
+    return { totalPrincipal, totalExpected, totalInterest, count }
   }, [savings, transactions])
 
   // 투자 보유 내역 (종목별 qty·평가금액·손익) — 위젯 + 총평가금액 공유

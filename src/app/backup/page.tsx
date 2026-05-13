@@ -4,7 +4,9 @@ import { useState, useRef } from 'react'
 import { useApp } from '@/lib/AppContext'
 import * as XLSX from 'xlsx'
 
-const BACKUP_VERSION = '1.1'
+const BACKUP_VERSION = '1.2'
+const SHEET_ACCOUNTS     = '계좌'
+const SHEET_CARDS        = '카드'
 const SHEET_TRANSACTIONS = '거래내역'
 const SHEET_SAVINGS      = '적금예금'
 const SHEET_INVESTMENTS  = '투자'
@@ -27,6 +29,7 @@ function fmtDate() {
 export default function BackupPage() {
   const {
     data, categories, setTransactions, setCategories, setBudgets, setSavings,
+    setAccounts, setCards,
   } = useApp()
   const { transactions, accounts, cards, budgets, savings, investments, investmentTrades } = data
 
@@ -42,12 +45,38 @@ export default function BackupPage() {
     catRows: Record<string, string | number>[]
     budgetRows: Record<string, string | number>[]
     savingsRows: Record<string, string | number>[]
+    accountRows: Record<string, string | number>[]
+    cardRows: Record<string, string | number>[]
   } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // ── 내보내기 ─────────────────────────────────────────────────────────────────
   function handleExport() {
     const wb = XLSX.utils.book_new()
+
+    // 0-1. 계좌 시트
+    const accountRows = accounts.map(a => ({
+      계좌ID: a.id,
+      계좌명: a.name,
+      은행: a.bank,
+      잔액: a.balance,
+      색상: a.color,
+      자산유형: a.assetType ?? 'cash',
+      메모: a.memo ?? '',
+    }))
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(accountRows.length ? accountRows : [{}]), SHEET_ACCOUNTS)
+
+    // 0-2. 카드 시트
+    const cardRows = cards.map(c => ({
+      카드ID: c.id,
+      카드명: c.name,
+      은행: c.bank,
+      결제일: c.billingDate,
+      색상: c.color,
+      연회비금액: c.annualFeeAmount ?? '',
+      연회비납부일: c.annualFeeDate ?? '',
+    }))
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cardRows.length ? cardRows : [{}]), SHEET_CARDS)
 
     // 1. 거래내역 시트
     const txRows = transactions.map(t => {
@@ -143,6 +172,8 @@ export default function BackupPage() {
     const metaRows = [
       { 항목: '버전', 값: BACKUP_VERSION },
       { 항목: '내보낸날짜', 값: today },
+      { 항목: '계좌수', 값: accounts.length },
+      { 항목: '카드수', 값: cards.length },
       { 항목: '총거래건수', 값: transactions.length },
       { 항목: '적금예금수', 값: savings.length },
       { 항목: '투자종목수', 값: investments.length },
@@ -181,9 +212,17 @@ export default function BackupPage() {
 
         const txRows      = XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_TRANSACTIONS])
         const catRows     = XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_CATEGORIES])
-        const budgetRows  = XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_BUDGETS] ?? {})
+        const budgetRows  = wb.SheetNames.includes(SHEET_BUDGETS)
+          ? XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_BUDGETS])
+          : []
         const savingsRows = wb.SheetNames.includes(SHEET_SAVINGS)
           ? XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_SAVINGS])
+          : []
+        const accountRows = wb.SheetNames.includes(SHEET_ACCOUNTS)
+          ? XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_ACCOUNTS])
+          : []
+        const cardRows = wb.SheetNames.includes(SHEET_CARDS)
+          ? XLSX.utils.sheet_to_json<Record<string, string | number>>(wb.Sheets[SHEET_CARDS])
           : []
 
         // 열 구조 검증
@@ -213,7 +252,7 @@ export default function BackupPage() {
           budgetCount: budgetRows.length,
           dateRange,
         })
-        setPendingData({ txRows, catRows, budgetRows, savingsRows })
+        setPendingData({ txRows, catRows, budgetRows, savingsRows, accountRows, cardRows })
         setImportStatus('preview')
         if (fileVersion !== BACKUP_VERSION) {
           setImportError(`백업 파일 버전(${fileVersion})이 현재 버전(${BACKUP_VERSION})과 다릅니다. 복구를 진행하면 일부 데이터가 누락될 수 있습니다.`)
@@ -230,7 +269,35 @@ export default function BackupPage() {
   // ── 복구 실행 ─────────────────────────────────────────────────────────────────
   function handleRestore() {
     if (!pendingData) return
-    const { txRows, catRows, budgetRows, savingsRows } = pendingData
+    const { txRows, catRows, budgetRows, savingsRows, accountRows, cardRows } = pendingData
+
+    // 계좌 복구
+    if (accountRows.length > 0) {
+      const restoredAccounts = accountRows.map(r => ({
+        id: String(r['계좌ID'] || `a_${Math.random().toString(36).slice(2)}`),
+        name: String(r['계좌명'] || ''),
+        bank: String(r['은행'] || ''),
+        balance: Number(r['잔액']) || 0,
+        color: String(r['색상'] || '#607D8B'),
+        assetType: (r['자산유형'] as 'cash' | 'savings' | 'investment') || 'cash',
+        memo: r['메모'] ? String(r['메모']) : undefined,
+      }))
+      setAccounts(restoredAccounts)
+    }
+
+    // 카드 복구
+    if (cardRows.length > 0) {
+      const restoredCards = cardRows.map(r => ({
+        id: String(r['카드ID'] || `c_${Math.random().toString(36).slice(2)}`),
+        name: String(r['카드명'] || ''),
+        bank: String(r['은행'] || ''),
+        billingDate: Number(r['결제일']) || 25,
+        color: String(r['색상'] || '#607D8B'),
+        annualFeeAmount: r['연회비금액'] ? Number(r['연회비금액']) : undefined,
+        annualFeeDate: r['연회비납부일'] ? String(r['연회비납부일']) : undefined,
+      }))
+      setCards(restoredCards)
+    }
 
     // 카테고리 복구
     if (catRows.length > 0) {
@@ -278,20 +345,23 @@ export default function BackupPage() {
       setSavings(restoredSavings)
     }
 
-    // 거래내역 복구
+    // 거래내역 복구 (복구된 계좌 목록 우선, 없으면 기존 계좌)
     const txTypeMap: Record<string, string> = { 수입: 'income', 지출: 'expense', 이체: 'transfer', 환급: 'refund' }
+    const allAccountsForLookup = accountRows.length > 0
+      ? accountRows.map(r => ({ id: String(r['계좌ID']), name: String(r['계좌명'] || '') }))
+      : accounts.map(a => ({ id: a.id, name: a.name }))
     const restoredTxs = txRows.map(r => {
       const accName = String(r['계좌'] || '')
-      const acc = accounts.find(a => a.name === accName) ?? accounts[0]
+      const acc = allAccountsForLookup.find(a => a.name === accName) ?? allAccountsForLookup[0]
       const toAccName = String(r['받는계좌'] || '')
-      const toAcc = toAccName ? accounts.find(a => a.name === toAccName) : undefined
+      const toAcc = toAccName ? allAccountsForLookup.find(a => a.name === toAccName) : undefined
       return {
         id: String(r['거래ID'] || `t_${Date.now()}_${Math.random().toString(36).slice(2)}`),
         date: String(r['날짜'] || ''),
         description: String(r['내용'] || ''),
         amount: Number(r['금액']) || 0,
         type: (txTypeMap[String(r['유형'])] || 'expense') as 'income' | 'expense' | 'transfer' | 'refund',
-        accountId: acc?.id || '',
+        accountId: acc?.id ?? '',
         toAccountId: toAcc?.id,
         categoryId: '',
         paymentMethod: 'account' as const,
@@ -315,13 +385,13 @@ export default function BackupPage() {
       <div className="bg-white rounded-2xl shadow-sm p-6 mb-4">
         <h2 className="text-base font-bold text-gray-800 mb-1">데이터 내보내기</h2>
         <p className="text-sm text-gray-500 mb-4">
-          거래내역·적금예금·투자·카테고리·예산을 엑셀 파일로 다운로드합니다.
+          계좌·카드·거래내역·적금예금·투자·카테고리·예산을 엑셀 파일로 다운로드합니다.
         </p>
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
+            ['계좌', accounts.length, 'slate'],
             ['거래내역', transactions.length, 'blue'],
             ['적금·예금', savings.length, 'emerald'],
-            ['투자종목', investments.length, 'purple'],
           ].map(([label, count, color]) => (
             <div key={String(label)} className={`bg-${color}-50 rounded-xl p-3 text-center`}>
               <div className={`text-lg font-bold text-${color}-600`}>{Number(count).toLocaleString('ko-KR')}</div>
