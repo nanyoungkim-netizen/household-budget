@@ -395,7 +395,7 @@ export default function TransactionsPage() {
         accountId: form2.accountId,
         categoryId: form2.categoryId,
         paymentMethod: form2.paymentMethod,
-        cardId: form2.paymentMethod === 'card' ? form2.cardId : undefined,
+        cardId: (form2.paymentMethod === 'card' || isCardPaymentCat(form2.categoryId)) && form2.cardId ? form2.cardId : undefined,
         savingLinks: resolvedSavingLinks,
         billingMonth: isCardPaymentCat(form2.categoryId) && form2.billingMonth ? form2.billingMonth : undefined,
         consumptionType: formType === 'expense' ? form2.consumptionType : undefined,
@@ -1110,6 +1110,8 @@ export default function TransactionsPage() {
                         ...f,
                         categoryId: newCatId,
                         billingMonth: isCardPaymentCat(newCatId) && !f.billingMonth ? prevMonthStr() : f.billingMonth,
+                        // 카드대금 카테고리로 전환 시 카드 선택 초기화 (구매카드가 아닌 납부 카드 선택용)
+                        cardId: isCardPaymentCat(newCatId) ? '' : f.cardId,
                       }))
                       setCatSearch('')
                       if (!isSavingCat(newCatId)) {
@@ -1215,22 +1217,35 @@ export default function TransactionsPage() {
                     )
                   })()}
 
-                  {/* ── 카드대금 청구 월 선택 ── */}
+                  {/* ── 카드대금 청구 월 + 카드 선택 ── */}
                   {isCardPaymentCat(form.categoryId) && (
-                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3">
-                      <label className="text-xs font-semibold text-purple-700 block mb-2">💳 청구 월 선택</label>
-                      <select
-                        value={form.billingMonth}
-                        onChange={e => setForm(f => ({ ...f, billingMonth: e.target.value }))}
-                        className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                        <option value="">청구 월 선택 (선택사항)</option>
-                        {recentMonthOptions().map(ym => (
-                          <option key={ym} value={ym}>{fmtMonthLabel(ym)} 카드대금</option>
-                        ))}
-                      </select>
+                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3 space-y-2.5">
+                      <label className="text-xs font-semibold text-purple-700 block">💳 카드대금 정보</label>
+                      <div>
+                        <label className="text-xs text-purple-600 block mb-1">납부 카드</label>
+                        <select
+                          value={form.cardId}
+                          onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
+                          className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          <option value="">카드 선택 (선택사항)</option>
+                          {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-purple-600 block mb-1">청구 월</label>
+                        <select
+                          value={form.billingMonth}
+                          onChange={e => setForm(f => ({ ...f, billingMonth: e.target.value }))}
+                          className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          <option value="">청구 월 선택 (선택사항)</option>
+                          {recentMonthOptions().map(ym => (
+                            <option key={ym} value={ym}>{fmtMonthLabel(ym)} 카드대금</option>
+                          ))}
+                        </select>
+                      </div>
                       {form.billingMonth && (
-                        <p className="text-xs text-purple-500 mt-1.5">
-                          {fmtMonthLabel(form.billingMonth)}에 사용한 카드 내역의 대금을 납부하는 거래로 기록됩니다.
+                        <p className="text-xs text-purple-500">
+                          {fmtMonthLabel(form.billingMonth)} 사용분 카드대금 납부로 기록됩니다.
                         </p>
                       )}
                     </div>
