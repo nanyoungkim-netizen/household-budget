@@ -222,7 +222,16 @@ export default function TransactionsPage() {
       t.description.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
       String(t.amount).includes(searchQuery.trim())
     )
-    .filter(t => filterCategories.length === 0 || filterCategories.includes(t.categoryId))
+    .filter(t => {
+      // 소분류 선택 우선
+      if (filterCategories.length > 0) return filterCategories.includes(t.categoryId)
+      // 대분류만 선택된 경우 → 해당 대분류의 모든 소분류 포함
+      if (catParentFilter) {
+        const cat = categories.find(c => c.id === t.categoryId)
+        return cat?.parentId === catParentFilter
+      }
+      return true
+    })
     .filter(t => !realConsumptionFilter || getConsumptionType(t, categories) === 'normal')
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
@@ -711,29 +720,26 @@ export default function TransactionsPage() {
                 </button>
                 {parentCats.map(p => {
                   const isActive = catParentFilter === p.id
-                  const parentSubIds = leafCats.filter(c => c.parentId === p.id).map(c => c.id)
-                  const selectedCount = parentSubIds.filter(id => filterCategories.includes(id)).length
-                  const isPartial = !isActive && selectedCount > 0
                   return (
                     <button key={p.id}
                       onClick={() => {
+                        // 대분류 토글: 소분류 자동 체크 없이 대분류 전체 필터
                         if (catParentFilter === p.id) {
                           setCatParentFilter('')
-                          setFilterCategories([])
                         } else {
                           setCatParentFilter(p.id)
-                          setFilterCategories(parentSubIds)
+                          setFilterCategories([])  // 소분류 선택 초기화
                         }
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : isPartial ? 'text-white opacity-60' : 'text-gray-500 hover:bg-gray-100'}`}
-                      style={isActive || isPartial ? { backgroundColor: p.color || '#4B5563' } : {}}>
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                      style={isActive ? { backgroundColor: p.color || '#4B5563' } : {}}>
                       {p.icon} {p.name}
                     </button>
                   )
                 })}
               </div>
             </div>
-            {/* 소분류 행 — 대분류 선택 시만 표시 */}
+            {/* 소분류 행 — 대분류 선택 or 소분류 선택 시 표시 */}
             {catParentFilter && subCats.length > 0 && (
               <div className="overflow-x-auto border-t border-gray-100">
                 <div className="flex gap-1 p-2" style={{ minWidth: 'max-content' }}>
@@ -741,9 +747,13 @@ export default function TransactionsPage() {
                     const isSelected = filterCategories.includes(cat.id)
                     return (
                       <button key={cat.id}
-                        onClick={() => setFilterCategories(prev =>
-                          prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
-                        )}
+                        onClick={() => {
+                          // 소분류 클릭 시 대분류 필터 해제 후 해당 소분류만 적용
+                          setCatParentFilter('')
+                          setFilterCategories(prev =>
+                            prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [cat.id]
+                          )
+                        }}
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 border ${
                           isSelected ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                         }`}
@@ -783,14 +793,14 @@ export default function TransactionsPage() {
         <div className="overflow-x-auto">
           <div className="flex gap-1.5 px-3 py-2" style={{ minWidth: 'max-content' }}>
             {([
-              ['this_month', '이번 달'],
-              ['last_month', '전월'],
-              ['this_year',  '올해'],
               ['today',      '오늘'],
               ['yesterday',  '어제'],
               ['this_week',  '이번 주'],
               ['last_week',  '지난 주'],
+              ['this_month', '이번 달'],
+              ['last_month', '전월'],
               ['last_3m',    '최근 3개월'],
+              ['this_year',  '올해'],
             ] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -939,9 +949,9 @@ export default function TransactionsPage() {
           const dayTransfer = dayTxs.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
           return (
           <div key={date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500">{date}</span>
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-3">
                 {dayIncome > 0 && (
                   <span className="text-[11px] font-medium text-blue-500">+{fmtDailyAmt(dayIncome)}</span>
                 )}

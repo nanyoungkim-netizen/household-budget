@@ -111,6 +111,7 @@ export default function SavingsPage() {
   const [pendingTab, setPendingTab] = useState<SavingFormType | null>(null)
   const [expandedSavingId, setExpandedSavingId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [maturedSectionOpen, setMaturedSectionOpen] = useState(false)
 
   // ── 만기 처리 모달 ────────────────────────────────────────────────────────
   type MaturityModal = { savingId: string; principal: number; interest: number; accountId: string; date: string } | null
@@ -293,18 +294,29 @@ export default function SavingsPage() {
     return (s.currentAmount || 0) + linkedPaid
   }
 
-  // ── 요약 ─────────────────────────────────────────────────────────────────
-  const sdSavings = savings.filter(s => s.type !== 'subscription')
-  const subSavings = savings.filter(s => s.type === 'subscription')
+  // ── 만기 여부 판별 ───────────────────────────────────────────────────────
+  function isMaturedSaving(s: Saving) {
+    if (s.status === 'matured') return true
+    if (!s.maturityDate) return false
+    return new Date(s.maturityDate) < today
+  }
 
-  const totalCurrent     = sdSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const savingPaid       = sdSavings.filter(s => s.type === 'saving') .reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const depositPaid      = sdSavings.filter(s => s.type === 'deposit').reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const totalExpected    = sdSavings.reduce((sum, s) => sum + s.expectedAmount, 0)
+  // ── 요약 ─────────────────────────────────────────────────────────────────
+  const sdSavings     = savings.filter(s => s.type !== 'subscription')
+  const subSavings    = savings.filter(s => s.type === 'subscription')
+  const activeSdSavings = sdSavings.filter(s => !isMaturedSaving(s))
+
+  const totalCurrent     = activeSdSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const savingPaid       = activeSdSavings.filter(s => s.type === 'saving') .reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const depositPaid      = activeSdSavings.filter(s => s.type === 'deposit').reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const totalExpected    = activeSdSavings.reduce((sum, s) => sum + s.expectedAmount, 0)
   const totalSubPaid     = subSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
 
   // ── 리스트 필터 ──────────────────────────────────────────────────────────
-  const displayedSD  = sdSavings.filter(s => filterTab === 'all' || s.type === filterTab)
+  const displayedSD      = sdSavings.filter(s => filterTab === 'all' || s.type === filterTab)
+  const activeDisplayedSD  = displayedSD.filter(s => !isMaturedSaving(s))
+  const maturedDisplayedSD = displayedSD.filter(s => isMaturedSaving(s))
+  const totalMaturedPaid   = maturedDisplayedSD.reduce((sum, s) => sum + getPaidAmount(s), 0)
   const displayedSub = subSavings
 
   // ── 과세 라벨 ─────────────────────────────────────────────────────────────
@@ -378,7 +390,7 @@ export default function SavingsPage() {
 
           {/* 목록 */}
           <div className="space-y-3">
-            {displayedSD.map((s, idx) => {
+            {activeDisplayedSD.map((s, idx) => {
               const dday = getDday(s.maturityDate)
               const isDone = dday === '만기완료'
               const isMatured = s.status === 'matured'
@@ -559,13 +571,98 @@ export default function SavingsPage() {
                 </div>
               )
             })}
-            {displayedSD.length === 0 && (
+            {activeDisplayedSD.length === 0 && maturedDisplayedSD.length === 0 && (
               <div className="text-center py-12 text-gray-400">
                 <div className="text-4xl mb-2">💰</div>
                 <div className="text-sm">등록된 {filterTab === 'saving' ? '적금' : filterTab === 'deposit' ? '예금' : '적금·예금'}이 없습니다</div>
               </div>
             )}
           </div>
+
+          {/* 만기 섹션 */}
+          {maturedDisplayedSD.length > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => setMaturedSectionOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 rounded-2xl hover:bg-gray-200 transition-colors mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-600">만기 완료</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 font-medium">{maturedDisplayedSD.length}건</span>
+                  <span className="text-xs text-gray-400">{fmtKRW(totalMaturedPaid)}</span>
+                </div>
+                <span className="text-gray-400 text-sm">{maturedSectionOpen ? '▲' : '▼'}</span>
+              </button>
+              {maturedSectionOpen && (
+                <div className="space-y-3">
+                  {maturedDisplayedSD.map(s => {
+                    const linkedTxs = data.transactions.filter(t =>
+                      t.savingLinks?.some(l => l.savingId === s.id)
+                    )
+                    const linkedPaid = linkedTxs.reduce((sum, t) => sum + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
+                    const paidAmount = (s.currentAmount || 0) + linkedPaid
+                    const totalMonths = s.startDate && s.maturityDate
+                      ? (() => {
+                          const st = new Date(s.startDate), en = new Date(s.maturityDate)
+                          return (en.getFullYear() - st.getFullYear()) * 12 + (en.getMonth() - st.getMonth())
+                        })()
+                      : 0
+                    const cardCalc = calcMaturity(
+                      s.type, s.type === 'saving' ? s.monthlyAmount : s.currentAmount,
+                      s.interestRate, s.startDate, s.maturityDate,
+                      s.interestType ?? 'simple', (s.taxType as TaxType) ?? 'general',
+                    )
+                    const totalPrincipal = cardCalc
+                      ? cardCalc.principal
+                      : (s.type === 'saving' ? s.monthlyAmount * Math.max(totalMonths, 1) : s.currentAmount)
+                    const interestIncome = cardCalc ? cardCalc.netInterest : Math.max(0, s.expectedAmount - totalPrincipal)
+                    const displayMaturity = cardCalc ? cardCalc.maturityAmount : s.expectedAmount
+
+                    return (
+                      <div key={s.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-200 opacity-80">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.type === 'saving' ? 'bg-blue-50 text-blue-400' : 'bg-amber-50 text-amber-400'}`}>
+                                {s.type === 'saving' ? '적금' : '예금'}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-200 text-gray-500">만기완료</span>
+                            </div>
+                            <div className="font-semibold text-gray-500 mt-1">{s.name}</div>
+                            <div className="text-xs text-gray-400">
+                              {s.bank} · 연 {s.interestRate}% {totalMonths > 0 ? `· ${totalMonths}개월` : ''}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2">
+                            <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
+                            <button onClick={() => setDeleteConfirmId(s.id)} className="text-xs text-red-400 hover:text-red-600 ml-1">삭제</button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-white rounded-xl p-3">
+                            <div className="text-xs text-gray-400 mb-0.5">납입 원금</div>
+                            <div className="text-sm font-semibold text-gray-600">{fmtKRW(paidAmount)}</div>
+                          </div>
+                          <div className="bg-white rounded-xl p-3">
+                            <div className="text-xs text-gray-400 mb-0.5">이자(세후)</div>
+                            <div className="text-sm font-semibold text-gray-600">+{fmtKRW(interestIncome)}</div>
+                          </div>
+                          <div className="bg-white rounded-xl p-3">
+                            <div className="text-xs text-gray-400 mb-0.5">만기수령액</div>
+                            <div className="text-sm font-semibold text-gray-600">{fmtKRW(displayMaturity)}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-3">
+                          <span>{s.startDate}</span>
+                          <div className="flex-1 h-px bg-gray-200" />
+                          <span>{s.maturityDate}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
