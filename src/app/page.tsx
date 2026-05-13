@@ -312,8 +312,8 @@ export default function Dashboard() {
     let totalInterest = 0
     let count = 0
     for (const s of savings) {
-      // 만기 완료된 상품은 납입금 합계에서 제외 (savings/page.tsx와 동일 기준)
-      if (s.status === 'matured' || (s.maturityDate && new Date(s.maturityDate) < today)) continue
+      // 만기처리 버튼으로 완료된 것만 제외. 날짜만 지난 것은 납입 중이므로 포함
+      if (s.status === 'matured') continue
       const linkedPaid = transactions
         .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
         .reduce((acc, t) => acc + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)

@@ -304,12 +304,13 @@ export default function SavingsPage() {
   // ── 요약 ─────────────────────────────────────────────────────────────────
   const sdSavings     = savings.filter(s => s.type !== 'subscription')
   const subSavings    = savings.filter(s => s.type === 'subscription')
-  const activeSdSavings = sdSavings.filter(s => !isMaturedSaving(s))
+  // 합계 계산: 만기처리(status==='matured')된 것만 제외. 날짜만 지난 것은 여전히 납입 중이므로 포함
+  const countedSdSavings = sdSavings.filter(s => s.status !== 'matured')
 
-  const totalCurrent     = activeSdSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const savingPaid       = activeSdSavings.filter(s => s.type === 'saving') .reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const depositPaid      = activeSdSavings.filter(s => s.type === 'deposit').reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const totalExpected    = activeSdSavings.reduce((sum, s) => sum + s.expectedAmount, 0)
+  const totalCurrent     = countedSdSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const savingPaid       = countedSdSavings.filter(s => s.type === 'saving') .reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const depositPaid      = countedSdSavings.filter(s => s.type === 'deposit').reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const totalExpected    = countedSdSavings.reduce((sum, s) => sum + s.expectedAmount, 0)
   const totalSubPaid     = subSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
 
   // ── 리스트 필터 ──────────────────────────────────────────────────────────
