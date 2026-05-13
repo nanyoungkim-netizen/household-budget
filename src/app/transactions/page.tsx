@@ -316,7 +316,17 @@ export default function TransactionsPage() {
   function openAdd() {
     setEditingId(null)
     setFormType('expense')
-    setForm(defaultForm())
+    const base = defaultForm()
+    // 통장/카드 필터 선택 중이면 해당 계좌·카드를 기본값으로
+    const hasAccount = filterAccount !== 'all' && accounts.some(a => a.id === filterAccount)
+    const hasCard    = filterCard   !== 'all' && cards.some(c => c.id === filterCard)
+    setForm({
+      ...base,
+      accountId:     hasAccount ? filterAccount : base.accountId,
+      toAccountId:   hasAccount ? (accounts.find(a => a.id !== filterAccount)?.id ?? base.toAccountId) : base.toAccountId,
+      paymentMethod: hasCard ? 'card' : base.paymentMethod,
+      cardId:        hasCard ? filterCard : base.cardId,
+    })
     setSavingLinks([])
     setSavingSearch('')
     setShowModal(true)
