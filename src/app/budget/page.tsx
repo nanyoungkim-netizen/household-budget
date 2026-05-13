@@ -199,18 +199,28 @@ export default function BudgetPage() {
         .filter(t => t.date.startsWith(prev) && t.type === 'refund' && t.paymentMethod === 'card' && t.cardId === card.id)
         .reduce((s, t) => s + t.amount, 0)
       const netCharged = Math.max(0, charged - refunded)
-      // CardBilling 기록이 있으면 카드별로 납부 여부 판단, 없으면 트랜잭션 fallback
-      const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === prev)
       let isPaid: boolean
       let paid: number
+      // 1순위: CardBilling 레코드 (카드별 정확한 납부 기록)
+      const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === prev)
       if (billing) {
         paid = billing.paidAmount
         isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
       } else {
-        paid = transactions
-          .filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev && (!t.cardId || t.cardId === card.id))
-          .reduce((s, t) => s + t.amount, 0)
-        isPaid = paid >= netCharged && netCharged > 0
+        const payTxs = transactions.filter(
+          t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev
+        )
+        // 2순위: 트랜잭션에 cardId가 명시된 경우
+        const cardTxs = payTxs.filter(t => t.cardId === card.id)
+        if (cardTxs.length > 0) {
+          paid = cardTxs.reduce((s, t) => s + t.amount, 0)
+          isPaid = paid >= netCharged && netCharged > 0
+        } else {
+          // 3순위: 납부 금액이 청구액과 정확히 일치하는 트랜잭션으로 매칭
+          const matchTx = payTxs.find(t => t.amount === netCharged)
+          paid = matchTx ? matchTx.amount : 0
+          isPaid = !!matchTx
+        }
       }
       return { ...card, charged: netCharged, paid, isPaid }
     })
