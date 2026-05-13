@@ -312,7 +312,8 @@ export default function Dashboard() {
     let totalInterest = 0
     let count = 0
     for (const s of savings) {
-      // 만기처리 버튼으로 완료된 것만 제외. 날짜만 지난 것은 납입 중이므로 포함
+      // 청약 제외 (적금·예금 탭과 동일 기준), 만기처리 완료된 것만 제외
+      if (s.type === 'subscription') continue
       if (s.status === 'matured') continue
       const linkedPaid = transactions
         .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
