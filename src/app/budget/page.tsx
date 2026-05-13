@@ -173,7 +173,7 @@ export default function BudgetPage() {
     .reduce((s, t) => s + t.amount, 0)
 
   // ── 카드별 청구 예정 ────────────────────────────────────────────────────────
-  const { cards } = data
+  const { cards, cardBillings } = data
   const prev = prevMonth(month)
 
   // 이달 카드 사용 (→ 다음달 청구 예정) — 환급 차감
@@ -199,10 +199,20 @@ export default function BudgetPage() {
         .filter(t => t.date.startsWith(prev) && t.type === 'refund' && t.paymentMethod === 'card' && t.cardId === card.id)
         .reduce((s, t) => s + t.amount, 0)
       const netCharged = Math.max(0, charged - refunded)
-      const paid = transactions
-        .filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev)
-        .reduce((s, t) => s + t.amount, 0)
-      return { ...card, charged: netCharged, paid, isPaid: paid >= netCharged && netCharged > 0 }
+      // CardBilling 기록이 있으면 카드별로 납부 여부 판단, 없으면 트랜잭션 fallback
+      const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === prev)
+      let isPaid: boolean
+      let paid: number
+      if (billing) {
+        paid = billing.paidAmount
+        isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
+      } else {
+        paid = transactions
+          .filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev && (!t.cardId || t.cardId === card.id))
+          .reduce((s, t) => s + t.amount, 0)
+        isPaid = paid >= netCharged && netCharged > 0
+      }
+      return { ...card, charged: netCharged, paid, isPaid }
     })
     .filter(c => c.charged > 0)
 
