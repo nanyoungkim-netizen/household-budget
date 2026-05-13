@@ -65,67 +65,10 @@ function calcStats(txs: Transaction[]) {
   return { income, expense: netExpense, refund, balance: income - netExpense }
 }
 
-function MemoWidget({ memo, onSave }: { memo: string; onSave: (v: string) => void }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(memo)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  function startEdit() {
-    setDraft(memo)
-    setEditing(true)
-    setTimeout(() => textareaRef.current?.focus(), 0)
-  }
-  function save() {
-    onSave(draft)
-    setEditing(false)
-  }
-  function cancel() {
-    setDraft(memo)
-    setEditing(false)
-  }
-
-  return (
-    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-base">📝</span>
-          <span className="text-sm font-bold text-amber-800">메모</span>
-        </div>
-        {!editing && (
-          <button onClick={startEdit} className="text-xs text-amber-600 hover:text-amber-800 transition-colors">
-            {memo ? '수정' : '작성'}
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <div className="space-y-2">
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Escape') cancel() }}
-            rows={4}
-            placeholder="기억해야 할 내용을 적어두세요"
-            className="w-full text-sm text-amber-900 bg-white border border-amber-300 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-amber-300"
-          />
-          <div className="flex gap-2 justify-end">
-            <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-lg transition-colors">취소</button>
-            <button onClick={save} className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 transition-colors font-medium">저장</button>
-          </div>
-        </div>
-      ) : memo ? (
-        <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed cursor-pointer" onClick={startEdit}>{memo}</p>
-      ) : (
-        <p className="text-xs text-amber-400 cursor-pointer" onClick={startEdit}>탭하여 메모 작성…</p>
-      )}
-    </div>
-  )
-}
-
 export default function Dashboard() {
   const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, cardBillings, dashboardMemo, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, cardBillings, dashboardMemo } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -363,12 +306,39 @@ export default function Dashboard() {
   const budgetPct    = totalBudgetReal > 0 ? Math.min((budgetUsed / totalBudgetReal) * 100, 100) : 0
   const budgetLeft   = totalBudgetReal - budgetUsed
 
+  const BUDGET_WARN_MSGS = [
+    '🔔 예산이 얼마 안 남았어요. 지갑 잠금 시작!',
+    '😅 바닥이 보여요! 무지출 챌린지 어때요?',
+    '💸 브레이크를 밟을 시간이에요. 꼭 필요한 것만!',
+    '🚨 예산 임박! 이번 달은 집밥으로 버텨봐요.',
+    '⚠️ 지금 손에 든 물건, 정말 필요한가요?',
+  ]
+  const BUDGET_OVER_MSGS = [
+    '💥 예산 초과! 다음 달엔 반드시 복수해요 💪',
+    '😱 지갑이 텅 비었어요... 카드는 서랍 속으로!',
+    '🚫 이번 달은 여기까지! 다음 달을 노려봐요.',
+    '💣 예산 폭발! 냉장고 털어서 버텨봐요.',
+    '📉 예산 초과 달성(?)... 절약 챌린지 시작!',
+    '🤯 가계부가 울고 있어요. 잠깐, 숨 고르기!',
+  ]
+  const _budgetMsgSeed = parseInt(budgetMonth.replace('-', '')) % 100
+  const budgetNudgeMsg = totalBudgetReal > 0
+    ? budgetLeft < 0
+      ? BUDGET_OVER_MSGS[_budgetMsgSeed % BUDGET_OVER_MSGS.length]
+      : budgetPct >= 80
+      ? BUDGET_WARN_MSGS[_budgetMsgSeed % BUDGET_WARN_MSGS.length]
+      : null
+    : null
+
   // ── 적금·예금 요약 ──────────────────────────────────────────────────────────
   const savingsSummary = useMemo(() => {
     let totalPrincipal = 0
     let totalExpected = 0
     let totalInterest = 0
+    let count = 0
     for (const s of savings) {
+      // 만기처리 완료된 것만 제외 (청약 포함)
+      if (s.status === 'matured') continue
       const linkedPaid = transactions
         .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
         .reduce((acc, t) => acc + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
@@ -376,8 +346,9 @@ export default function Dashboard() {
       totalPrincipal += principal
       totalExpected  += s.expectedAmount ?? 0
       totalInterest  += Math.max(0, (s.expectedAmount ?? 0) - principal)
+      count++
     }
-    return { totalPrincipal, totalExpected, totalInterest, count: savings.length }
+    return { totalPrincipal, totalExpected, totalInterest, count }
   }, [savings, transactions])
 
   // 투자 보유 내역 (종목별 qty·평가금액·손익) — 위젯 + 총평가금액 공유
@@ -385,7 +356,7 @@ export default function Dashboard() {
     const holdingsMap = new Map<string, { qty: number; buyAmt: number }>()
     investments.forEach(inv => holdingsMap.set(inv.id, { qty: 0, buyAmt: 0 }))
     ;[...investmentTrades]
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
       .forEach(trade => {
         const h = holdingsMap.get(trade.investmentId)
         if (!h) return
@@ -950,46 +921,44 @@ export default function Dashboard() {
             }
 
             if (widgetId === 'card_payment') {
-              // CardBilling 기반 납부 완료 판단: 해당 월의 모든 카드 청구가 완납된 경우만 true
-              const billingByMonth: Record<string, typeof cardBillings> = {}
-              cardBillings.forEach(b => {
-                if (!billingByMonth[b.billingMonth]) billingByMonth[b.billingMonth] = []
-                billingByMonth[b.billingMonth].push(b)
-              })
               const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
-              const txPaidBillingMonths = new Set<string>(
-                transactions
-                  .filter(t => isCardPayCat(t.categoryId))
-                  .map(t => {
-                    if (t.billingMonth) return t.billingMonth
-                    const [y, m] = t.date.slice(0, 7).split('-').map(Number)
-                    const d = new Date(y, m - 2, 1)
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                  })
-              )
-              const isPaidMonth = (m: string) => {
-                const billings = billingByMonth[m]
-                if (billings && billings.length > 0) {
-                  // CardBilling 기록이 있으면 모든 카드가 완납돼야 납부완료
-                  return billings.every(b => b.paidAmount >= b.totalAmount)
-                }
-                // CardBilling 미등록 시 트랜잭션 기반 fallback
-                return txPaidBillingMonths.has(m)
-              }
-              const byMonth: Record<string, number> = {}
+              // 카드별·청구월별 지출 집계
+              const chargesByCardMonth: Record<string, Record<string, number>> = {}
               transactions
-                .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
+                .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund') && t.cardId)
                 .forEach(t => {
                   const m = t.date.slice(0, 7)
-                  byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
+                  if (!chargesByCardMonth[t.cardId!]) chargesByCardMonth[t.cardId!] = {}
+                  chargesByCardMonth[t.cardId!][m] = (chargesByCardMonth[t.cardId!][m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
                 })
-              const monthRows = Object.entries(byMonth)
-                .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: isPaidMonth(m) }))
-                .filter(r => r.total > 0)
-                .sort((a, b) => b.month.localeCompare(a.month))
-                .slice(0, 6)
-              if (monthRows.length === 0 && !editMode) return null
-              const totalUnpaid = monthRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
+              // 카드별·청구월별 납부 여부 판정 (3단계)
+              const cardRows: { cardId: string; cardName: string; month: string; total: number; isPaid: boolean }[] = []
+              cards.forEach(card => {
+                const monthMap = chargesByCardMonth[card.id] || {}
+                Object.entries(monthMap).forEach(([m, v]) => {
+                  const total = Math.max(0, v)
+                  if (total === 0) return
+                  const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === m)
+                  let isPaid = false
+                  if (billing) {
+                    isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
+                  } else {
+                    const payTxs = transactions.filter(t => isCardPayCat(t.categoryId) && t.billingMonth === m)
+                    const cardTxs = payTxs.filter(t => t.cardId === card.id)
+                    if (cardTxs.length > 0) {
+                      isPaid = cardTxs.reduce((s, t) => s + t.amount, 0) >= total
+                    } else {
+                      isPaid = !!payTxs.find(t => t.amount === total)
+                    }
+                  }
+                  cardRows.push({ cardId: card.id, cardName: card.name, month: m, total, isPaid })
+                })
+              })
+              const sortedRows = cardRows
+                .sort((a, b) => b.month.localeCompare(a.month) || a.cardName.localeCompare(b.cardName))
+                .slice(0, 10)
+              if (sortedRows.length === 0 && !editMode) return null
+              const totalUnpaid = sortedRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
               return (
                 <div className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
@@ -999,21 +968,22 @@ export default function Dashboard() {
                     </div>
                     <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
                   </div>
-                  {monthRows.length > 0 ? (
+                  {sortedRows.length > 0 ? (
                     <>
                       <div className="space-y-2">
-                        {monthRows.map(row => {
+                        {sortedRows.map(row => {
                           const mo = parseInt(row.month.split('-')[1])
                           return (
-                            <div key={row.month} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 w-7 font-medium">{mo}월</span>
+                            <div key={`${row.cardId}-${row.month}`} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-gray-500 w-7 flex-shrink-0 font-medium">{mo}월</span>
+                                <span className="text-xs text-gray-600 truncate">{row.cardName}</span>
                                 {row.isPaid
-                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">✓ 납부완료</span>
-                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">미납</span>
+                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">✓ 납부완료</span>
+                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">미납</span>
                                 }
                               </div>
-                              <span className={`text-sm font-semibold tabular-nums ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
+                              <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ml-2 ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
                                 {fmtKRW(row.total)}
                               </span>
                             </div>
@@ -1092,6 +1062,11 @@ export default function Dashboard() {
                           {budgetLeft >= 0 ? `남은 예산 ${fmtShort(budgetLeft)}` : `초과 ${fmtShort(-budgetLeft)}`}
                         </span>
                       </div>
+                      {budgetNudgeMsg && (
+                        <div className={`mt-2 text-xs font-medium px-3 py-1.5 rounded-xl ${budgetLeft < 0 ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}`}>
+                          {budgetNudgeMsg}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="text-center py-4">
@@ -1196,7 +1171,18 @@ export default function Dashboard() {
 
             if (widgetId === 'memo') {
               return (
-                <MemoWidget memo={dashboardMemo} onSave={setDashboardMemo} />
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <span className="text-base">📝</span>
+                    <span className="text-sm font-bold text-gray-700">메모</span>
+                  </div>
+                  <textarea
+                    value={dashboardMemo}
+                    onChange={e => setDashboardMemo(e.target.value)}
+                    placeholder="기억해야 할 내용을 메모하세요..."
+                    className="w-full text-sm text-gray-700 placeholder-gray-400 border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[80px]"
+                  />
+                </div>
               )
             }
 

@@ -70,6 +70,7 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
+  const [quickDateKey, setQuickDateKey] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [catParentFilter, setCatParentFilter] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
@@ -141,9 +142,71 @@ export default function TransactionsPage() {
 
   const [form, setForm] = useState<FormState>(defaultForm)
 
+  // ── 빠른 날짜 헬퍼 ─────────────────────────────────────────────────────────
+  function applyQuickDate(key: string) {
+    const d = new Date()
+    const fmt = (dt: Date) => dt.toISOString().slice(0, 10)
+    const fmtM = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`
+    let from = '', to = '', newMonth = ''
+    if (key === 'today') { from = to = fmt(d); newMonth = fmtM(d) }
+    else if (key === 'yesterday') { const y = new Date(d); y.setDate(d.getDate()-1); from = to = fmt(y); newMonth = fmtM(y) }
+    else if (key === 'this_week') {
+      const start = new Date(d); start.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay()-1))
+      from = fmt(start); to = fmt(d)
+    }
+    else if (key === 'last_week') {
+      const end = new Date(d); end.setDate(d.getDate() - (d.getDay() === 0 ? 0 : d.getDay()))
+      const start = new Date(end); start.setDate(end.getDate()-6)
+      from = fmt(start); to = fmt(end)
+    }
+    else if (key === 'this_month') { from = `${fmtM(d)}-01`; to = fmt(d); newMonth = fmtM(d) }
+    else if (key === 'last_month') {
+      const lm = new Date(d); lm.setDate(1); lm.setMonth(d.getMonth()-1)
+      const lastDay = new Date(lm.getFullYear(), lm.getMonth()+1, 0)
+      from = `${fmtM(lm)}-01`; to = fmt(lastDay); newMonth = fmtM(lm)
+    }
+    else if (key === 'last_3m') { const s = new Date(d); s.setDate(d.getDate()-89); from = fmt(s); to = fmt(d) }
+    else if (key === 'this_year') { from = `${d.getFullYear()}-01-01`; to = fmt(d) }
+    setQuickDateKey(key)
+    setFilterDateFrom(from)
+    setFilterDateTo(to)
+    if (newMonth) setMonth(newMonth)
+  }
+
+  function resetAllFilters() {
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    setQuickDateKey('')
+    setMonth(currentMonth)
+    setFilterCategories([])
+    setCatParentFilter('')
+    setFilterType('all')
+    setFilterAccount('all')
+    setFilterCard('all')
+    setSearchQuery('')
+    setRealConsumptionFilter(false)
+  }
+
+  // 금액 축약 표시 (100만 이상 → '150.0만')
+  function fmtDailyAmt(n: number): string {
+    if (n >= 1000000) return `${(n / 10000).toFixed(1)}만`
+    return n.toLocaleString('ko-KR')
+  }
+
+  // 활성 필터 수
+  const activeFilterCount = [
+    filterDateFrom || filterDateTo || quickDateKey ? 1 : 0,
+    filterType !== 'all' ? 1 : 0,
+    filterCategories.length > 0 ? 1 : 0,
+    (paymentTab === 'all' && filterAccount !== 'all') || (paymentTab === 'account' && filterAccount !== 'all') ? 1 : 0,
+    filterCard !== 'all' ? 1 : 0,
+    searchQuery.trim() ? 1 : 0,
+    realConsumptionFilter ? 1 : 0,
+  ].reduce((s, v) => s + v, 0)
+
   // ── 필터링 ──────────────────────────────────────────────────────────────────
   const filtered = transactions
-    .filter(t => t.date.startsWith(month))
+    .filter(t => (filterDateFrom && filterDateTo) ? true : t.date.startsWith(month))
     .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
     .filter(t => {
@@ -159,7 +222,16 @@ export default function TransactionsPage() {
       t.description.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
       String(t.amount).includes(searchQuery.trim())
     )
-    .filter(t => filterCategories.length === 0 || filterCategories.includes(t.categoryId))
+    .filter(t => {
+      // 소분류 선택 우선
+      if (filterCategories.length > 0) return filterCategories.includes(t.categoryId)
+      // 대분류만 선택된 경우 → 해당 대분류의 모든 소분류 포함
+      if (catParentFilter) {
+        const cat = categories.find(c => c.id === t.categoryId)
+        return cat?.parentId === catParentFilter
+      }
+      return true
+    })
     .filter(t => !realConsumptionFilter || getConsumptionType(t, categories) === 'normal')
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
@@ -253,7 +325,17 @@ export default function TransactionsPage() {
   function openAdd() {
     setEditingId(null)
     setFormType('expense')
-    setForm(defaultForm())
+    const base = defaultForm()
+    // 통장/카드 필터 선택 중이면 해당 계좌·카드를 기본값으로
+    const hasAccount = filterAccount !== 'all' && accounts.some(a => a.id === filterAccount)
+    const hasCard    = filterCard   !== 'all' && cards.some(c => c.id === filterCard)
+    setForm({
+      ...base,
+      accountId:     hasAccount ? filterAccount : base.accountId,
+      toAccountId:   hasAccount ? (accounts.find(a => a.id !== filterAccount)?.id ?? base.toAccountId) : base.toAccountId,
+      paymentMethod: hasCard ? 'card' : base.paymentMethod,
+      cardId:        hasCard ? filterCard : base.cardId,
+    })
     setSavingLinks([])
     setSavingSearch('')
     setShowModal(true)
@@ -277,6 +359,23 @@ export default function TransactionsPage() {
       consumptionType: t.consumptionType,
     })
     setSavingLinks((t.savingLinks || []).map(l => ({ savingId: l.savingId, amount: fmtInput(String(l.amount)) })))
+    setSavingSearch('')
+    setShowModal(true)
+  }
+
+  function openCopy(t: Transaction) {
+    setEditingId(null)
+    setFormType(t.type === 'refund' ? 'refund' : t.type as TxFormType)
+    setForm({
+      ...defaultForm(),
+      date: today.toISOString().slice(0, 10),
+      description: t.description,
+      categoryId: t.categoryId,
+      accountId: t.accountId,
+      paymentMethod: t.paymentMethod,
+      cardId: t.cardId ?? '',
+    })
+    setSavingLinks([])
     setSavingSearch('')
     setShowModal(true)
   }
@@ -395,7 +494,7 @@ export default function TransactionsPage() {
         accountId: form2.accountId,
         categoryId: form2.categoryId,
         paymentMethod: form2.paymentMethod,
-        cardId: (form2.paymentMethod === 'card' || isCardPaymentCat(form2.categoryId)) && form2.cardId ? form2.cardId : undefined,
+        cardId: form2.paymentMethod === 'card' ? form2.cardId : (isCardPaymentCat(form2.categoryId) && form2.cardId ? form2.cardId : undefined),
         savingLinks: resolvedSavingLinks,
         billingMonth: isCardPaymentCat(form2.categoryId) && form2.billingMonth ? form2.billingMonth : undefined,
         consumptionType: formType === 'expense' ? form2.consumptionType : undefined,
@@ -640,16 +739,32 @@ export default function TransactionsPage() {
                   const isActive = catParentFilter === p.id
                   return (
                     <button key={p.id}
-                      onClick={() => { setCatParentFilter(prev => prev === p.id ? '' : p.id); setFilterCategories([]) }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                      style={isActive ? { backgroundColor: p.color || '#4B5563' } : {}}>
+                      onClick={() => {
+                        if (catParentFilter === p.id) {
+                          setCatParentFilter('')
+                          setFilterCategories([])
+                        } else {
+                          setCatParentFilter(p.id)
+                          setFilterCategories([])
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${
+                        isActive && filterCategories.length === 0 ? 'text-white' :
+                        isActive && filterCategories.length > 0 ? 'border border-current bg-white' :
+                        'text-gray-500 hover:bg-gray-100'
+                      }`}
+                      style={
+                        isActive && filterCategories.length === 0 ? { backgroundColor: p.color || '#4B5563' } :
+                        isActive && filterCategories.length > 0 ? { color: p.color || '#4B5563' } :
+                        {}
+                      }>
                       {p.icon} {p.name}
                     </button>
                   )
                 })}
               </div>
             </div>
-            {/* 소분류 행 — 대분류 선택 시만 표시 */}
+            {/* 소분류 행 — 대분류 선택 or 소분류 선택 시 표시 */}
             {catParentFilter && subCats.length > 0 && (
               <div className="overflow-x-auto border-t border-gray-100">
                 <div className="flex gap-1 p-2" style={{ minWidth: 'max-content' }}>
@@ -657,9 +772,12 @@ export default function TransactionsPage() {
                     const isSelected = filterCategories.includes(cat.id)
                     return (
                       <button key={cat.id}
-                        onClick={() => setFilterCategories(prev =>
-                          prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
-                        )}
+                        onClick={() => {
+                          // 소분류 클릭 시 catParentFilter는 유지 (행이 계속 보이도록)
+                          setFilterCategories(prev =>
+                            prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [cat.id]
+                          )
+                        }}
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 border ${
                           isSelected ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                         }`}
@@ -674,6 +792,54 @@ export default function TransactionsPage() {
           </div>
         )
       })()}
+
+      {/* 빠른 날짜 필터 */}
+      <div className="bg-white rounded-2xl shadow-sm mb-3 overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+          <span className="text-xs font-semibold text-gray-500 flex-shrink-0">빠른 날짜</span>
+          {activeFilterCount > 0 && (
+            <span className="flex-shrink-0 text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
+          <div className="flex-1" />
+          <button
+            onClick={resetAllFilters}
+            disabled={activeFilterCount === 0}
+            className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-all flex-shrink-0 ${
+              activeFilterCount > 0
+                ? 'text-red-500 hover:bg-red-50 bg-red-50/50'
+                : 'text-gray-300 cursor-not-allowed'
+            }`}>
+            필터 초기화 ✕
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <div className="flex gap-1.5 px-3 py-2" style={{ minWidth: 'max-content' }}>
+            {([
+              ['today',      '오늘'],
+              ['yesterday',  '어제'],
+              ['this_week',  '이번 주'],
+              ['last_week',  '지난 주'],
+              ['this_month', '이번 달'],
+              ['last_month', '전월'],
+              ['last_3m',    '최근 3개월'],
+              ['this_year',  '올해'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => quickDateKey === key ? (setQuickDateKey(''), setFilterDateFrom(''), setFilterDateTo('')) : applyQuickDate(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex-shrink-0 ${
+                  quickDateKey === key
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* 필터 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
@@ -799,10 +965,27 @@ export default function TransactionsPage() {
 
       {/* 거래 목록 */}
       <div className="space-y-3">
-        {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
+        {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => {
+          const dayTxs = grouped[date]
+          const dayIncome = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+          const dayRefund = dayTxs.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
+          const dayExpense = Math.max(0, dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0) - dayRefund)
+          const dayTransfer = dayTxs.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
+          return (
           <div key={date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500">{date}</span>
+              <div className="flex items-center gap-3">
+                {dayIncome > 0 && (
+                  <span className="text-[11px] font-medium text-blue-500">+{fmtDailyAmt(dayIncome)}</span>
+                )}
+                {dayExpense > 0 && (
+                  <span className="text-[11px] font-medium text-red-500">-{fmtDailyAmt(dayExpense)}</span>
+                )}
+                {dayTransfer > 0 && (
+                  <span className="text-[11px] font-medium text-gray-400">{fmtDailyAmt(dayTransfer)}</span>
+                )}
+              </div>
             </div>
             {grouped[date].map(t => {
               const cat = categories.find(c => c.id === t.categoryId)
@@ -884,8 +1067,13 @@ export default function TransactionsPage() {
                         </div>
                       )}
                     </div>
-                    {/* 수정 / 삭제 버튼 — hover 시 표시 */}
+                    {/* 복사 / 수정 / 삭제 버튼 — hover 시 표시 */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={e => { e.stopPropagation(); openCopy(t) }}
+                        className="text-xs text-gray-400 hover:text-emerald-500 px-1.5 py-1 rounded-lg hover:bg-emerald-50 transition-colors"
+                        title="복사하여 추가"
+                      >복사</button>
                       <button
                         onClick={e => { e.stopPropagation(); openEdit(t) }}
                         className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
@@ -900,7 +1088,8 @@ export default function TransactionsPage() {
               )
             })}
           </div>
-        ))}
+          )
+        })}
         {Object.keys(grouped).length === 0 && (
           <div className="text-center py-16 text-gray-400">
             <div className="text-4xl mb-2">📭</div>
@@ -1110,8 +1299,7 @@ export default function TransactionsPage() {
                         ...f,
                         categoryId: newCatId,
                         billingMonth: isCardPaymentCat(newCatId) && !f.billingMonth ? prevMonthStr() : f.billingMonth,
-                        // 카드대금 카테고리로 전환 시 카드 선택 초기화 (구매카드가 아닌 납부 카드 선택용)
-                        cardId: isCardPaymentCat(newCatId) ? '' : f.cardId,
+                        cardId: isCardPaymentCat(newCatId) ? f.cardId : (f.paymentMethod === 'card' ? f.cardId : ''),
                       }))
                       setCatSearch('')
                       if (!isSavingCat(newCatId)) {
@@ -1217,37 +1405,42 @@ export default function TransactionsPage() {
                     )
                   })()}
 
-                  {/* ── 카드대금 청구 월 + 카드 선택 ── */}
+                  {/* ── 카드대금 청구 월 선택 ── */}
                   {isCardPaymentCat(form.categoryId) && (
-                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3 space-y-2.5">
-                      <label className="text-xs font-semibold text-purple-700 block">💳 카드대금 정보</label>
-                      <div>
-                        <label className="text-xs text-purple-600 block mb-1">납부 카드</label>
-                        <select
-                          value={form.cardId}
-                          onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
-                          className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                          <option value="">카드 선택 (선택사항)</option>
-                          {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs text-purple-600 block mb-1">청구 월</label>
-                        <select
-                          value={form.billingMonth}
-                          onChange={e => setForm(f => ({ ...f, billingMonth: e.target.value }))}
-                          className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                          <option value="">청구 월 선택 (선택사항)</option>
-                          {recentMonthOptions().map(ym => (
-                            <option key={ym} value={ym}>{fmtMonthLabel(ym)} 카드대금</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3">
+                      <label className="text-xs font-semibold text-purple-700 block mb-2">💳 청구 월 선택</label>
+                      <select
+                        value={form.billingMonth}
+                        onChange={e => setForm(f => ({ ...f, billingMonth: e.target.value }))}
+                        className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                        <option value="">청구 월 선택 (선택사항)</option>
+                        {recentMonthOptions().map(ym => (
+                          <option key={ym} value={ym}>{fmtMonthLabel(ym)} 카드대금</option>
+                        ))}
+                      </select>
                       {form.billingMonth && (
-                        <p className="text-xs text-purple-500">
-                          {fmtMonthLabel(form.billingMonth)} 사용분 카드대금 납부로 기록됩니다.
+                        <p className="text-xs text-purple-500 mt-1.5">
+                          {fmtMonthLabel(form.billingMonth)}에 사용한 카드 내역의 대금을 납부하는 거래로 기록됩니다.
                         </p>
                       )}
+                    </div>
+                  )}
+
+                  {/* ── 카드대금 납부 카드 선택 ── */}
+                  {isCardPaymentCat(form.categoryId) && (
+                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3">
+                      <label className="text-xs font-semibold text-purple-700 block mb-2">💳 납부 카드 선택 (선택사항)</label>
+                      <select
+                        value={form.cardId || ''}
+                        onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
+                        className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                      >
+                        <option value="">카드 선택 (선택사항)</option>
+                        {data.cards.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-purple-500 mt-1.5">부분납부 추적을 위해 어느 카드의 대금인지 선택하세요.</p>
                     </div>
                   )}
 
