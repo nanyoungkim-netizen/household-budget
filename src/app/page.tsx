@@ -7,8 +7,8 @@ import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/Ap
 import { Transaction } from '@/types'
 
 // PRD: 위젯 순서 커스터마이징
-type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
-const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
+type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions' | 'memo'
+const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions', 'memo']
 const WIDGET_LABELS: Record<WidgetId, string> = {
   cash_accounts:       '현금성 자산',
   investment_accounts: '투자 자산',
@@ -17,6 +17,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   budget:              '예산 현황',
   goals:               '재무 목표',
   transactions:        '거래 목록',
+  memo:                '메모',
 }
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -64,10 +65,67 @@ function calcStats(txs: Transaction[]) {
   return { income, expense: netExpense, refund, balance: income - netExpense }
 }
 
+function MemoWidget({ memo, onSave }: { memo: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(memo)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  function startEdit() {
+    setDraft(memo)
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+  function save() {
+    onSave(draft)
+    setEditing(false)
+  }
+  function cancel() {
+    setDraft(memo)
+    setEditing(false)
+  }
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-base">📝</span>
+          <span className="text-sm font-bold text-amber-800">메모</span>
+        </div>
+        {!editing && (
+          <button onClick={startEdit} className="text-xs text-amber-600 hover:text-amber-800 transition-colors">
+            {memo ? '수정' : '작성'}
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') cancel() }}
+            rows={4}
+            placeholder="기억해야 할 내용을 적어두세요"
+            className="w-full text-sm text-amber-900 bg-white border border-amber-300 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-amber-300"
+          />
+          <div className="flex gap-2 justify-end">
+            <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-lg transition-colors">취소</button>
+            <button onClick={save} className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 transition-colors font-medium">저장</button>
+          </div>
+        </div>
+      ) : memo ? (
+        <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed cursor-pointer" onClick={startEdit}>{memo}</p>
+      ) : (
+        <p className="text-xs text-amber-400 cursor-pointer" onClick={startEdit}>탭하여 메모 작성…</p>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard() {
-  const { data, categories, setDashboardWidgetOrder, setInvestments } = useApp()
+  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades } = data
+  const { accounts, transactions, goals, budgets, savings, cards, cardBillings, dashboardMemo, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -892,8 +950,14 @@ export default function Dashboard() {
             }
 
             if (widgetId === 'card_payment') {
+              // CardBilling 기반 납부 완료 판단: 해당 월의 모든 카드 청구가 완납된 경우만 true
+              const billingByMonth: Record<string, typeof cardBillings> = {}
+              cardBillings.forEach(b => {
+                if (!billingByMonth[b.billingMonth]) billingByMonth[b.billingMonth] = []
+                billingByMonth[b.billingMonth].push(b)
+              })
               const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
-              const paidBillingMonths = new Set<string>(
+              const txPaidBillingMonths = new Set<string>(
                 transactions
                   .filter(t => isCardPayCat(t.categoryId))
                   .map(t => {
@@ -903,6 +967,15 @@ export default function Dashboard() {
                     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
                   })
               )
+              const isPaidMonth = (m: string) => {
+                const billings = billingByMonth[m]
+                if (billings && billings.length > 0) {
+                  // CardBilling 기록이 있으면 모든 카드가 완납돼야 납부완료
+                  return billings.every(b => b.paidAmount >= b.totalAmount)
+                }
+                // CardBilling 미등록 시 트랜잭션 기반 fallback
+                return txPaidBillingMonths.has(m)
+              }
               const byMonth: Record<string, number> = {}
               transactions
                 .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
@@ -911,7 +984,7 @@ export default function Dashboard() {
                   byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
                 })
               const monthRows = Object.entries(byMonth)
-                .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: paidBillingMonths.has(m) }))
+                .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: isPaidMonth(m) }))
                 .filter(r => r.total > 0)
                 .sort((a, b) => b.month.localeCompare(a.month))
                 .slice(0, 6)
@@ -1118,6 +1191,12 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
+              )
+            }
+
+            if (widgetId === 'memo') {
+              return (
+                <MemoWidget memo={dashboardMemo} onSave={setDashboardMemo} />
               )
             }
 
