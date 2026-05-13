@@ -35,7 +35,7 @@ type ModalType = 'addChild' | 'addParent' | null
 
 export default function BudgetPage() {
   const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths, setCategoryExcludeMonths, setBudgetCarriedMonths } = useApp()
-  const { budgets, transactions, categoryHiddenMonths, categoryExcludeMonths, cardBillings } = data
+  const { budgets, transactions, categoryHiddenMonths, categoryExcludeMonths } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
@@ -199,25 +199,10 @@ export default function BudgetPage() {
         .filter(t => t.date.startsWith(prev) && t.type === 'refund' && t.paymentMethod === 'card' && t.cardId === card.id)
         .reduce((s, t) => s + t.amount, 0)
       const netCharged = Math.max(0, charged - refunded)
-      let paid = 0
-      let isPaid = false
-      const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === prev)
-      if (billing) {
-        paid = billing.paidAmount
-        isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
-      } else {
-        const payTxs = transactions.filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev)
-        const cardTxs = payTxs.filter(t => t.cardId === card.id)
-        if (cardTxs.length > 0) {
-          paid = cardTxs.reduce((s, t) => s + t.amount, 0)
-          isPaid = paid >= netCharged && netCharged > 0
-        } else {
-          const matchTx = payTxs.find(t => t.amount === netCharged)
-          paid = matchTx ? matchTx.amount : 0
-          isPaid = !!matchTx
-        }
-      }
-      return { ...card, charged: netCharged, paid, isPaid }
+      const paid = transactions
+        .filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev)
+        .reduce((s, t) => s + t.amount, 0)
+      return { ...card, charged: netCharged, paid, isPaid: paid >= netCharged && netCharged > 0 }
     })
     .filter(c => c.charged > 0)
 

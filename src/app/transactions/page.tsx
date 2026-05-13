@@ -494,7 +494,7 @@ export default function TransactionsPage() {
         accountId: form2.accountId,
         categoryId: form2.categoryId,
         paymentMethod: form2.paymentMethod,
-        cardId: form2.paymentMethod === 'card' ? form2.cardId : (isCardPaymentCat(form2.categoryId) && form2.cardId ? form2.cardId : undefined),
+        cardId: form2.paymentMethod === 'card' ? form2.cardId : undefined,
         savingLinks: resolvedSavingLinks,
         billingMonth: isCardPaymentCat(form2.categoryId) && form2.billingMonth ? form2.billingMonth : undefined,
         consumptionType: formType === 'expense' ? form2.consumptionType : undefined,
@@ -1299,7 +1299,6 @@ export default function TransactionsPage() {
                         ...f,
                         categoryId: newCatId,
                         billingMonth: isCardPaymentCat(newCatId) && !f.billingMonth ? prevMonthStr() : f.billingMonth,
-                        cardId: isCardPaymentCat(newCatId) ? f.cardId : (f.paymentMethod === 'card' ? f.cardId : ''),
                       }))
                       setCatSearch('')
                       if (!isSavingCat(newCatId)) {
@@ -1423,24 +1422,6 @@ export default function TransactionsPage() {
                           {fmtMonthLabel(form.billingMonth)}에 사용한 카드 내역의 대금을 납부하는 거래로 기록됩니다.
                         </p>
                       )}
-                    </div>
-                  )}
-
-                  {/* ── 카드대금 납부 카드 선택 ── */}
-                  {isCardPaymentCat(form.categoryId) && (
-                    <div className="border border-purple-100 rounded-xl bg-purple-50/40 p-3">
-                      <label className="text-xs font-semibold text-purple-700 block mb-2">💳 납부 카드 선택 (선택사항)</label>
-                      <select
-                        value={form.cardId || ''}
-                        onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
-                        className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
-                      >
-                        <option value="">카드 선택 (선택사항)</option>
-                        {data.cards.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-purple-500 mt-1.5">부분납부 추적을 위해 어느 카드의 대금인지 선택하세요.</p>
                     </div>
                   )}
 
