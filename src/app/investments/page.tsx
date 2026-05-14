@@ -39,7 +39,7 @@ const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
 
 const EMPTY_TRADE: Omit<InvestmentTrade, 'id' | 'investmentId'> = {
   type: 'buy',
-  date: today,
+  date: '',
   quantity: 0,
   price: 0,
   currency: 'KRW',
@@ -84,6 +84,10 @@ export default function InvestmentsPage() {
   const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
   const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
 
+  // F-01: 항상 최신 investments를 참조하도록 ref 유지 (stale closure 방지)
+  const investmentsRef = useRef(investments)
+  useEffect(() => { investmentsRef.current = investments })
+
   // F-04 + PRD §10: 종목명 자동완성 (로컬 + 네이버 금융)
   const [nameDropdownOpen, setNameDropdownOpen] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -97,8 +101,25 @@ export default function InvestmentsPage() {
   const [priceLoadingIds, setPriceLoadingIds] = useState<Set<string>>(new Set())
   const [priceRefreshing, setPriceRefreshing] = useState(false)
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
+  const [exchangeRateUpdatedAt, setExchangeRateUpdatedAt] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
-  // F-03: 주가 업데이트 토스트
+  // PRD F-03: 통화 전환 토글 (localStorage 유지)
+  const [currencyMode, setCurrencyMode] = useState<'KRW' | 'USD'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('inv_currency_mode') as 'KRW' | 'USD') || 'KRW'
+    }
+    return 'KRW'
+  })
+  function toggleCurrencyMode() {
+    setCurrencyMode(prev => {
+      const next = prev === 'KRW' ? 'USD' : 'KRW'
+      localStorage.setItem('inv_currency_mode', next)
+      return next
+    })
+  }
+
+  // PRD F-03: 주가 업데이트 토스트
   const [refreshToast, setRefreshToast] = useState<string | null>(null)
   const refreshToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   function showRefreshToast(msg: string) {
@@ -155,12 +176,11 @@ export default function InvestmentsPage() {
     setPriceLoadingIds(new Set())
     if (Object.keys(patches).length === 0) return
 
-    const next = investments.map(inv =>
+    setInvestments(investmentsRef.current.map(inv =>
       patches[inv.id]
         ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
         : inv
-    )
-    setInvestments(next)
+    ))
   }
 
   useEffect(() => {
@@ -186,7 +206,10 @@ export default function InvestmentsPage() {
     try {
       const res = await fetch('/api/stock/exchange-rate')
       const json = await res.json()
-      if (json.rates && Object.keys(json.rates).length > 0) setExchangeRates(json.rates)
+      if (json.rates && Object.keys(json.rates).length > 0) {
+        setExchangeRates(json.rates)
+        setExchangeRateUpdatedAt(new Date().toISOString())
+      }
     } catch { /* silent */ }
   }
 
@@ -246,7 +269,7 @@ export default function InvestmentsPage() {
       const res = await fetch(endpoint)
       const json = await res.json()
       if (!json.error && json.price) {
-        setInvestments(investments.map(inv =>
+        setInvestments(investmentsRef.current.map(inv =>
           inv.id === invId
             ? { ...inv, currentPrice: json.price, currentPriceUpdatedAt: json.updatedAt }
             : inv
@@ -440,7 +463,7 @@ export default function InvestmentsPage() {
     investments.forEach(inv => {
       const trades = investmentTrades
         .filter(t => t.investmentId === inv.id)
-        .sort((a, b) => a.date.localeCompare(b.date))
+        .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
 
       let holdingQty = 0
       let totalBuyAmt = 0
@@ -527,6 +550,18 @@ export default function InvestmentsPage() {
     return { totalBuy, totalEval, unrealizedPnl, returnRate, totalRealized, totalDividend, totalFee, totalReturn, byType, byAccount }
   }, [holdingsMap, investmentDividends, exchangeRates])
 
+  // F-03: 달러 기준 합계 (USD 모드에서 대시보드에 표시)
+  const portfolioUSD = useMemo(() => {
+    let buyUSD = 0, evalUSD = 0
+    holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt }) => {
+      if (investment.currency === 'USD') {
+        buyUSD += totalBuyAmt
+        evalUSD += holdingQty * (investment.currentPrice ?? 0)
+      }
+    })
+    return { buyUSD, evalUSD, pnlUSD: evalUSD - buyUSD }
+  }, [holdingsMap])
+
   // ── F-03: 계좌 유형 헬퍼 ─────────────────────────────────────────────────
   function getTypeLabel(typeId: string): string {
     return investmentAccountTypes.find(t => t.id === typeId)?.name ?? typeId
@@ -606,41 +641,49 @@ export default function InvestmentsPage() {
   }
 
   function handleSaveInvestment() {
-    if (!investmentForm.name) return
-    const invId = editInvestmentId ?? `inv${Date.now()}`
-    const newInv: Investment = { id: invId, ...investmentForm }
-    if (editInvestmentId) {
-      setInvestments(investments.map(i => i.id === editInvestmentId ? newInv : i))
-    } else {
-      let finalInv = newInv
-      if (initialBuy && initialBuy.quantity && initialBuy.price) {
-        const qty = parseAmt(initialBuy.quantity)
-        const price = parseAmt(initialBuy.price)
-        const fee = parseAmt(initialBuy.fee)
-        if (qty > 0 && price > 0) {
-          finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
-          const trade: InvestmentTrade = {
-            id: `tr${Date.now()}`,
-            investmentId: invId,
-            type: 'buy',
-            date: initialBuy.date,
-            quantity: qty,
-            price,
-            currency: investmentForm.currency,
-            fee: fee > 0 ? fee : undefined,
+    if (!investmentForm.name || isSaving) return
+    setIsSaving(true)
+    try {
+      const invId = editInvestmentId ?? `inv${Date.now()}`
+      const newInv: Investment = { id: invId, ...investmentForm }
+      if (editInvestmentId) {
+        setInvestments(investments.map(i => i.id === editInvestmentId ? newInv : i))
+      } else {
+        let finalInv = newInv
+        if (initialBuy && initialBuy.quantity && initialBuy.price) {
+          const qty = parseAmt(initialBuy.quantity)
+          const price = parseAmt(initialBuy.price)
+          const fee = parseAmt(initialBuy.fee)
+          if (qty > 0 && price > 0) {
+            finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
+            const trade: InvestmentTrade = {
+              id: `tr${Date.now()}`,
+              investmentId: invId,
+              type: 'buy',
+              date: initialBuy.date,
+              quantity: qty,
+              price,
+              currency: investmentForm.currency,
+              fee: fee > 0 ? fee : undefined,
+            }
+            setInvestmentTrades([...investmentTrades, trade])
           }
-          setInvestmentTrades([...investmentTrades, trade])
+        }
+        // investmentsRef는 setState 직후 재렌더까지 업데이트 안 되므로 직접 합산 후 ref도 갱신
+        const nextInvestments = [...investments, finalInv]
+        investmentsRef.current = nextInvestments
+        setInvestments(nextInvestments)
+        // 티커 있으면 즉시 현재가 조회 (ref 통해 stale closure 방지)
+        if (finalInv.ticker) {
+          setTimeout(() => fetchAndUpdatePrice(invId, finalInv.ticker!, finalInv.assetType), 100)
         }
       }
-      setInvestments([...investments, finalInv])
-      // 티커 있으면 즉시 현재가 조회
-      if (finalInv.ticker) {
-        setTimeout(() => fetchAndUpdatePrice(invId, finalInv.ticker!, finalInv.assetType), 100)
-      }
+      setShowInvestmentModal(false)
+      setEditInvestmentId(null)
+      setInitialBuy(null)
+    } finally {
+      setIsSaving(false)
     }
-    setShowInvestmentModal(false)
-    setEditInvestmentId(null)
-    setInitialBuy(null)
   }
 
   function handleDeleteInvestment(id: string) {
@@ -701,14 +744,14 @@ export default function InvestmentsPage() {
       if (accountId) {
         if (oldTrade?.linkedDepositId) {
           setInvestmentCashDeposits(investmentCashDeposits.map(d =>
-            d.id === oldTrade.linkedDepositId ? { ...d, amount: depositAmt, date: tradeForm.date } : d
+            d.id === oldTrade.linkedDepositId ? { ...d, amount: depositAmt, date: tradeForm.date ?? today } : d
           ))
           linkedDepositId = oldTrade.linkedDepositId
         } else {
           const newDep: InvestmentCashDeposit = {
             id: `dep${Date.now()}`,
             accountId,
-            date: tradeForm.date,
+            date: tradeForm.date ?? today,
             amount: depositAmt,
             note: `거래 연동: ${inv?.name ?? ''}`,
           }
@@ -724,7 +767,7 @@ export default function InvestmentsPage() {
         const newDep: InvestmentCashDeposit = {
           id: `dep${Date.now()}`,
           accountId,
-          date: tradeForm.date,
+          date: tradeForm.date ?? today,
           amount: depositAmt,
           note: `거래 연동: ${inv?.name ?? ''}`,
         }
@@ -899,7 +942,7 @@ export default function InvestmentsPage() {
         return inv?.name === selectedTradeInvName
       })
     : tradeFilteredByAccount
-  ).slice().sort((a, b) => b.date.localeCompare(a.date))
+  ).slice().sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
   // 거래 이력 - 계좌 필터에 맞는 종목 이름 (중복 제거)
   const tradeInvNames = (() => {
@@ -960,9 +1003,20 @@ export default function InvestmentsPage() {
           const isForeign = inv.currency !== 'KRW'
           const fxRate = isForeign ? (exchangeRates[inv.currency] ?? 0) : 1
           const hasFx = fxRate > 0
-          const fmtNative = (v: number) => inv.currency === 'USD'
-            ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${isForeign ? ` ${inv.currency}` : '원'}`
+          // F-03: 통화 모드에 따라 표시 단위 결정
+          const showInUSD = currencyMode === 'USD' && isForeign
+          const showInKRW = currencyMode === 'KRW' && isForeign && hasFx
+          const fmtNative = (v: number) => {
+            if (showInUSD && inv.currency === 'USD') {
+              return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            }
+            if (showInKRW) {
+              return `${Math.round(v * fxRate).toLocaleString('ko-KR')}원`
+            }
+            return inv.currency === 'USD'
+              ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${isForeign ? ` ${inv.currency}` : '원'}`
+          }
           return (
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="bg-gray-50 rounded-xl p-2.5">
@@ -972,12 +1026,12 @@ export default function InvestmentsPage() {
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">총 매수금액</div>
               <div className="text-sm font-semibold text-gray-900">{fmtNative(h.totalBuyAmt)}</div>
-              {isForeign && hasFx && <div className="text-xs text-blue-400 mt-0.5">≈ {fmtKRW(Math.round(h.totalBuyAmt * fxRate))}</div>}
+              {isForeign && hasFx && showInUSD && <div className="text-xs text-gray-400 mt-0.5">≈ {fmtKRW(Math.round(h.totalBuyAmt * fxRate))}</div>}
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">평균매수단가</div>
               <div className="text-sm font-semibold text-gray-900">{fmtNative(h.avgPrice)}</div>
-              {isForeign && hasFx && <div className="text-xs text-blue-400 mt-0.5">≈ {fmtKRW(Math.round(h.avgPrice * fxRate))}</div>}
+              {isForeign && hasFx && showInUSD && <div className="text-xs text-gray-400 mt-0.5">≈ {fmtKRW(Math.round(h.avgPrice * fxRate))}</div>}
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">현재가</div>
@@ -987,7 +1041,7 @@ export default function InvestmentsPage() {
                 return (
                   <>
                     <div className="text-sm font-semibold text-gray-900">{fmtNative(currentPrice)}</div>
-                    {isForeign && hasFx && <div className="text-xs text-blue-400 mt-0.5">≈ {fmtKRW(Math.round(currentPrice * fxRate))}</div>}
+                    {isForeign && hasFx && showInUSD && <div className="text-xs text-gray-400 mt-0.5">≈ {fmtKRW(Math.round(currentPrice * fxRate))}</div>}
                     <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                       {priceDiff >= 0 ? '+' : ''}{fmtNative(priceDiff)} ({fmtPct(priceRate)})
                     </div>
@@ -1005,7 +1059,7 @@ export default function InvestmentsPage() {
                     </div>
                     <div className="text-xs text-gray-500">{fmtNative(evalAmt)}</div>
                   </div>
-                  {hasFx && (
+                  {hasFx && showInUSD && (
                     <div className="mt-1 text-xs text-blue-500">
                       ≈ {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl * fxRate))} / 평가 {fmtKRW(Math.round(evalAmt * fxRate))}
                       <span className="ml-1 text-gray-400">(환율 {fxRate.toLocaleString()})</span>
@@ -1089,7 +1143,14 @@ export default function InvestmentsPage() {
       )}
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-gray-900">투자 내역 관리</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* F-03: 통화 전환 토글 */}
+          <button onClick={toggleCurrencyMode}
+            className="flex items-center gap-1 bg-gray-100 text-gray-700 text-sm font-semibold px-3 py-2 rounded-xl hover:bg-gray-200 transition-colors border border-gray-200">
+            <span className={currencyMode === 'KRW' ? 'text-blue-600' : 'text-gray-400'}>₩</span>
+            <span className="text-gray-300">/</span>
+            <span className={currencyMode === 'USD' ? 'text-green-600' : 'text-gray-400'}>$</span>
+          </button>
           <button onClick={() => setShowTypeModal(true)}
             className="bg-gray-100 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-200 transition-colors">
             계좌유형 관리
@@ -1107,6 +1168,17 @@ export default function InvestmentsPage() {
           </button>
         </div>
       </div>
+      {/* F-02: 환율 마지막 업데이트 시각 */}
+      {exchangeRateUpdatedAt && Object.keys(exchangeRates).length > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
+          <span>💱 환율 기준:</span>
+          {Object.entries(exchangeRates).map(([currency, rate]) => (
+            <span key={currency} className="text-gray-500 font-medium">{currency}/KRW {rate.toLocaleString('ko-KR')}</span>
+          ))}
+          <span className="ml-1 text-gray-300">·</span>
+          <span>업데이트 {new Date(exchangeRateUpdatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+      )}
 
       {/* 탭 */}
       <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-1 overflow-x-auto">
@@ -1122,24 +1194,35 @@ export default function InvestmentsPage() {
       {pageTab === 'dashboard' && (
         <div className="space-y-4">
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 text-white">
-            <div className="text-xs opacity-70 mb-3">투자 현황 요약</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs opacity-70">투자 현황 요약</div>
+              <div className="text-xs opacity-60">{currencyMode === 'USD' ? '달러($) 기준' : '원화(₩) 기준'}</div>
+            </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="bg-white/10 rounded-xl p-3">
                 <div className="text-xs opacity-70 mb-1">총 투자금액</div>
                 <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalBuy))}</div>
+                {currencyMode === 'USD' && portfolioUSD.buyUSD > 0 && (
+                  <div className="text-xs opacity-60 mt-0.5">해외 ${portfolioUSD.buyUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                )}
               </div>
               <div className="bg-white/10 rounded-xl p-3">
                 <div className="text-xs opacity-70 mb-1">총 평가금액</div>
                 <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalEval + portfolio.totalDividend))}</div>
-                {portfolio.totalDividend > 0 && (
+                {currencyMode === 'USD' && portfolioUSD.evalUSD > 0 ? (
+                  <div className="text-xs opacity-60 mt-0.5">해외 ${portfolioUSD.evalUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                ) : portfolio.totalDividend > 0 ? (
                   <div className="text-xs opacity-60 mt-0.5">주식 {fmtKRW(Math.round(portfolio.totalEval))} + 예수금 {fmtKRW(Math.round(portfolio.totalDividend))}</div>
-                )}
+                ) : null}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className={`rounded-xl p-3 ${portfolio.unrealizedPnl >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
                 <div className="text-xs opacity-70 mb-1">평가손익</div>
                 <div className="text-base font-bold">{portfolio.unrealizedPnl >= 0 ? '+' : ''}{fmtKRW(Math.round(portfolio.unrealizedPnl))}</div>
+                {currencyMode === 'USD' && portfolioUSD.pnlUSD !== 0 && (
+                  <div className="text-xs opacity-70">{portfolioUSD.pnlUSD >= 0 ? '+' : ''}${portfolioUSD.pnlUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                )}
                 <div className="text-xs opacity-80">{fmtPct(portfolio.returnRate)}</div>
               </div>
               <div className={`rounded-xl p-3 ${portfolio.totalRealized >= 0 ? 'bg-emerald-400/20' : 'bg-red-400/20'}`}>
@@ -1618,7 +1701,7 @@ export default function InvestmentsPage() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-xs font-medium text-gray-700">{trade.date}</span>
+                                  <span className="text-xs font-medium text-gray-700">{trade.date ?? '날짜 미입력'}</span>
                                   <span className="text-xs text-gray-400">{trade.quantity.toLocaleString()}주</span>
                                   <span className="text-xs text-gray-400">@{trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}</span>
                                 </div>
@@ -1667,7 +1750,7 @@ export default function InvestmentsPage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
-                          <span>{trade.date}</span>
+                          <span>{trade.date ?? '날짜 미입력'}</span>
                           <span>·</span>
                           <span>{trade.quantity.toLocaleString()}주 × {trade.price.toLocaleString()}{trade.currency !== 'KRW' ? ` ${trade.currency}` : '원'}</span>
                           {trade.fee ? <><span>·</span><span>수수료 {trade.fee.toLocaleString()}원</span></> : null}
@@ -2095,9 +2178,23 @@ export default function InvestmentsPage() {
               {!editInvestmentId && initialBuy && (
                 <div className="border border-blue-100 bg-blue-50/50 rounded-xl p-3 space-y-2">
                   <div className="text-xs font-semibold text-blue-600">첫 매수 정보 입력</div>
-                  <input type="date" value={initialBuy.date}
-                    onChange={e => setInitialBuy(b => b && ({ ...b, date: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-400">매수일 <span className="text-gray-300">(선택)</span></span>
+                      {initialBuy.date && (
+                        <button
+                          type="button"
+                          onClick={() => setInitialBuy(b => b && ({ ...b, date: '' }))}
+                          className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                        >
+                          날짜 지우기 ×
+                        </button>
+                      )}
+                    </div>
+                    <input type="date" value={initialBuy.date}
+                      onChange={e => setInitialBuy(b => b && ({ ...b, date: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-gray-400 block mb-1">매수 수량 (주)</label>
@@ -2136,8 +2233,9 @@ export default function InvestmentsPage() {
                   </button>
                 )}
                 <button onClick={handleSaveInvestment}
-                  className="flex-1 bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">
-                  {editInvestmentId ? '수정 완료' : '추가하기'}
+                  disabled={isSaving || !investmentForm.name}
+                  className="flex-1 bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSaving ? '저장 중...' : editInvestmentId ? '수정 완료' : '추가하기'}
                 </button>
               </div>
             </div>
@@ -2176,9 +2274,23 @@ export default function InvestmentsPage() {
                   </button>
                 ))}
               </div>
-              <input type="date" value={tradeForm.date}
-                onChange={e => setTradeForm(f => ({ ...f, date: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-gray-400">매수일 <span className="text-gray-300">(선택)</span></label>
+                  {tradeForm.date && (
+                    <button
+                      type="button"
+                      onClick={() => setTradeForm(f => ({ ...f, date: undefined }))}
+                      className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      날짜 지우기 ×
+                    </button>
+                  )}
+                </div>
+                <input type="date" value={tradeForm.date ?? ''}
+                  onChange={e => setTradeForm(f => ({ ...f, date: e.target.value || undefined }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">거래 수량 *</label>
