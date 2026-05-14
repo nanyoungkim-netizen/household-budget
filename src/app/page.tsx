@@ -305,6 +305,30 @@ export default function Dashboard() {
   const budgetPct    = totalBudgetReal > 0 ? Math.min((budgetUsed / totalBudgetReal) * 100, 100) : 0
   const budgetLeft   = totalBudgetReal - budgetUsed
 
+  const BUDGET_WARN_MSGS = [
+    '🔔 예산이 얼마 안 남았어요. 지갑 잠금 시작!',
+    '😅 바닥이 보여요! 무지출 챌린지 어때요?',
+    '💸 브레이크를 밟을 시간이에요. 꼭 필요한 것만!',
+    '🚨 예산 임박! 이번 달은 집밥으로 버텨봐요.',
+    '⚠️ 지금 손에 든 물건, 정말 필요한가요?',
+  ]
+  const BUDGET_OVER_MSGS = [
+    '💥 예산 초과! 다음 달엔 반드시 복수해요 💪',
+    '😱 지갑이 텅 비었어요... 카드는 서랍 속으로!',
+    '🚫 이번 달은 여기까지! 다음 달을 노려봐요.',
+    '💣 예산 폭발! 냉장고 털어서 버텨봐요.',
+    '📉 예산 초과 달성(?)... 절약 챌린지 시작!',
+    '🤯 가계부가 울고 있어요. 잠깐, 숨 고르기!',
+  ]
+  const _budgetMsgSeed = parseInt(budgetMonth.replace('-', '')) % 100
+  const budgetNudgeMsg = totalBudgetReal > 0
+    ? budgetLeft < 0
+      ? BUDGET_OVER_MSGS[_budgetMsgSeed % BUDGET_OVER_MSGS.length]
+      : budgetPct >= 80
+      ? BUDGET_WARN_MSGS[_budgetMsgSeed % BUDGET_WARN_MSGS.length]
+      : null
+    : null
+
   // ── 적금·예금 요약 ──────────────────────────────────────────────────────────
   const savingsSummary = useMemo(() => {
     let totalPrincipal = 0
@@ -331,7 +355,7 @@ export default function Dashboard() {
     const holdingsMap = new Map<string, { qty: number; buyAmt: number }>()
     investments.forEach(inv => holdingsMap.set(inv.id, { qty: 0, buyAmt: 0 }))
     ;[...investmentTrades]
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
       .forEach(trade => {
         const h = holdingsMap.get(trade.investmentId)
         if (!h) return
@@ -897,16 +921,7 @@ export default function Dashboard() {
 
             if (widgetId === 'card_payment') {
               const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
-              const paidBillingMonths = new Set<string>(
-                transactions
-                  .filter(t => isCardPayCat(t.categoryId))
-                  .map(t => {
-                    if (t.billingMonth) return t.billingMonth
-                    const [y, m] = t.date.slice(0, 7).split('-').map(Number)
-                    const d = new Date(y, m - 2, 1)
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                  })
-              )
+              // 청구월별 카드 지출 합계
               const byMonth: Record<string, number> = {}
               transactions
                 .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
@@ -914,8 +929,24 @@ export default function Dashboard() {
                   const m = t.date.slice(0, 7)
                   byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
                 })
+              // 청구월별 납부 합계 (카드대금 카테고리 거래의 합산)
+              const paidByMonth: Record<string, number> = {}
+              transactions
+                .filter(t => isCardPayCat(t.categoryId))
+                .forEach(t => {
+                  const m = t.billingMonth || (() => {
+                    const [y, mo] = t.date.slice(0, 7).split('-').map(Number)
+                    const d = new Date(y, mo - 2, 1)
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                  })()
+                  paidByMonth[m] = (paidByMonth[m] || 0) + t.amount
+                })
               const monthRows = Object.entries(byMonth)
-                .map(([m, v]) => ({ month: m, total: Math.max(0, v), isPaid: paidBillingMonths.has(m) }))
+                .map(([m, v]) => {
+                  const spendTotal = Math.max(0, v)
+                  const paidTotal = paidByMonth[m] || 0
+                  return { month: m, total: spendTotal, isPaid: spendTotal > 0 && paidTotal >= spendTotal }
+                })
                 .filter(r => r.total > 0)
                 .sort((a, b) => b.month.localeCompare(a.month))
                 .slice(0, 6)
@@ -1023,6 +1054,11 @@ export default function Dashboard() {
                           {budgetLeft >= 0 ? `남은 예산 ${fmtShort(budgetLeft)}` : `초과 ${fmtShort(-budgetLeft)}`}
                         </span>
                       </div>
+                      {budgetNudgeMsg && (
+                        <div className={`mt-2 text-xs font-medium px-3 py-1.5 rounded-xl ${budgetLeft < 0 ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}`}>
+                          {budgetNudgeMsg}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="text-center py-4">

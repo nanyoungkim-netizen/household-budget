@@ -175,7 +175,7 @@ export interface InvestmentTrade {
   id: string
   investmentId: string    // 종목 ID
   type: InvestmentTradeType
-  date: string            // YYYY-MM-DD
+  date?: string           // YYYY-MM-DD (선택 — 매수일 불명 시 생략 가능)
   quantity: number        // 거래 수량
   price: number           // 거래 단가
   currency: InvestmentCurrency

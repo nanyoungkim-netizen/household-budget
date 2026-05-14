@@ -363,6 +363,23 @@ export default function TransactionsPage() {
     setShowModal(true)
   }
 
+  function openCopy(t: Transaction) {
+    setEditingId(null)
+    setFormType(t.type === 'refund' ? 'refund' : t.type as TxFormType)
+    setForm({
+      ...defaultForm(),
+      date: today.toISOString().slice(0, 10),
+      description: t.description,
+      categoryId: t.categoryId,
+      accountId: t.accountId,
+      paymentMethod: t.paymentMethod,
+      cardId: t.cardId ?? '',
+    })
+    setSavingLinks([])
+    setSavingSearch('')
+    setShowModal(true)
+  }
+
   function closeModal() {
     setShowModal(false)
     setEditingId(null)
@@ -1050,8 +1067,13 @@ export default function TransactionsPage() {
                         </div>
                       )}
                     </div>
-                    {/* 수정 / 삭제 버튼 — hover 시 표시 */}
+                    {/* 복사 / 수정 / 삭제 버튼 — hover 시 표시 */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={e => { e.stopPropagation(); openCopy(t) }}
+                        className="text-xs text-gray-400 hover:text-emerald-500 px-1.5 py-1 rounded-lg hover:bg-emerald-50 transition-colors"
+                        title="복사하여 추가"
+                      >복사</button>
                       <button
                         onClick={e => { e.stopPropagation(); openEdit(t) }}
                         className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"

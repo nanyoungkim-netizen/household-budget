@@ -341,6 +341,32 @@ export default function BudgetPage() {
   const totalActualReal = totalActual - totalExcludedActual
   const totalBudgetReal = totalBudget - totalExcludedBudget
 
+  // ── 자극 멘트 ────────────────────────────────────────────────────────────
+  const BUDGET_WARN_MSGS = [
+    '🔔 예산이 얼마 안 남았어요. 지갑 잠금 시작!',
+    '😅 바닥이 보여요! 무지출 챌린지 어때요?',
+    '💸 브레이크를 밟을 시간이에요. 꼭 필요한 것만!',
+    '🚨 예산 임박! 이번 달은 집밥으로 버텨봐요.',
+    '⚠️ 지금 손에 든 물건, 정말 필요한가요?',
+  ]
+  const BUDGET_OVER_MSGS = [
+    '💥 예산 초과! 다음 달엔 반드시 복수해요 💪',
+    '😱 지갑이 텅 비었어요... 카드는 서랍 속으로!',
+    '🚫 이번 달은 여기까지! 다음 달을 노려봐요.',
+    '💣 예산 폭발! 냉장고 털어서 버텨봐요.',
+    '📉 예산 초과 달성(?)... 절약 챌린지 시작!',
+    '🤯 가계부가 울고 있어요. 잠깐, 숨 고르기!',
+  ]
+  const _nudgeSeed = parseInt(month.replace('-', '')) % 100
+  const usagePct = totalBudgetReal > 0 ? totalActualReal / totalBudgetReal * 100 : 0
+  const budgetNudgeMsg = totalBudgetReal > 0
+    ? totalActualReal > totalBudgetReal
+      ? BUDGET_OVER_MSGS[_nudgeSeed % BUDGET_OVER_MSGS.length]
+      : usagePct >= 80
+      ? BUDGET_WARN_MSGS[_nudgeSeed % BUDGET_WARN_MSGS.length]
+      : null
+    : null
+
   // ── 카테고리 CRUD ────────────────────────────────────────────────────────
   function addChild() {
     if (!newCat.name || !modalParentId) return
@@ -537,6 +563,13 @@ export default function BudgetPage() {
         </div>
       )}
 
+      {/* 자극 멘트 */}
+      {budgetNudgeMsg && (
+        <div className={`mb-3 px-4 py-3 rounded-xl text-sm font-medium text-center ${totalActualReal > totalBudgetReal ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}`}>
+          {budgetNudgeMsg}
+        </div>
+      )}
+
       {/* 지출 방식 분석 */}
       <div className="bg-white rounded-xl p-3 shadow-sm mb-3">
         <div className="text-xs font-semibold text-gray-500 mb-2">이달 지출 분석</div>
@@ -622,7 +655,7 @@ export default function BudgetPage() {
           const { budget: grpBudget, actual: grpActual } = groupTotal(parent.id)
           const isCollapsed = collapsed.has(parent.id)
           const grpDiff = grpBudget - grpActual
-          const grpOver = grpBudget > 0 && grpActual > grpBudget
+          const grpOver = grpActual > grpBudget  // 예산 미설정(0)인데 지출 있으면 초과
 
           return (
             <div key={parent.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -701,7 +734,7 @@ export default function BudgetPage() {
                     const actual = getActual(cat.id)
                     const diff = budgetAmt - actual
                     const pct = budgetAmt > 0 ? Math.min(actual / budgetAmt * 100, 100) : 0
-                    const isOver = budgetAmt > 0 && actual > budgetAmt
+                    const isOver = actual > budgetAmt  // 예산 미설정(0)인데 지출 있으면 초과
 
                     return (
                       <div key={cat.id} className={`border-b border-gray-50 last:border-0 group ${isExcludedThisMonth(cat.id) && !isExcludedThisMonth(parent.id) ? 'bg-blue-50/40' : ''}`}>
@@ -779,7 +812,9 @@ export default function BudgetPage() {
                           </div>
                           {/* 차액 */}
                           <div className={`text-right text-sm font-medium ${isOver ? 'text-red-500' : diff > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
-                            {budgetAmt > 0 ? (isOver ? '+' + fmtKRW(Math.abs(diff)) : diff > 0 ? '-' + fmtKRW(diff) : '±0') : '-'}
+                            {actual > 0 || budgetAmt > 0
+                              ? (isOver ? '+' + fmtKRW(Math.abs(diff)) : diff > 0 ? '-' + fmtKRW(diff) : '±0')
+                              : '-'}
                           </div>
                         </div>
                         {/* 진행바 */}
@@ -802,7 +837,9 @@ export default function BudgetPage() {
                       <span className="text-right">{grpBudget > 0 ? fmtKRW(grpBudget) : '-'}</span>
                       <span className="text-right">{grpActual > 0 ? fmtKRW(grpActual) : '-'}</span>
                       <span className={`text-right ${grpOver ? 'text-red-500' : grpDiff > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
-                        {grpBudget > 0 ? (grpOver ? '+' + fmtKRW(Math.abs(grpDiff)) : grpDiff > 0 ? '-' + fmtKRW(grpDiff) : '±0') : '-'}
+                        {grpActual > 0 || grpBudget > 0
+                          ? (grpOver ? '+' + fmtKRW(Math.abs(grpDiff)) : grpDiff > 0 ? '-' + fmtKRW(grpDiff) : '±0')
+                          : '-'}
                       </span>
                     </div>
                   )}
