@@ -293,14 +293,14 @@ export default function InvestmentsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 로컬 종목명 자동완성 (기존 등록 종목)
+  // 로컬 종목명 자동완성 (기존 등록 종목) — Investment 객체로 반환해 ticker·currency·assetType 함께 전달
   const localSuggestions = useMemo(() => {
     const q = investmentForm.name.trim()
     if (!q) return []
+    const seen = new Set<string>()
     return investments
       .filter(inv => inv.id !== editInvestmentId && inv.name.includes(q))
-      .map(inv => inv.name)
-      .filter((name, idx, arr) => arr.indexOf(name) === idx)
+      .filter(inv => { if (seen.has(inv.name)) return false; seen.add(inv.name); return true })
       .slice(0, 5)
   }, [investmentForm.name, investments, editInvestmentId])
 
@@ -2089,8 +2089,13 @@ export default function InvestmentsPage() {
                     onChange={e => {
                       const v = e.target.value
                       setInvestmentForm(f => ({ ...f, name: v }))
-                      setNameDropdownOpen(true)
-                      triggerNaverSearch(v)
+                      if (!v.trim()) {
+                        setNameDropdownOpen(false)
+                        setNaverResults([])
+                      } else {
+                        setNameDropdownOpen(true)
+                        triggerNaverSearch(v)
+                      }
                     }}
                     onFocus={() => setNameDropdownOpen(true)}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-8"
@@ -2143,12 +2148,25 @@ export default function InvestmentsPage() {
                         <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100">
                           📁 등록된 종목
                         </div>
-                        {localSuggestions.map((name, idx) => (
+                        {localSuggestions.map((inv, idx) => (
                           <button
                             key={`local-${idx}`}
-                            onMouseDown={e => { e.preventDefault(); setInvestmentForm(f => ({ ...f, name })); setNameDropdownOpen(false) }}
-                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
-                            {name}
+                            onMouseDown={e => {
+                              e.preventDefault()
+                              setInvestmentForm(f => ({
+                                ...f,
+                                name: inv.name,
+                                ticker: inv.ticker,
+                                currency: inv.currency,
+                                assetType: inv.assetType,
+                                exchange: inv.exchange,
+                              }))
+                              setNaverResults([])
+                              setNameDropdownOpen(false)
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between gap-2">
+                            <span>{inv.name}</span>
+                            {inv.ticker && <span className="text-xs text-gray-400 tabular-nums">{inv.ticker}</span>}
                           </button>
                         ))}
                       </>
