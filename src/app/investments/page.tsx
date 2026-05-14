@@ -656,20 +656,6 @@ export default function InvestmentsPage() {
           const fee = parseAmt(initialBuy.fee)
           if (qty > 0 && price > 0) {
             finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
-            // 소속 계좌가 있으면 초기 매수 금액을 예수금에서 차감
-            let linkedDepositId: string | undefined
-            if (investmentForm.accountId) {
-              const depositAmt = -(Math.round(qty * price) + (fee > 0 ? fee : 0))
-              const newDep: InvestmentCashDeposit = {
-                id: `dep${Date.now()}`,
-                accountId: investmentForm.accountId,
-                date: initialBuy.date,
-                amount: depositAmt,
-                note: `거래 연동: ${investmentForm.name}`,
-              }
-              setInvestmentCashDeposits([...investmentCashDeposits, newDep])
-              linkedDepositId = newDep.id
-            }
             const trade: InvestmentTrade = {
               id: `tr${Date.now()}`,
               investmentId: invId,
@@ -679,7 +665,6 @@ export default function InvestmentsPage() {
               price,
               currency: investmentForm.currency,
               fee: fee > 0 ? fee : undefined,
-              linkedDepositId,
             }
             setInvestmentTrades([...investmentTrades, trade])
           }
@@ -719,19 +704,10 @@ export default function InvestmentsPage() {
   // ── 거래 CRUD ──────────────────────────────────────────────────────────────
   function openAddTrade(investmentId: string) {
     const inv = investments.find(i => i.id === investmentId)
-    // 종목에 계좌가 없으면 잔액이 가장 많은 계좌를 자동 선택 (단일 계좌이면 무조건)
-    const defaultAccountId = inv?.accountId ?? (() => {
-      if (investmentAccounts.length === 0) return undefined
-      if (investmentAccounts.length === 1) return investmentAccounts[0].id
-      // 여러 계좌면 잔액 최대 계좌 기본 선택
-      return investmentAccounts.reduce((best, acc) =>
-        (cashBalanceMap.get(acc.id) ?? 0) > (cashBalanceMap.get(best.id) ?? 0) ? acc : best
-      ).id
-    })()
     setTradeInvestmentId(investmentId)
     setEditTradeId(null)
     setTradeUsesCash(false)
-    setTradeModalAccountId(defaultAccountId)
+    setTradeModalAccountId(inv?.accountId)
     setTradeForm({ ...EMPTY_TRADE, currency: inv?.currency ?? 'KRW' })
     setShowTradeModal(true)
   }
@@ -765,7 +741,8 @@ export default function InvestmentsPage() {
 
     if (editTradeId) {
       const oldTrade = investmentTrades.find(t => t.id === editTradeId)
-      if (accountId) {
+      if (accountId && tradeUsesCash) {
+        // 연동 ON: 기존 deposit 업데이트 or 신규 생성
         if (oldTrade?.linkedDepositId) {
           setInvestmentCashDeposits(investmentCashDeposits.map(d =>
             d.id === oldTrade.linkedDepositId ? { ...d, amount: depositAmt, date: tradeForm.date ?? today } : d
@@ -782,12 +759,14 @@ export default function InvestmentsPage() {
           setInvestmentCashDeposits([...investmentCashDeposits, newDep])
           linkedDepositId = newDep.id
         }
-      } else {
-        linkedDepositId = oldTrade?.linkedDepositId
+      } else if (oldTrade?.linkedDepositId) {
+        // 연동 OFF로 변경: 기존 deposit 삭제
+        setInvestmentCashDeposits(investmentCashDeposits.filter(d => d.id !== oldTrade.linkedDepositId))
       }
       setInvestmentTrades(investmentTrades.map(t => t.id === editTradeId ? { ...t, ...tradeForm, linkedDepositId } : t))
     } else {
-      if (accountId) {
+      if (accountId && tradeUsesCash) {
+        // 신규 거래 + 연동 ON
         const newDep: InvestmentCashDeposit = {
           id: `dep${Date.now()}`,
           accountId,
@@ -2335,6 +2314,22 @@ export default function InvestmentsPage() {
                     ))}
                   </select>
                 </div>
+              )}
+              {/* 예수금 연동 토글 — 소속 계좌가 있을 때만 표시 */}
+              {tradeModalAccountId && (
+                <button
+                  type="button"
+                  onClick={() => setTradeUsesCash(v => !v)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm transition-colors ${
+                    tradeUsesCash
+                      ? 'bg-blue-50 border-blue-200 text-blue-700'
+                      : 'bg-gray-50 border-gray-200 text-gray-500'
+                  }`}>
+                  <span className="font-medium">예수금 연동</span>
+                  <span className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 ${tradeUsesCash ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                    <span className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${tradeUsesCash ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </span>
+                </button>
               )}
               <div className="flex bg-gray-100 rounded-xl p-1">
                 {(['buy','sell'] as const).map(type => (
