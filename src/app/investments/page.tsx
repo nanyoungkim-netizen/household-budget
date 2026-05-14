@@ -706,7 +706,7 @@ export default function InvestmentsPage() {
     const inv = investments.find(i => i.id === investmentId)
     setTradeInvestmentId(investmentId)
     setEditTradeId(null)
-    setTradeUsesCash(false)
+    setTradeUsesCash(true)   // 신규 거래 기본값 ON
     setTradeModalAccountId(inv?.accountId)
     setTradeForm({ ...EMPTY_TRADE, currency: inv?.currency ?? 'KRW' })
     setShowTradeModal(true)
