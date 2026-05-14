@@ -77,6 +77,7 @@ export default function GoalsPage() {
 
   // 납입 추가 모달
   const [paymentGoalId, setPaymentGoalId] = useState<string | null>(null)
+  const [paymentType, setPaymentType] = useState<'save' | 'withdraw'>('save')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentDate, setPaymentDate] = useState(todayStr)
   const [paymentNote, setPaymentNote] = useState('')
@@ -163,6 +164,7 @@ export default function GoalsPage() {
 
   function openPaymentModal(goalId: string) {
     setPaymentGoalId(goalId)
+    setPaymentType('save')
     setPaymentAmount('')
     setPaymentDate(todayStr)
     setPaymentNote('')
@@ -175,7 +177,7 @@ export default function GoalsPage() {
       id: `gp${Date.now()}`,
       goalId: paymentGoalId,
       date: paymentDate,
-      amount: amt,
+      amount: paymentType === 'save' ? amt : -amt,
       note: paymentNote || undefined,
     }
     setGoalPayments([...goalPayments, payment])
@@ -292,17 +294,15 @@ export default function GoalsPage() {
 
               {/* 납입 버튼 + 이력 토글 */}
               <div className="flex gap-2">
-                {!isDone && (
-                  <button onClick={() => openPaymentModal(goal.id)}
-                    className="flex-1 text-sm font-medium text-white rounded-xl py-2 transition-colors"
-                    style={{ backgroundColor: goal.color }}>
-                    + 납입
-                  </button>
-                )}
+                <button onClick={() => openPaymentModal(goal.id)}
+                  className="flex-1 text-sm font-medium text-white rounded-xl py-2 transition-colors"
+                  style={{ backgroundColor: goal.color }}>
+                  + 기록하기
+                </button>
                 {payments.length > 0 && (
                   <button onClick={() => toggleHistory(goal.id)}
                     className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                    납입 이력 {payments.length}건
+                    이력 {payments.length}건
                     <span className="text-[10px]">{isHistoryExpanded ? '▲' : '▼'}</span>
                   </button>
                 )}
@@ -311,21 +311,29 @@ export default function GoalsPage() {
               {/* 납입 이력 목록 */}
               {isHistoryExpanded && payments.length > 0 && (
                 <div className="mt-3 border border-gray-100 rounded-xl overflow-hidden">
-                  {payments.map((p, i) => (
-                    <div key={p.id} className={`flex items-center justify-between px-3 py-2.5 text-sm ${i !== 0 ? 'border-t border-gray-100' : ''}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">{fmtDate(p.date)}</span>
-                        {p.note && <span className="text-xs text-gray-400">· {p.note}</span>}
+                  {payments.map((p, i) => {
+                    const isSave = p.amount >= 0
+                    return (
+                      <div key={p.id} className={`flex items-center justify-between px-3 py-2.5 text-sm ${i !== 0 ? 'border-t border-gray-100' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isSave ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-400'}`}>
+                            {isSave ? '🐿️ 모았어요' : '🏃 출금했어요'}
+                          </span>
+                          <span className="text-xs text-gray-400">{fmtDate(p.date)}</span>
+                          {p.note && <span className="text-xs text-gray-300">· {p.note}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-semibold text-sm ${isSave ? 'text-emerald-600' : 'text-red-400'}`}>
+                            {isSave ? '+' : '-'}{fmtKRW(Math.abs(p.amount))}
+                          </span>
+                          <button onClick={() => handleDeletePayment(p.id)}
+                            className="text-gray-300 hover:text-red-400 text-xs px-1 transition-colors">✕</button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-800">+{fmtKRW(p.amount)}</span>
-                        <button onClick={() => handleDeletePayment(p.id)}
-                          className="text-gray-300 hover:text-red-400 text-xs px-1 transition-colors">✕</button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-gray-100">
-                    <span className="text-xs text-gray-400">납입 합계</span>
+                    <span className="text-xs text-gray-400">누적 합계</span>
                     <span className="text-xs font-bold text-gray-700">{fmtKRW(payments.reduce((s, p) => s + p.amount, 0))}</span>
                   </div>
                 </div>
@@ -447,17 +455,29 @@ export default function GoalsPage() {
       {paymentGoalId && (() => {
         const goal = goals.find(g => g.id === paymentGoalId)
         if (!goal) return null
+        const isSave = paymentType === 'save'
         return (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold">납입 추가</h2>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-base font-bold">이력 기록</h2>
                 <button onClick={() => setPaymentGoalId(null)} className="text-gray-400 text-xl leading-none">×</button>
               </div>
-              <div className="text-xs text-gray-400 mb-3">{goal.name}</div>
+              <div className="text-xs text-gray-400 mb-4">{goal.name}</div>
               <div className="space-y-3">
+                {/* 모았어요 / 출금했어요 선택 */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setPaymentType('save')}
+                    className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${isSave ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-100 bg-gray-50 text-gray-400'}`}>
+                    🐿️ 모았어요
+                  </button>
+                  <button onClick={() => setPaymentType('withdraw')}
+                    className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${!isSave ? 'border-red-300 bg-red-50 text-red-500' : 'border-gray-100 bg-gray-50 text-gray-400'}`}>
+                    🏃 출금했어요
+                  </button>
+                </div>
                 <div>
-                  <label className="text-xs text-gray-400 block mb-0.5">납입 금액 *</label>
+                  <label className="text-xs text-gray-400 block mb-0.5">금액 *</label>
                   <input type="text" inputMode="numeric" placeholder="0원" value={paymentAmount}
                     onChange={e => setPaymentAmount(fmtInput(e.target.value))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -476,9 +496,8 @@ export default function GoalsPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <button onClick={handleAddPayment}
-                  className="w-full text-white font-semibold py-3 rounded-xl transition-colors"
-                  style={{ backgroundColor: goal.color }}>
-                  납입 추가
+                  className={`w-full font-semibold py-3 rounded-xl transition-colors text-white ${isSave ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-400 hover:bg-red-500'}`}>
+                  {isSave ? '🐿️ 모았어요!' : '🏃 출금했어요!'}
                 </button>
               </div>
             </div>
