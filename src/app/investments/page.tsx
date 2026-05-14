@@ -704,6 +704,15 @@ export default function InvestmentsPage() {
   }
 
   function handleDeleteInvestment(id: string) {
+    // 종목에 속한 거래의 linkedDepositId 모두 수집해서 예수금 레코드도 삭제
+    const linkedIds = new Set(
+      investmentTrades
+        .filter(t => t.investmentId === id && t.linkedDepositId)
+        .map(t => t.linkedDepositId as string)
+    )
+    if (linkedIds.size > 0) {
+      setInvestmentCashDeposits(investmentCashDeposits.filter(d => !linkedIds.has(d.id)))
+    }
     setInvestments(investments.filter(i => i.id !== id))
     setInvestmentTrades(investmentTrades.filter(t => t.investmentId !== id))
     setDeleteInvestmentId(null)
