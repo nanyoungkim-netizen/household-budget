@@ -1000,23 +1000,55 @@ export default function InvestmentsPage() {
         </div>
 
         {h && h.holdingQty > 0 && (() => {
-          const isForeign = inv.currency !== 'KRW'
-          const fxRate = isForeign ? (exchangeRates[inv.currency] ?? 0) : 1
+          // assetType 기반으로 해외 여부 판정 (currency='KRW'로 잘못 등록된 레거시 데이터 대응)
+          const isForeign = inv.currency !== 'KRW' || inv.assetType === 'foreign_stock'
+          // 해외 종목 현재가는 API에서 항상 USD로 반환되므로 USD 환율 사용
+          const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
           const hasFx = fxRate > 0
-          // F-03: 통화 모드에 따라 표시 단위 결정
-          const showInUSD = currencyMode === 'USD' && isForeign
+          // 매수 비용은 inv.currency 기준으로 입력됨
+          const costIsKRW = inv.currency === 'KRW'
+
+          const showInUSD = currencyMode === 'USD' && isForeign && hasFx
           const showInKRW = currencyMode === 'KRW' && isForeign && hasFx
-          const fmtNative = (v: number) => {
-            if (showInUSD && inv.currency === 'USD') {
-              return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }
+
+          // 모든 금액을 표시 통화로 정규화
+          let dispCurrentPrice: number, dispAvgPrice: number, dispTotalBuyAmt: number
+          if (isForeign && hasFx) {
             if (showInKRW) {
-              return `${Math.round(v * fxRate).toLocaleString('ko-KR')}원`
+              dispCurrentPrice = currentPrice * fxRate
+              dispAvgPrice    = costIsKRW ? h.avgPrice      : h.avgPrice      * fxRate
+              dispTotalBuyAmt = costIsKRW ? h.totalBuyAmt   : h.totalBuyAmt   * fxRate
+            } else {
+              // USD 모드
+              dispCurrentPrice = currentPrice
+              dispAvgPrice    = costIsKRW ? h.avgPrice    / fxRate : h.avgPrice
+              dispTotalBuyAmt = costIsKRW ? h.totalBuyAmt / fxRate : h.totalBuyAmt
             }
-            return inv.currency === 'USD'
-              ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${isForeign ? ` ${inv.currency}` : '원'}`
+          } else {
+            dispCurrentPrice = currentPrice
+            dispAvgPrice    = h.avgPrice
+            dispTotalBuyAmt = h.totalBuyAmt
           }
+
+          const dispEvalAmt  = h.holdingQty * dispCurrentPrice
+          const dispEvalPnl  = dispEvalAmt - dispTotalBuyAmt
+          const dispEvalRate = dispTotalBuyAmt > 0 ? (dispEvalPnl / dispTotalBuyAmt) * 100 : 0
+          const dispPriceDiff = dispCurrentPrice - dispAvgPrice
+          const dispPriceRate = dispAvgPrice > 0 ? (dispPriceDiff / dispAvgPrice) * 100 : 0
+          const isProfit = dispEvalPnl >= 0  // 바깥 isProfit 대체
+
+          const fmtDisp = (v: number) => {
+            if (showInKRW || !isForeign) {
+              return `${Math.round(v).toLocaleString('ko-KR')}원`
+            }
+            return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          }
+
+          // USD 모드 시 원화 참고값 (costIsKRW이면 원래 입력값, 아니면 환산)
+          const secBuy   = showInUSD ? `≈ ${fmtKRW(costIsKRW ? Math.round(h.totalBuyAmt) : Math.round(h.totalBuyAmt * fxRate))}` : null
+          const secAvg   = showInUSD ? `≈ ${fmtKRW(costIsKRW ? Math.round(h.avgPrice)    : Math.round(h.avgPrice    * fxRate))}` : null
+          const secPrice = showInUSD ? `≈ ${fmtKRW(Math.round(currentPrice * fxRate))}` : null
+
           return (
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="bg-gray-50 rounded-xl p-2.5">
@@ -1025,29 +1057,25 @@ export default function InvestmentsPage() {
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">총 매수금액</div>
-              <div className="text-sm font-semibold text-gray-900">{fmtNative(h.totalBuyAmt)}</div>
-              {isForeign && hasFx && showInUSD && <div className="text-xs text-gray-400 mt-0.5">≈ {fmtKRW(Math.round(h.totalBuyAmt * fxRate))}</div>}
+              <div className="text-sm font-semibold text-gray-900">{fmtDisp(dispTotalBuyAmt)}</div>
+              {secBuy && <div className="text-xs text-gray-400 mt-0.5">{secBuy}</div>}
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">평균매수단가</div>
-              <div className="text-sm font-semibold text-gray-900">{fmtNative(h.avgPrice)}</div>
-              {isForeign && hasFx && showInUSD && <div className="text-xs text-gray-400 mt-0.5">≈ {fmtKRW(Math.round(h.avgPrice * fxRate))}</div>}
+              <div className="text-sm font-semibold text-gray-900">{fmtDisp(dispAvgPrice)}</div>
+              {secAvg && <div className="text-xs text-gray-400 mt-0.5">{secAvg}</div>}
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5">
               <div className="text-xs text-gray-400 mb-0.5">현재가</div>
-              {currentPrice > 0 ? (() => {
-                const priceDiff = currentPrice - h.avgPrice
-                const priceRate = h.avgPrice > 0 ? (priceDiff / h.avgPrice) * 100 : 0
-                return (
-                  <>
-                    <div className="text-sm font-semibold text-gray-900">{fmtNative(currentPrice)}</div>
-                    {isForeign && hasFx && showInUSD && <div className="text-xs text-gray-400 mt-0.5">≈ {fmtKRW(Math.round(currentPrice * fxRate))}</div>}
-                    <div className={`text-xs mt-0.5 ${priceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {priceDiff >= 0 ? '+' : ''}{fmtNative(priceDiff)} ({fmtPct(priceRate)})
-                    </div>
-                  </>
-                )
-              })() : <div className="text-sm font-semibold text-gray-400">미입력</div>}
+              {dispCurrentPrice > 0 ? (
+                <>
+                  <div className="text-sm font-semibold text-gray-900">{fmtDisp(dispCurrentPrice)}</div>
+                  {secPrice && <div className="text-xs text-gray-400 mt-0.5">{secPrice}</div>}
+                  <div className={`text-xs mt-0.5 ${dispPriceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {dispPriceDiff >= 0 ? '+' : ''}{fmtDisp(dispPriceDiff)} ({fmtPct(dispPriceRate)})
+                  </div>
+                </>
+              ) : <div className="text-sm font-semibold text-gray-400">미입력</div>}
             </div>
             <div className={`col-span-2 rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익 (총 평가금액)</div>
@@ -1055,13 +1083,13 @@ export default function InvestmentsPage() {
                 <div>
                   <div className="flex items-baseline justify-between">
                     <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                      {isProfit ? '+' : ''}{fmtNative(evalPnl)} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+                      {isProfit ? '+' : ''}{fmtDisp(dispEvalPnl)} <span className="text-xs font-normal">({fmtPct(dispEvalRate)})</span>
                     </div>
-                    <div className="text-xs text-gray-500">{fmtNative(evalAmt)}</div>
+                    <div className="text-xs text-gray-500">{fmtDisp(dispEvalAmt)}</div>
                   </div>
                   {hasFx && showInUSD && (
                     <div className="mt-1 text-xs text-blue-500">
-                      ≈ {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl * fxRate))} / 평가 {fmtKRW(Math.round(evalAmt * fxRate))}
+                      ≈ {isProfit ? '+' : ''}{fmtKRW(Math.round(dispEvalPnl * fxRate))} / 평가 {fmtKRW(Math.round(dispEvalAmt * fxRate))}
                       <span className="ml-1 text-gray-400">(환율 {fxRate.toLocaleString()})</span>
                     </div>
                   )}
@@ -1069,9 +1097,9 @@ export default function InvestmentsPage() {
               ) : (
                 <div className="flex items-baseline justify-between">
                   <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                    {isProfit ? '+' : ''}{fmtKRW(Math.round(evalPnl))} <span className="text-xs font-normal">({fmtPct(evalRate)})</span>
+                    {isProfit ? '+' : ''}{fmtKRW(Math.round(dispEvalPnl))} <span className="text-xs font-normal">({fmtPct(dispEvalRate)})</span>
                   </div>
-                  <div className="text-xs text-gray-500">{fmtKRW(Math.round(evalAmt))}</div>
+                  <div className="text-xs text-gray-500">{fmtKRW(Math.round(dispEvalAmt))}</div>
                 </div>
               )}
             </div>
