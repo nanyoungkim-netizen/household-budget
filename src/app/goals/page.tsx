@@ -302,12 +302,6 @@ export default function GoalsPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-0.5">기한 (D-Day)</label>
-                <input type="date" value={form.deadline}
-                  onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
 
               {/* 추천 납입액 미리보기 */}
               {form.targetDate && form.targetAmount && (() => {
