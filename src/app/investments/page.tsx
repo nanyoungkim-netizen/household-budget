@@ -619,6 +619,20 @@ export default function InvestmentsPage() {
   }
 
   function handleDeleteAccount(id: string) {
+    // 해당 계좌의 예수금 레코드 ID 수집
+    const depositIdsToRemove = new Set(
+      investmentCashDeposits.filter(d => d.accountId === id).map(d => d.id)
+    )
+    // 예수금 레코드 삭제
+    setInvestmentCashDeposits(investmentCashDeposits.filter(d => d.accountId !== id))
+    // 해당 예수금에 연동된 거래의 linkedDepositId 초기화
+    if (depositIdsToRemove.size > 0) {
+      setInvestmentTrades(investmentTrades.map(t =>
+        t.linkedDepositId && depositIdsToRemove.has(t.linkedDepositId)
+          ? { ...t, linkedDepositId: undefined }
+          : t
+      ))
+    }
     setInvestments(investments.map(inv => inv.accountId === id ? { ...inv, accountId: undefined } : inv))
     setInvestmentAccounts(investmentAccounts.filter(a => a.id !== id))
     setDeleteAccountId(null)
