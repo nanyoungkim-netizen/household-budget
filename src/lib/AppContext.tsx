@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -88,6 +88,7 @@ interface AppData {
   installments: Installment[]
   savings: Saving[]
   goals: Goal[]
+  goalPayments: GoalPayment[]
   cardBillings: CardBilling[]
   mappingRules: MappingRule[]
   investments: Investment[]            // PRD 2.6
@@ -115,6 +116,7 @@ const INITIAL_DATA: AppData = {
   installments: [],
   savings: [],
   goals: [],
+  goalPayments: [],
   cardBillings: [],
   mappingRules: [],
   investments: [],
@@ -162,6 +164,7 @@ interface AppContextType {
   setSavings: (savings: Saving[]) => void
   // 목표
   setGoals: (goals: Goal[]) => void
+  setGoalPayments: (payments: GoalPayment[]) => void
   // 카드 청구
   setCardBillings: (billings: CardBilling[]) => void
   // 카테고리
@@ -477,6 +480,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, goals, lastModified: now() }))
   }, [update])
 
+  const setGoalPayments = useCallback((goalPayments: GoalPayment[]) => {
+    update(d => ({ ...d, goalPayments, lastModified: now() }))
+  }, [update])
+
   const setCardBillings = useCallback((cardBillings: CardBilling[]) => {
     update(d => ({ ...d, cardBillings, lastModified: now() }))
   }, [update])
@@ -569,6 +576,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInstallments,
       setSavings,
       setGoals,
+      setGoalPayments,
       setCardBillings,
       setCategories,
       setMappingRules,

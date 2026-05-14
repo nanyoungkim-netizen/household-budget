@@ -146,6 +146,15 @@ export interface CardBilling {
 // PRD 2.5: 재무 목표 카테고리
 export type GoalCategory = 'travel' | 'wedding' | 'emergency' | 'housing' | 'car' | 'education' | 'other'
 
+// 재무 목표 납입 이력
+export interface GoalPayment {
+  id: string
+  goalId: string
+  date: string   // YYYY-MM-DD
+  amount: number
+  note?: string
+}
+
 export interface Goal {
   id: string
   name: string

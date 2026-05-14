@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useApp } from '@/lib/AppContext'
-import { Goal, GoalCategory } from '@/types'
+import { Goal, GoalCategory, GoalPayment } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -12,6 +12,11 @@ function fmtShort(n: number) {
   if (n >= 100000000) return (n/100000000).toFixed(1)+'억'
   if (n >= 10000) return (n/10000).toFixed(0)+'만'
   return n.toLocaleString()
+}
+function fmtDate(d: string) {
+  if (!d) return ''
+  const [y, m, day] = d.split('-')
+  return `${y}.${m}.${day}`
 }
 
 const PRESET_COLORS = ['#0064FF','#00B493','#FF6B6B','#FFB800','#9B59B6','#E67E22','#1ABC9C','#E74C3C']
@@ -27,6 +32,7 @@ const GOAL_CATEGORIES: { value: GoalCategory; label: string; icon: string }[] = 
 ]
 
 const today = new Date()
+const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
 
 type FormState = {
@@ -58,13 +64,22 @@ function targetDateToDeadline(targetDate: string): string {
 }
 
 export default function GoalsPage() {
-  const { data, setGoals } = useApp()
-  const { goals } = data
+  const { data, setGoals, setGoalPayments } = useApp()
+  const { goals, goalPayments = [] } = data
 
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  // 납입 이력 토글 (goalId set)
+  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
+
+  // 납입 추가 모달
+  const [paymentGoalId, setPaymentGoalId] = useState<string | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentDate, setPaymentDate] = useState(todayStr)
+  const [paymentNote, setPaymentNote] = useState('')
 
   function getDday(d: string) {
     if (!d) return null
@@ -82,12 +97,18 @@ export default function GoalsPage() {
     return Math.max(1, (y - fy) * 12 + (m - fm))
   }
 
-  function getRecommendedMonthly(goal: Goal): number {
+  function getEffectiveCurrent(goal: Goal): number {
+    const payments = goalPayments.filter(p => p.goalId === goal.id)
+    const paymentSum = payments.reduce((s, p) => s + p.amount, 0)
+    return goal.currentAmount + paymentSum
+  }
+
+  function getRecommendedMonthly(goal: Goal, effectiveCurrent: number): number {
     const months = goal.targetDate
       ? getMonthsLeft(goal.targetDate, goal.startDate)
       : (goal.deadline ? Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30)) : 0)
     if (months <= 0) return 0
-    return Math.ceil((goal.targetAmount - goal.currentAmount) / months)
+    return Math.ceil((goal.targetAmount - effectiveCurrent) / months)
   }
 
   function openAdd() {
@@ -136,11 +157,42 @@ export default function GoalsPage() {
 
   function handleDelete(id: string) {
     setGoals(goals.filter(g => g.id !== id))
+    setGoalPayments(goalPayments.filter(p => p.goalId !== id))
     setDeleteConfirmId(null)
   }
 
-  function handleAddAmount(id: string, amount: number) {
-    setGoals(goals.map(g => g.id === id ? { ...g, currentAmount: Math.min(g.currentAmount+amount, g.targetAmount) } : g))
+  function openPaymentModal(goalId: string) {
+    setPaymentGoalId(goalId)
+    setPaymentAmount('')
+    setPaymentDate(todayStr)
+    setPaymentNote('')
+  }
+
+  function handleAddPayment() {
+    const amt = parseAmt(paymentAmount)
+    if (!paymentGoalId || amt <= 0) return
+    const payment: GoalPayment = {
+      id: `gp${Date.now()}`,
+      goalId: paymentGoalId,
+      date: paymentDate,
+      amount: amt,
+      note: paymentNote || undefined,
+    }
+    setGoalPayments([...goalPayments, payment])
+    setPaymentGoalId(null)
+  }
+
+  function handleDeletePayment(id: string) {
+    setGoalPayments(goalPayments.filter(p => p.id !== id))
+  }
+
+  function toggleHistory(goalId: string) {
+    setExpandedHistory(prev => {
+      const next = new Set(prev)
+      if (next.has(goalId)) next.delete(goalId)
+      else next.add(goalId)
+      return next
+    })
   }
 
   return (
@@ -152,15 +204,17 @@ export default function GoalsPage() {
 
       <div className="space-y-4">
         {goals.map(goal => {
-          const pct = Math.min(goal.currentAmount / goal.targetAmount * 100, 100)
+          const effectiveCurrent = getEffectiveCurrent(goal)
+          const pct = Math.min(effectiveCurrent / goal.targetAmount * 100, 100)
           const dday = goal.deadline ? getDday(goal.deadline) : null
-          const remaining = goal.targetAmount - goal.currentAmount
+          const remaining = goal.targetAmount - effectiveCurrent
           const isDone = pct >= 100
           const daysLeft = goal.deadline ? Math.ceil((new Date(goal.deadline).getTime()-today.getTime())/(1000*60*60*24)) : 0
-          const monthlyNeeded = getRecommendedMonthly(goal)
+          const monthlyNeeded = getRecommendedMonthly(goal, effectiveCurrent)
           const catMeta = GOAL_CATEGORIES.find(c => c.value === (goal.goalCategory || 'other'))
+          const payments = goalPayments.filter(p => p.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date))
+          const isHistoryExpanded = expandedHistory.has(goal.id)
 
-          // 시나리오 비교 (6/12/24개월)
           const scenarios = [6, 12, 24].map(months => ({
             months,
             monthly: Math.ceil(remaining / months),
@@ -189,7 +243,7 @@ export default function GoalsPage() {
 
               <div className="flex items-end justify-between mb-3">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: goal.color }}>{fmtShort(goal.currentAmount)}원</div>
+                  <div className="text-2xl font-bold" style={{ color: goal.color }}>{fmtShort(effectiveCurrent)}원</div>
                   <div className="text-sm text-gray-400">목표 {fmtKRW(goal.targetAmount)}</div>
                 </div>
                 <div className="text-right">
@@ -223,7 +277,6 @@ export default function GoalsPage() {
                       <div className="font-semibold">{fmtKRW(remaining)}</div>
                     </div>
                   </div>
-                  {/* 시나리오 비교 */}
                   {scenarios.length > 0 && (
                     <div className="grid grid-cols-3 gap-2">
                       {scenarios.map(s => (
@@ -237,14 +290,44 @@ export default function GoalsPage() {
                 </div>
               )}
 
-              {!isDone && (
-                <div className="flex gap-2">
-                  {[10000,50000,100000].map(amt => (
-                    <button key={amt} onClick={() => handleAddAmount(goal.id, amt)}
-                      className="flex-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-xl py-2 hover:bg-blue-100 transition-colors">
-                      +{fmtShort(amt)}
-                    </button>
+              {/* 납입 버튼 + 이력 토글 */}
+              <div className="flex gap-2">
+                {!isDone && (
+                  <button onClick={() => openPaymentModal(goal.id)}
+                    className="flex-1 text-sm font-medium text-white rounded-xl py-2 transition-colors"
+                    style={{ backgroundColor: goal.color }}>
+                    + 납입
+                  </button>
+                )}
+                {payments.length > 0 && (
+                  <button onClick={() => toggleHistory(goal.id)}
+                    className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    납입 이력 {payments.length}건
+                    <span className="text-[10px]">{isHistoryExpanded ? '▲' : '▼'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 납입 이력 목록 */}
+              {isHistoryExpanded && payments.length > 0 && (
+                <div className="mt-3 border border-gray-100 rounded-xl overflow-hidden">
+                  {payments.map((p, i) => (
+                    <div key={p.id} className={`flex items-center justify-between px-3 py-2.5 text-sm ${i !== 0 ? 'border-t border-gray-100' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">{fmtDate(p.date)}</span>
+                        {p.note && <span className="text-xs text-gray-400">· {p.note}</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-800">+{fmtKRW(p.amount)}</span>
+                        <button onClick={() => handleDeletePayment(p.id)}
+                          className="text-gray-300 hover:text-red-400 text-xs px-1 transition-colors">✕</button>
+                      </div>
+                    </div>
                   ))}
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-gray-100">
+                    <span className="text-xs text-gray-400">납입 합계</span>
+                    <span className="text-xs font-bold text-gray-700">{fmtKRW(payments.reduce((s, p) => s + p.amount, 0))}</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -253,7 +336,7 @@ export default function GoalsPage() {
         {goals.length === 0 && <div className="text-center py-16 text-gray-400"><div className="text-4xl mb-2">🎯</div><div className="text-sm">재무 목표를 설정해보세요!</div></div>}
       </div>
 
-      {/* 추가/수정 모달 */}
+      {/* 목표 추가/수정 모달 */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -359,6 +442,49 @@ export default function GoalsPage() {
           </div>
         </div>
       )}
+
+      {/* 납입 추가 모달 */}
+      {paymentGoalId && (() => {
+        const goal = goals.find(g => g.id === paymentGoalId)
+        if (!goal) return null
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold">납입 추가</h2>
+                <button onClick={() => setPaymentGoalId(null)} className="text-gray-400 text-xl leading-none">×</button>
+              </div>
+              <div className="text-xs text-gray-400 mb-3">{goal.name}</div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-0.5">납입 금액 *</label>
+                  <input type="text" inputMode="numeric" placeholder="0원" value={paymentAmount}
+                    onChange={e => setPaymentAmount(fmtInput(e.target.value))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-0.5">날짜</label>
+                  <input type="date" value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-0.5">메모 (선택)</label>
+                  <input type="text" placeholder="예: 월급에서 이체" value={paymentNote}
+                    onChange={e => setPaymentNote(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <button onClick={handleAddPayment}
+                  className="w-full text-white font-semibold py-3 rounded-xl transition-colors"
+                  style={{ backgroundColor: goal.color }}>
+                  납입 추가
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {deleteConfirmId && (
         <DeleteConfirmModal
