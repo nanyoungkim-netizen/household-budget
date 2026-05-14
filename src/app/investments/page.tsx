@@ -81,6 +81,7 @@ export default function InvestmentsPage() {
   const [editInvestmentId, setEditInvestmentId] = useState<string | null>(null)
   const [investmentForm, setInvestmentForm] = useState<Omit<Investment, 'id'>>(EMPTY_INVESTMENT)
   const [initialBuy, setInitialBuy] = useState<{ date: string; quantity: string; price: string; fee: string } | null>(null)
+  const [initialBuyUsesCash, setInitialBuyUsesCash] = useState(true)
   const [deleteInvestmentId, setDeleteInvestmentId] = useState<string | null>(null)
   const [currentPriceInput, setCurrentPriceInput] = useState<Record<string, string>>({})
 
@@ -628,6 +629,7 @@ export default function InvestmentsPage() {
     setEditInvestmentId(null)
     setInvestmentForm({ ...EMPTY_INVESTMENT, accountId: presetAccountId })
     setInitialBuy({ date: today, quantity: '', price: '', fee: '' })
+    setInitialBuyUsesCash(true)
     setShowInvestmentModal(true)
   }
 
@@ -657,6 +659,19 @@ export default function InvestmentsPage() {
           const fee = parseAmt(initialBuy.fee)
           if (qty > 0 && price > 0) {
             finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
+            let linkedDepositId: string | undefined
+            if (investmentForm.accountId && initialBuyUsesCash) {
+              const depositAmt = -(Math.round(qty * price) + (fee > 0 ? fee : 0))
+              const newDep: InvestmentCashDeposit = {
+                id: `dep${Date.now()}`,
+                accountId: investmentForm.accountId,
+                date: initialBuy.date || today,
+                amount: depositAmt,
+                note: `거래 연동: ${investmentForm.name}`,
+              }
+              setInvestmentCashDeposits([...investmentCashDeposits, newDep])
+              linkedDepositId = newDep.id
+            }
             const trade: InvestmentTrade = {
               id: `tr${Date.now()}`,
               investmentId: invId,
@@ -666,6 +681,7 @@ export default function InvestmentsPage() {
               price,
               currency: investmentForm.currency,
               fee: fee > 0 ? fee : undefined,
+              linkedDepositId,
             }
             setInvestmentTrades([...investmentTrades, trade])
           }
@@ -2277,6 +2293,21 @@ export default function InvestmentsPage() {
                       onChange={e => setInitialBuy(b => b && ({ ...b, fee: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
+                  {investmentForm.accountId && (
+                    <button
+                      type="button"
+                      onClick={() => setInitialBuyUsesCash(v => !v)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-sm transition-colors ${
+                        initialBuyUsesCash
+                          ? 'bg-blue-50 border-blue-200 text-blue-700'
+                          : 'bg-gray-50 border-gray-200 text-gray-500'
+                      }`}>
+                      <span className="text-xs font-medium">예수금 연동</span>
+                      <span className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 ${initialBuyUsesCash ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                        <span className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${initialBuyUsesCash ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </span>
+                    </button>
+                  )}
                   {initialBuy.quantity && initialBuy.price && (
                     <div className="text-xs text-blue-600 font-medium">
                       총 원금: {fmtKRW(Math.round(parseAmt(initialBuy.quantity) * parseAmt(initialBuy.price) + parseAmt(initialBuy.fee)))}
