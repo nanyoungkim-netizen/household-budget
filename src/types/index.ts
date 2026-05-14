@@ -156,6 +156,7 @@ export interface Goal {
   // PRD 2.5: 추가 필드
   goalCategory?: GoalCategory   // 목표 카테고리
   targetDate?: string           // 목표 달성 희망 년월 (YYYY-MM)
+  startDate?: string            // 목표 시작 월 (YYYY-MM)
 }
 
 // FR-08: 가맹점-카테고리 매핑 규칙

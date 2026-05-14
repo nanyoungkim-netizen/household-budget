@@ -35,6 +35,7 @@ type FormState = {
   currentAmount: string
   deadline: string
   targetDate: string
+  startDate: string
   goalCategory: GoalCategory
   color: string
 }
@@ -45,8 +46,15 @@ const EMPTY_FORM: FormState = {
   currentAmount: '',
   deadline: '',
   targetDate: '',
+  startDate: currentMonth,
   goalCategory: 'other',
   color: '#0064FF',
+}
+
+function targetDateToDeadline(targetDate: string): string {
+  const [y, m] = targetDate.split('-').map(Number)
+  const lastDay = new Date(y, m, 0).getDate()
+  return `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 }
 
 export default function GoalsPage() {
@@ -66,15 +74,18 @@ export default function GoalsPage() {
     return `D-${diff}`
   }
 
-  function getMonthsLeft(targetDate: string): number {
+  function getMonthsLeft(targetDate: string, fromDate?: string): number {
     if (!targetDate) return 0
     const [y, m] = targetDate.split('-').map(Number)
-    const [cy, cm] = currentMonth.split('-').map(Number)
-    return Math.max(1, (y - cy) * 12 + (m - cm))
+    const from = fromDate && fromDate > currentMonth ? fromDate : currentMonth
+    const [fy, fm] = from.split('-').map(Number)
+    return Math.max(1, (y - fy) * 12 + (m - fm))
   }
 
   function getRecommendedMonthly(goal: Goal): number {
-    const months = goal.targetDate ? getMonthsLeft(goal.targetDate) : (goal.deadline ? Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30)) : 0)
+    const months = goal.targetDate
+      ? getMonthsLeft(goal.targetDate, goal.startDate)
+      : (goal.deadline ? Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30)) : 0)
     if (months <= 0) return 0
     return Math.ceil((goal.targetAmount - goal.currentAmount) / months)
   }
@@ -93,6 +104,7 @@ export default function GoalsPage() {
       currentAmount: fmtInput(String(goal.currentAmount)),
       deadline: goal.deadline || '',
       targetDate: goal.targetDate || '',
+      startDate: goal.startDate || currentMonth,
       goalCategory: goal.goalCategory || 'other',
       color: goal.color,
     })
@@ -110,6 +122,7 @@ export default function GoalsPage() {
       color: form.color,
       goalCategory: form.goalCategory,
       targetDate: form.targetDate || undefined,
+      startDate: form.startDate || undefined,
     }
     if (editingId) {
       setGoals(goals.map(g => g.id === editingId ? newGoal : g))
@@ -199,7 +212,9 @@ export default function GoalsPage() {
                       <div className="text-lg font-bold text-blue-800">{fmtKRW(monthlyNeeded)}/월</div>
                       {goal.targetDate && (
                         <div className="text-xs text-blue-500 mt-0.5">
-                          {goal.targetDate.replace('-', '년 ')}월까지 달성 가능
+                          {goal.startDate
+                            ? `${goal.startDate.replace('-', '년 ')}월 ~ ${goal.targetDate.replace('-', '년 ')}월`
+                            : `${goal.targetDate.replace('-', '년 ')}월까지 달성 가능`}
                         </div>
                       )}
                     </div>
@@ -268,30 +283,46 @@ export default function GoalsPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-gray-400 block mb-0.5">목표 달성 월</label>
-                  <input type="month" value={form.targetDate}
-                    onChange={e => setForm(f => ({ ...f, targetDate: e.target.value }))}
+                  <label className="text-xs text-gray-400 block mb-0.5">목표 시작 월</label>
+                  <input type="month" value={form.startDate}
+                    onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 block mb-0.5">기한 (D-Day)</label>
-                  <input type="date" value={form.deadline}
-                    onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
+                  <label className="text-xs text-gray-400 block mb-0.5">목표 달성 월</label>
+                  <input type="month" value={form.targetDate}
+                    onChange={e => {
+                      const val = e.target.value
+                      setForm(f => ({
+                        ...f,
+                        targetDate: val,
+                        deadline: val ? targetDateToDeadline(val) : f.deadline,
+                      }))
+                    }}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-0.5">기한 (D-Day)</label>
+                <input type="date" value={form.deadline}
+                  onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
               {/* 추천 납입액 미리보기 */}
               {form.targetDate && form.targetAmount && (() => {
                 const target = parseAmt(form.targetAmount)
                 const current = parseAmt(form.currentAmount) || 0
-                const months = getMonthsLeft(form.targetDate)
+                const months = getMonthsLeft(form.targetDate, form.startDate)
                 const monthly = months > 0 ? Math.ceil((target - current) / months) : 0
+                const periodLabel = form.startDate
+                  ? `${form.startDate.replace('-', '년 ')}월 ~ ${form.targetDate.replace('-', '년 ')}월`
+                  : `${months}개월`
                 return monthly > 0 ? (
                   <div className="bg-blue-50 rounded-xl p-3 text-xs">
                     <span className="text-blue-600 font-medium">💡 추천 월 납입액: </span>
                     <span className="text-blue-800 font-bold">{fmtKRW(monthly)}/월</span>
-                    <span className="text-blue-500 ml-1">({months}개월)</span>
+                    <span className="text-blue-500 ml-1">({periodLabel}, {months}개월)</span>
                   </div>
                 ) : null
               })()}
