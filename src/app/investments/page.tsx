@@ -656,6 +656,20 @@ export default function InvestmentsPage() {
           const fee = parseAmt(initialBuy.fee)
           if (qty > 0 && price > 0) {
             finalInv = { ...finalInv, currentPrice: price, currentPriceUpdatedAt: new Date().toISOString() }
+            // 소속 계좌가 있으면 초기 매수 금액을 예수금에서 차감
+            let linkedDepositId: string | undefined
+            if (investmentForm.accountId) {
+              const depositAmt = -(Math.round(qty * price) + (fee > 0 ? fee : 0))
+              const newDep: InvestmentCashDeposit = {
+                id: `dep${Date.now()}`,
+                accountId: investmentForm.accountId,
+                date: initialBuy.date,
+                amount: depositAmt,
+                note: `거래 연동: ${investmentForm.name}`,
+              }
+              setInvestmentCashDeposits([...investmentCashDeposits, newDep])
+              linkedDepositId = newDep.id
+            }
             const trade: InvestmentTrade = {
               id: `tr${Date.now()}`,
               investmentId: invId,
@@ -665,6 +679,7 @@ export default function InvestmentsPage() {
               price,
               currency: investmentForm.currency,
               fee: fee > 0 ? fee : undefined,
+              linkedDepositId,
             }
             setInvestmentTrades([...investmentTrades, trade])
           }
@@ -704,10 +719,19 @@ export default function InvestmentsPage() {
   // ── 거래 CRUD ──────────────────────────────────────────────────────────────
   function openAddTrade(investmentId: string) {
     const inv = investments.find(i => i.id === investmentId)
+    // 종목에 계좌가 없으면 잔액이 가장 많은 계좌를 자동 선택 (단일 계좌이면 무조건)
+    const defaultAccountId = inv?.accountId ?? (() => {
+      if (investmentAccounts.length === 0) return undefined
+      if (investmentAccounts.length === 1) return investmentAccounts[0].id
+      // 여러 계좌면 잔액 최대 계좌 기본 선택
+      return investmentAccounts.reduce((best, acc) =>
+        (cashBalanceMap.get(acc.id) ?? 0) > (cashBalanceMap.get(best.id) ?? 0) ? acc : best
+      ).id
+    })()
     setTradeInvestmentId(investmentId)
     setEditTradeId(null)
     setTradeUsesCash(false)
-    setTradeModalAccountId(inv?.accountId)
+    setTradeModalAccountId(defaultAccountId)
     setTradeForm({ ...EMPTY_TRADE, currency: inv?.currency ?? 'KRW' })
     setShowTradeModal(true)
   }
