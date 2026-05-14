@@ -2316,21 +2316,19 @@ export default function InvestmentsPage() {
                       onChange={e => setInitialBuy(b => b && ({ ...b, fee: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
-                  {investmentForm.accountId && (
-                    <button
-                      type="button"
-                      onClick={() => setInitialBuyUsesCash(v => !v)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-sm transition-colors ${
-                        initialBuyUsesCash
-                          ? 'bg-blue-50 border-blue-200 text-blue-700'
-                          : 'bg-gray-50 border-gray-200 text-gray-500'
-                      }`}>
-                      <span className="text-xs font-medium">예수금 연동</span>
-                      <span className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 ${initialBuyUsesCash ? 'bg-blue-500' : 'bg-gray-300'}`}>
-                        <span className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${initialBuyUsesCash ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setInitialBuyUsesCash(v => !v)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-sm transition-colors ${
+                      initialBuyUsesCash
+                        ? 'bg-blue-50 border-blue-200 text-blue-700'
+                        : 'bg-gray-50 border-gray-200 text-gray-500'
+                    }`}>
+                    <span className="text-xs font-medium">예수금 연동{!investmentForm.accountId && <span className="text-gray-400 font-normal ml-1">(계좌 선택 시 반영)</span>}</span>
+                    <span className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 ${initialBuyUsesCash ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                      <span className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${initialBuyUsesCash ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </span>
+                  </button>
                   {initialBuy.quantity && initialBuy.price && (
                     <div className="text-xs text-blue-600 font-medium">
                       총 원금: {fmtKRW(Math.round(parseAmt(initialBuy.quantity) * parseAmt(initialBuy.price) + parseAmt(initialBuy.fee)))}
