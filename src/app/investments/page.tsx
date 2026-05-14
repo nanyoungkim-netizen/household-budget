@@ -103,6 +103,7 @@ export default function InvestmentsPage() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
   const [exchangeRateUpdatedAt, setExchangeRateUpdatedAt] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [showExchangeRates, setShowExchangeRates] = useState(false)
 
   // PRD F-03: 통화 전환 토글 (localStorage 유지)
   const [currencyMode, setCurrencyMode] = useState<'KRW' | 'USD'>(() => {
@@ -1199,15 +1200,24 @@ export default function InvestmentsPage() {
           </button>
         </div>
       </div>
-      {/* F-02: 환율 마지막 업데이트 시각 */}
+      {/* F-02: 환율 기준 (토글로 펼치기) */}
       {exchangeRateUpdatedAt && Object.keys(exchangeRates).length > 0 && (
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
-          <span>💱 환율 기준:</span>
-          {Object.entries(exchangeRates).map(([currency, rate]) => (
-            <span key={currency} className="text-gray-500 font-medium">{currency}/KRW {rate.toLocaleString('ko-KR')}</span>
-          ))}
-          <span className="ml-1 text-gray-300">·</span>
-          <span>업데이트 {new Date(exchangeRateUpdatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <div className="mb-3">
+          <button
+            onClick={() => setShowExchangeRates(v => !v)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <span>💱 환율 기준</span>
+            <span className="text-gray-300">{showExchangeRates ? '▲' : '▼'}</span>
+          </button>
+          {showExchangeRates && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400 flex-wrap">
+              {Object.entries(exchangeRates).map(([currency, rate]) => (
+                <span key={currency} className="text-gray-500 font-medium">{currency}/KRW {rate.toLocaleString('ko-KR')}</span>
+              ))}
+              <span className="text-gray-300">·</span>
+              <span>업데이트 {new Date(exchangeRateUpdatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          )}
         </div>
       )}
 
