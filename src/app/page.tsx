@@ -66,7 +66,7 @@ function calcStats(txs: Transaction[]) {
 }
 
 export default function Dashboard() {
-  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo, setDismissedNotificationIds } = useApp()
+  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo, setDismissedNotificationIds, setInvestmentExchangeRates } = useApp()
   const router = useRouter()
   const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, investmentAccounts, investmentCashDeposits, investmentDividends, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
 
@@ -92,6 +92,21 @@ export default function Dashboard() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => setToast(null), 2500)
   }
+
+  // 해외주식이 있을 때 환율 자동 조회 (투자 페이지 미방문 시에도 동작)
+  useEffect(() => {
+    const hasForeign = investments.some(inv => inv.currency !== 'KRW')
+    if (!hasForeign) return
+    fetch('/api/stock/exchange-rate')
+      .then(r => r.json())
+      .then(json => {
+        if (json.rates && Object.keys(json.rates).length > 0) {
+          setInvestmentExchangeRates(json.rates)
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [investments.length])
 
   function moveWidget(fromId: WidgetId, toId: WidgetId) {
     const next = [...widgetOrder]
@@ -360,7 +375,7 @@ export default function Dashboard() {
         const isForeign  = inv.currency !== 'KRW'
         const fxRate     = isForeign ? (investmentExchangeRates[inv.currency] ?? 0) : 1
         const rawEval    = holdingQty > 0 && inv.currentPrice ? holdingQty * inv.currentPrice : 0
-        const evalAmount = isForeign && fxRate > 0 ? Math.round(rawEval * fxRate) : rawEval
+        const evalAmount = isForeign ? (fxRate > 0 ? Math.round(rawEval * fxRate) : 0) : rawEval
         const gain       = evalAmount > 0 ? evalAmount - buyAmt : 0
         const gainRate   = buyAmt > 0 && evalAmount > 0 ? (gain / buyAmt) * 100 : 0
         return { ...inv, holdingQty, buyAmt, evalAmount, gain, gainRate }
