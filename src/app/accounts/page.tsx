@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp } from '@/lib/AppContext'
+import { useApp, computeAccountBalance } from '@/lib/AppContext'
 import { Account, AssetType } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -134,13 +134,18 @@ export default function AccountsPage() {
     setAccounts(next)
   }
 
-  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
+  // 거래 반영 현재잔액 계산
+  const accountBalances = accounts.map(a => ({
+    ...a,
+    computed: computeAccountBalance(a.id, a.balance, transactions),
+  }))
+  const totalBalance = accountBalances.reduce((s, a) => s + a.computed, 0)
 
   // FR-01: 자산 유형별 그룹핑
   const grouped = ASSET_TYPES.map(at => ({
     ...at,
-    items: accounts.filter(a => (a.assetType ?? 'cash') === at.value),
-    subtotal: accounts.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s, a) => s + a.balance, 0),
+    items: accountBalances.filter(a => (a.assetType ?? 'cash') === at.value),
+    subtotal: accountBalances.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s, a) => s + a.computed, 0),
   })).filter(g => g.items.length > 0)
 
   return (
@@ -159,7 +164,7 @@ export default function AccountsPage() {
         {/* FR-01: 자산 유형별 소계 요약 */}
         <div className="flex gap-4 mt-3 flex-wrap">
           {ASSET_TYPES.map(at => {
-            const sub = accounts.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s,a) => s + a.balance, 0)
+            const sub = accountBalances.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s,a) => s + a.computed, 0)
             if (sub === 0) return null
             return (
               <div key={at.value} className="text-xs opacity-80">
@@ -202,11 +207,8 @@ export default function AccountsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="flex items-center gap-2">
-                          <input type="text" inputMode="numeric"
-                            value={acc.balance === 0 ? '' : acc.balance.toLocaleString('ko-KR')}
-                            onChange={e => handleBalanceEdit(acc.id, e.target.value)}
-                            className="text-xl font-bold text-gray-900 text-right w-36 border-b border-transparent hover:border-gray-200 focus:border-blue-400 focus:outline-none transition-colors bg-transparent" />
+                        <div className="flex items-center gap-2 justify-end">
+                          <span className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}</span>
                           <span className="text-sm text-gray-400">원</span>
                         </div>
                         <div className="flex gap-2 justify-end mt-0.5 items-center">
