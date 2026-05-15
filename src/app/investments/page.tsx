@@ -1275,6 +1275,11 @@ export default function InvestmentsPage() {
       {pageTab === 'dashboard' && (
         <div className="space-y-4">
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 text-white">
+            {(() => {
+              const totalCashBalance = [...cashBalanceMap.values()].reduce((s, v) => s + Math.max(0, v), 0)
+              const totalWithCash = portfolio.totalEval + totalCashBalance
+              return (
+            <>
             <div className="flex items-center justify-between mb-3">
               <div className="text-xs opacity-70">투자 현황 요약</div>
               <div className="text-xs opacity-60">{currencyMode === 'USD' ? '달러($) 기준' : '원화(₩) 기준'}</div>
@@ -1289,14 +1294,17 @@ export default function InvestmentsPage() {
               </div>
               <div className="bg-white/10 rounded-xl p-3">
                 <div className="text-xs opacity-70 mb-1">총 평가금액</div>
-                <div className="text-lg font-bold">{fmtKRW(Math.round(portfolio.totalEval + portfolio.totalDividend))}</div>
+                <div className="text-lg font-bold">{fmtKRW(Math.round(totalWithCash))}</div>
                 {currencyMode === 'USD' && portfolioUSD.evalUSD > 0 ? (
                   <div className="text-xs opacity-60 mt-0.5">해외 ${portfolioUSD.evalUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
-                ) : portfolio.totalDividend > 0 ? (
-                  <div className="text-xs opacity-60 mt-0.5">주식 {fmtKRW(Math.round(portfolio.totalEval))} + 예수금 {fmtKRW(Math.round(portfolio.totalDividend))}</div>
+                ) : totalCashBalance > 0 ? (
+                  <div className="text-xs opacity-60 mt-0.5">주식 {fmtKRW(Math.round(portfolio.totalEval))} + 예수금 {fmtKRW(Math.round(totalCashBalance))}</div>
                 ) : null}
               </div>
             </div>
+            </>
+              )
+            })()}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className={`rounded-xl p-3 ${portfolio.unrealizedPnl >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
                 <div className="text-xs opacity-70 mb-1">평가손익</div>

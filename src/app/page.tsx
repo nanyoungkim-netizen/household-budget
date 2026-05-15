@@ -850,10 +850,18 @@ export default function Dashboard() {
             // ── 투자 자산 위젯 (요약: 총투자금액·총평가금액·총수익) ──────
             if (widgetId === 'investment_accounts') {
               if (investmentHoldings.length === 0 && !editMode) return null
-              const totalEval     = investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0)
+              const holdingsEval  = investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0)
               const totalBuy      = investmentHoldings.reduce((s, inv) => s + inv.buyAmt,     0)
-              const totalGain     = totalEval - totalBuy
+              const totalGain     = holdingsEval - totalBuy
               const totalGainRate = totalBuy > 0 ? (totalGain / totalBuy) * 100 : 0
+              // 예수금 포함 총 평가금액 (투자잔액과 동일)
+              const totalCash = investmentAccounts.reduce((s, acc) => {
+                const legacy = acc.cashDeposits ?? 0
+                const fromHistory = investmentCashDeposits.filter(d => d.accountId === acc.id).reduce((sum, d) => sum + d.amount, 0)
+                const fromDividends = investmentDividends.filter(d => d.accountId === acc.id).reduce((sum, d) => sum + d.netAmount, 0)
+                return s + Math.max(0, legacy + fromHistory + fromDividends)
+              }, 0)
+              const totalEval = holdingsEval + totalCash
               const updatedAt     = investments.reduce<string | null>((latest, inv) => {
                 if (!inv.currentPriceUpdatedAt) return latest
                 return !latest || inv.currentPriceUpdatedAt > latest ? inv.currentPriceUpdatedAt : latest
@@ -897,6 +905,7 @@ export default function Dashboard() {
                         <div className="bg-violet-50 rounded-xl p-3">
                           <div className="text-[10px] text-violet-500 mb-1">총 평가금액</div>
                           <div className="text-sm font-bold text-violet-700 tabular-nums leading-tight">{fmtShort(totalEval)}</div>
+                          {totalCash > 0 && <div className="text-[10px] text-violet-400 mt-0.5">예수금 {fmtShort(totalCash)}</div>}
                         </div>
                         <div className={`rounded-xl p-3 ${totalGain >= 0 ? 'bg-red-50' : 'bg-blue-50'}`}>
                           <div className={`text-[10px] mb-1 ${totalGain >= 0 ? 'text-red-500' : 'text-blue-500'}`}>총 수익</div>
