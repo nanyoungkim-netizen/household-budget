@@ -7,8 +7,8 @@ import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/Ap
 import { Transaction } from '@/types'
 
 // PRD: 위젯 순서 커스터마이징
-type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions'
-const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
+type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions' | 'memo'
+const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions', 'memo']
 const WIDGET_LABELS: Record<WidgetId, string> = {
   cash_accounts:       '현금성 자산',
   investment_accounts: '투자 자산',
@@ -17,6 +17,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   budget:              '예산 현황',
   goals:               '재무 목표',
   transactions:        '거래 목록',
+  memo:                '메모',
 }
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -65,9 +66,9 @@ function calcStats(txs: Transaction[]) {
 }
 
 export default function Dashboard() {
-  const { data, categories, setDashboardWidgetOrder, setInvestments } = useApp()
+  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, cardBillings, dashboardMemo } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -921,37 +922,43 @@ export default function Dashboard() {
 
             if (widgetId === 'card_payment') {
               const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
-              // 청구월별 카드 지출 합계
-              const byMonth: Record<string, number> = {}
+              // 카드별·청구월별 지출 집계
+              const chargesByCardMonth: Record<string, Record<string, number>> = {}
               transactions
-                .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund'))
+                .filter(t => t.paymentMethod === 'card' && (t.type === 'expense' || t.type === 'refund') && t.cardId)
                 .forEach(t => {
                   const m = t.date.slice(0, 7)
-                  byMonth[m] = (byMonth[m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
+                  if (!chargesByCardMonth[t.cardId!]) chargesByCardMonth[t.cardId!] = {}
+                  chargesByCardMonth[t.cardId!][m] = (chargesByCardMonth[t.cardId!][m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
                 })
-              // 청구월별 납부 합계 (카드대금 카테고리 거래의 합산)
-              const paidByMonth: Record<string, number> = {}
-              transactions
-                .filter(t => isCardPayCat(t.categoryId))
-                .forEach(t => {
-                  const m = t.billingMonth || (() => {
-                    const [y, mo] = t.date.slice(0, 7).split('-').map(Number)
-                    const d = new Date(y, mo - 2, 1)
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                  })()
-                  paidByMonth[m] = (paidByMonth[m] || 0) + t.amount
+              // 카드별·청구월별 납부 여부 판정 (3단계)
+              const cardRows: { cardId: string; cardName: string; month: string; total: number; isPaid: boolean }[] = []
+              cards.forEach(card => {
+                const monthMap = chargesByCardMonth[card.id] || {}
+                Object.entries(monthMap).forEach(([m, v]) => {
+                  const total = Math.max(0, v)
+                  if (total === 0) return
+                  const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === m)
+                  let isPaid = false
+                  if (billing) {
+                    isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
+                  } else {
+                    const payTxs = transactions.filter(t => isCardPayCat(t.categoryId) && t.billingMonth === m)
+                    const cardTxs = payTxs.filter(t => t.cardId === card.id)
+                    if (cardTxs.length > 0) {
+                      isPaid = cardTxs.reduce((s, t) => s + t.amount, 0) >= total
+                    } else {
+                      isPaid = !!payTxs.find(t => t.amount === total)
+                    }
+                  }
+                  cardRows.push({ cardId: card.id, cardName: card.name, month: m, total, isPaid })
                 })
-              const monthRows = Object.entries(byMonth)
-                .map(([m, v]) => {
-                  const spendTotal = Math.max(0, v)
-                  const paidTotal = paidByMonth[m] || 0
-                  return { month: m, total: spendTotal, isPaid: spendTotal > 0 && paidTotal >= spendTotal }
-                })
-                .filter(r => r.total > 0)
-                .sort((a, b) => b.month.localeCompare(a.month))
-                .slice(0, 6)
-              if (monthRows.length === 0 && !editMode) return null
-              const totalUnpaid = monthRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
+              })
+              const sortedRows = cardRows
+                .sort((a, b) => b.month.localeCompare(a.month) || a.cardName.localeCompare(b.cardName))
+                .slice(0, 10)
+              if (sortedRows.length === 0 && !editMode) return null
+              const totalUnpaid = sortedRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
               return (
                 <div className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
@@ -961,21 +968,22 @@ export default function Dashboard() {
                     </div>
                     <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
                   </div>
-                  {monthRows.length > 0 ? (
+                  {sortedRows.length > 0 ? (
                     <>
                       <div className="space-y-2">
-                        {monthRows.map(row => {
+                        {sortedRows.map(row => {
                           const mo = parseInt(row.month.split('-')[1])
                           return (
-                            <div key={row.month} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 w-7 font-medium">{mo}월</span>
+                            <div key={`${row.cardId}-${row.month}`} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-gray-500 w-7 flex-shrink-0 font-medium">{mo}월</span>
+                                <span className="text-xs text-gray-600 truncate">{row.cardName}</span>
                                 {row.isPaid
-                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">✓ 납부완료</span>
-                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">미납</span>
+                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">✓ 납부완료</span>
+                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">미납</span>
                                 }
                               </div>
-                              <span className={`text-sm font-semibold tabular-nums ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
+                              <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ml-2 ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
                                 {fmtKRW(row.total)}
                               </span>
                             </div>
@@ -1157,6 +1165,23 @@ export default function Dashboard() {
                       <Link href="/transactions?action=add" className="text-xs text-blue-500 underline mt-1 block">거래 추가하기</Link>
                     </div>
                   )}
+                </div>
+              )
+            }
+
+            if (widgetId === 'memo') {
+              return (
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <span className="text-base">📝</span>
+                    <span className="text-sm font-bold text-gray-700">메모</span>
+                  </div>
+                  <textarea
+                    value={dashboardMemo}
+                    onChange={e => setDashboardMemo(e.target.value)}
+                    placeholder="기억해야 할 내용을 메모하세요..."
+                    className="w-full text-sm text-gray-700 placeholder-gray-400 border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[80px]"
+                  />
                 </div>
               )
             }
