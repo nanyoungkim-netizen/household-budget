@@ -11,6 +11,20 @@ import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function fmtPct(n: number) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%' }
 function parseAmt(s: string) { return parseFloat(s.replace(/[^0-9.]/g, '')) || 0 }
+function fmtInput(s: string | number): string {
+  const str = String(s)
+  const n = parseInt(str.replace(/[^0-9]/g, ''))
+  return isNaN(n) || n === 0 ? '' : n.toLocaleString('ko-KR')
+}
+function fmtDecimalInput(s: string | number): string {
+  const str = String(s === 0 ? '' : s)
+  if (!str) return ''
+  const clean = str.replace(/[^0-9.]/g, '')
+  const parts = clean.split('.')
+  const intPart = parseInt(parts[0]) || 0
+  const decPart = parts.length > 1 ? '.' + parts[1] : (clean.endsWith('.') ? '.' : '')
+  return intPart === 0 && !decPart ? '' : intPart.toLocaleString('ko-KR') + decPart
+}
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -346,6 +360,7 @@ export default function InvestmentsPage() {
   const [editTradeId, setEditTradeId] = useState<string | null>(null)
   const [tradeInvestmentId, setTradeInvestmentId] = useState<string | null>(null)
   const [tradeForm, setTradeForm] = useState<Omit<InvestmentTrade, 'id' | 'investmentId'>>(EMPTY_TRADE)
+  const [tradeStr, setTradeStr] = useState({ quantity: '', price: '', fee: '', exchangeRate: '' })
   const [tradeUsesCash, setTradeUsesCash] = useState(false)
   const [tradeModalAccountId, setTradeModalAccountId] = useState<string | undefined>(undefined)
   const [deleteTradeId, setDeleteTradeId] = useState<string | null>(null)
@@ -373,6 +388,7 @@ export default function InvestmentsPage() {
   const [dividendAccountId, setDividendAccountId] = useState<string | null>(null)
   const [editDividendId, setEditDividendId] = useState<string | null>(null)
   const [dividendForm, setDividendForm] = useState<Omit<InvestmentDividend, 'id'>>(EMPTY_DIVIDEND)
+  const [dividendStr, setDividendStr] = useState({ grossAmount: '', tax: '', netAmount: '' })
   const [deleteDividendId, setDeleteDividendId] = useState<string | null>(null)
   const [expandedDividendAccId, setExpandedDividendAccId] = useState<string | null>(null)
   const [dividendFilterAccId, setDividendFilterAccId] = useState<string | null>(null)
@@ -760,6 +776,7 @@ export default function InvestmentsPage() {
     setTradeUsesCash(true)   // 신규 거래 기본값 ON
     setTradeModalAccountId(inv?.accountId)
     setTradeForm({ ...EMPTY_TRADE, currency: inv?.currency ?? 'KRW' })
+    setTradeStr({ quantity: '', price: '', fee: '', exchangeRate: '' })
     setShowTradeModal(true)
   }
 
@@ -770,7 +787,28 @@ export default function InvestmentsPage() {
     setTradeUsesCash(!!trade.linkedDepositId)
     setTradeModalAccountId(inv?.accountId)
     setTradeForm({ type: trade.type, date: trade.date, quantity: trade.quantity, price: trade.price, currency: trade.currency, exchangeRate: trade.exchangeRate, fee: trade.fee, note: trade.note, cashAccountId: trade.cashAccountId })
+    setTradeStr({
+      quantity: fmtDecimalInput(trade.quantity),
+      price: fmtDecimalInput(trade.price),
+      fee: trade.fee ? fmtDecimalInput(trade.fee) : '',
+      exchangeRate: trade.exchangeRate ? fmtDecimalInput(trade.exchangeRate) : '',
+    })
     setShowTradeModal(true)
+  }
+
+  function updateTradeInput(field: 'quantity' | 'price' | 'fee' | 'exchangeRate', raw: string) {
+    const clean = raw.replace(/[^0-9.]/g, '')
+    const parts = clean.split('.')
+    const intVal = parseInt(parts[0]) || 0
+    const dec = parts.length > 1 ? '.' + parts[1] : (clean.endsWith('.') ? '.' : '')
+    const display = (intVal === 0 && !dec) ? '' : intVal.toLocaleString('ko-KR') + dec
+    setTradeStr(s => ({ ...s, [field]: display }))
+    const num = parseFloat(clean) || 0
+    if (field === 'fee' || field === 'exchangeRate') {
+      setTradeForm(f => ({ ...f, [field]: num || undefined }))
+    } else {
+      setTradeForm(f => ({ ...f, [field]: num }))
+    }
   }
 
   function handleSaveTrade() {
@@ -855,6 +893,7 @@ export default function InvestmentsPage() {
     setDividendAccountId(accId || null)
     setEditDividendId(null)
     setDividendForm({ ...EMPTY_DIVIDEND, accountId: accId, investmentId: undefined })
+    setDividendStr({ grossAmount: '', tax: '', netAmount: '' })
     setShowDividendModal(true)
   }
 
@@ -862,6 +901,7 @@ export default function InvestmentsPage() {
     setDividendAccountId(d.accountId)
     setEditDividendId(d.id)
     setDividendForm({ accountId: d.accountId, investmentId: d.investmentId, date: d.date, grossAmount: d.grossAmount, tax: d.tax, netAmount: d.netAmount, note: d.note })
+    setDividendStr({ grossAmount: fmtInput(d.grossAmount), tax: fmtInput(d.tax), netAmount: fmtInput(d.netAmount) })
     setShowDividendModal(true)
   }
 
@@ -956,7 +996,7 @@ export default function InvestmentsPage() {
   }, [holdingInvestments.length, investmentTargetAllocations.length])
 
   function handleCalcRebalance() {
-    const addAmt = parseFloat(additionalInvestment) || 0
+    const addAmt = parseAmt(additionalInvestment)
     const currentEval = totalEvalForPortfolio
     const totalAfter = currentEval + addAmt
     const results = holdingInvestments.map(inv => {
@@ -1195,7 +1235,7 @@ export default function InvestmentsPage() {
           <input type="text" inputMode="numeric"
             placeholder="현재가 입력"
             value={currentPriceInput[inv.id] ?? ''}
-            onChange={e => setCurrentPriceInput(prev => ({ ...prev, [inv.id]: e.target.value }))}
+            onChange={e => setCurrentPriceInput(prev => ({ ...prev, [inv.id]: fmtDecimalInput(e.target.value) }))}
             className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <button onClick={() => handleUpdateCurrentPrice(inv.id)}
             className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors">
@@ -1989,9 +2029,9 @@ export default function InvestmentsPage() {
                   <div className="text-sm font-semibold text-gray-800 mb-3">리밸런싱 추천</div>
                   <div className="flex gap-2 mb-3">
                     <input
-                      type="number" min={0} placeholder="추가 투자 가능 금액 (원)"
+                      type="text" inputMode="numeric" placeholder="추가 투자 가능 금액 (원)"
                       value={additionalInvestment}
-                      onChange={e => setAdditionalInvestment(e.target.value)}
+                      onChange={e => setAdditionalInvestment(fmtInput(e.target.value))}
                       className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button onClick={handleCalcRebalance}
@@ -2324,24 +2364,24 @@ export default function InvestmentsPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-gray-400 block mb-1">매수 수량 (주)</label>
-                      <input type="number" min={0} step="any" placeholder="0"
+                      <input type="text" inputMode="decimal" placeholder="0"
                         value={initialBuy.quantity}
-                        onChange={e => setInitialBuy(b => b && ({ ...b, quantity: e.target.value }))}
+                        onChange={e => setInitialBuy(b => b && ({ ...b, quantity: fmtDecimalInput(e.target.value) }))}
                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                       <label className="text-xs text-gray-400 block mb-1">매수 단가</label>
-                      <input type="number" min={0} step="any" placeholder="0"
+                      <input type="text" inputMode="decimal" placeholder="0"
                         value={initialBuy.price}
-                        onChange={e => setInitialBuy(b => b && ({ ...b, price: e.target.value }))}
+                        onChange={e => setInitialBuy(b => b && ({ ...b, price: fmtDecimalInput(e.target.value) }))}
                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 block mb-1">수수료 (선택)</label>
-                    <input type="number" min={0} step="any" placeholder="0"
+                    <input type="text" inputMode="decimal" placeholder="0"
                       value={initialBuy.fee}
-                      onChange={e => setInitialBuy(b => b && ({ ...b, fee: e.target.value }))}
+                      onChange={e => setInitialBuy(b => b && ({ ...b, fee: fmtDecimalInput(e.target.value) }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <button
@@ -2449,14 +2489,14 @@ export default function InvestmentsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">거래 수량 *</label>
-                  <input type="number" min={0} step="any" placeholder="0" value={tradeForm.quantity || ''}
-                    onChange={e => setTradeForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
+                  <input type="text" inputMode="decimal" placeholder="0" value={tradeStr.quantity}
+                    onChange={e => updateTradeInput('quantity', e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">거래 단가 *</label>
-                  <input type="number" min={0} step="any" placeholder="0" value={tradeForm.price || ''}
-                    onChange={e => setTradeForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))}
+                  <input type="text" inputMode="decimal" placeholder="0" value={tradeStr.price}
+                    onChange={e => updateTradeInput('price', e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
@@ -2469,14 +2509,14 @@ export default function InvestmentsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">수수료 (선택)</label>
-                  <input type="number" min={0} placeholder="0" value={tradeForm.fee ?? ''}
-                    onChange={e => setTradeForm(f => ({ ...f, fee: parseFloat(e.target.value) || undefined }))}
+                  <input type="text" inputMode="decimal" placeholder="0" value={tradeStr.fee}
+                    onChange={e => updateTradeInput('fee', e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">환율 (외화 시)</label>
-                  <input type="number" min={0} placeholder="예: 1380" value={tradeForm.exchangeRate ?? ''}
-                    onChange={e => setTradeForm(f => ({ ...f, exchangeRate: parseFloat(e.target.value) || undefined }))}
+                  <input type="text" inputMode="decimal" placeholder="예: 1,380" value={tradeStr.exchangeRate}
+                    onChange={e => updateTradeInput('exchangeRate', e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
@@ -2562,28 +2602,35 @@ export default function InvestmentsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">세전 배당금</label>
-                  <input type="number" min={0} placeholder="0" value={dividendForm.grossAmount || ''}
+                  <input type="text" inputMode="numeric" placeholder="0" value={dividendStr.grossAmount}
                     onChange={e => {
-                      const gross = parseFloat(e.target.value) || 0
+                      const gross = parseAmt(e.target.value)
                       const tax = dividendForm.tax
-                      setDividendForm(f => ({ ...f, grossAmount: gross, netAmount: Math.max(0, gross - tax) }))
+                      const net = Math.max(0, gross - tax)
+                      setDividendStr(s => ({ ...s, grossAmount: fmtInput(e.target.value), netAmount: fmtInput(String(net)) }))
+                      setDividendForm(f => ({ ...f, grossAmount: gross, netAmount: net }))
                     }}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">원천징수세액</label>
-                  <input type="number" min={0} placeholder="0" value={dividendForm.tax || ''}
+                  <input type="text" inputMode="numeric" placeholder="0" value={dividendStr.tax}
                     onChange={e => {
-                      const tax = parseFloat(e.target.value) || 0
-                      setDividendForm(f => ({ ...f, tax, netAmount: Math.max(0, f.grossAmount - tax) }))
+                      const tax = parseAmt(e.target.value)
+                      const net = Math.max(0, dividendForm.grossAmount - tax)
+                      setDividendStr(s => ({ ...s, tax: fmtInput(e.target.value), netAmount: fmtInput(String(net)) }))
+                      setDividendForm(f => ({ ...f, tax, netAmount: net }))
                     }}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">실수령액 (세후) *</label>
-                <input type="number" min={0} placeholder="0" value={dividendForm.netAmount || ''}
-                  onChange={e => setDividendForm(f => ({ ...f, netAmount: parseFloat(e.target.value) || 0 }))}
+                <input type="text" inputMode="numeric" placeholder="0" value={dividendStr.netAmount}
+                  onChange={e => {
+                    setDividendStr(s => ({ ...s, netAmount: fmtInput(e.target.value) }))
+                    setDividendForm(f => ({ ...f, netAmount: parseAmt(e.target.value) }))
+                  }}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <input type="text" placeholder="메모 (선택)" value={dividendForm.note ?? ''}
