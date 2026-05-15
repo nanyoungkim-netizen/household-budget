@@ -1418,7 +1418,11 @@ export default function InvestmentsPage() {
           )}
 
           {investmentAccounts.map(acc => {
-            const accInvestments = investmentsByAccount.get(acc.id) ?? []
+            const allAccInvestments = investmentsByAccount.get(acc.id) ?? []
+            // 거래 이력이 없는 종목은 목록에서 숨김 (등록만 하고 거래 내역 전체 삭제된 경우)
+            const accInvestments = allAccInvestments.filter(inv =>
+              investmentTrades.some(t => t.investmentId === inv.id)
+            )
             const stats = portfolio.byAccount[acc.id]
             const isCollapsed = !expandedAccounts.has(acc.id)
             return (
@@ -1505,20 +1509,26 @@ export default function InvestmentsPage() {
             )
           })}
 
-          {(investmentsByAccount.get('__none__') ?? []).length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg">📦</div>
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-700">미분류</div>
-                  <div className="text-xs text-gray-400">계좌가 지정되지 않은 종목</div>
+          {(() => {
+            const noneInvs = (investmentsByAccount.get('__none__') ?? []).filter(inv =>
+              investmentTrades.some(t => t.investmentId === inv.id)
+            )
+            if (noneInvs.length === 0) return null
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg">📦</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-700">미분류</div>
+                    <div className="text-xs text-gray-400">계좌가 지정되지 않은 종목</div>
+                  </div>
+                </div>
+                <div className="space-y-3 pl-1 border-l-2 border-gray-200">
+                  {noneInvs.map(inv => renderInvestmentCard(inv))}
                 </div>
               </div>
-              <div className="space-y-3 pl-1 border-l-2 border-gray-200">
-                {(investmentsByAccount.get('__none__') ?? []).map(inv => renderInvestmentCard(inv))}
-              </div>
-            </div>
-          )}
+            )
+          })()}
 
           {investmentAccounts.length > 0 && (
             <button onClick={() => openAddAccount()}
