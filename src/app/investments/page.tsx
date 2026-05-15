@@ -457,8 +457,10 @@ export default function InvestmentsPage() {
     const map = new Map<string, {
       investment: Investment
       avgPrice: number
+      avgPriceKRW: number
       holdingQty: number
       totalBuyAmt: number
+      totalBuyAmtKRW: number
       totalFee: number
       realizedPnl: number
     }>()
@@ -470,6 +472,7 @@ export default function InvestmentsPage() {
 
       let holdingQty = 0
       let totalBuyAmt = 0
+      let totalBuyAmtKRW = 0
       let totalFee = 0
       let realizedPnl = 0
 
@@ -477,19 +480,26 @@ export default function InvestmentsPage() {
         const tradeAmt = trade.quantity * trade.price
         const fee = trade.fee ?? 0
         totalFee += fee
+        // 거래 당시 환율 기준 KRW 금액 (예수금 차감 로직과 동일하게 exchangeRate ?? 1 사용)
+        const tradeRate = trade.currency !== 'KRW' ? (trade.exchangeRate ?? 1) : 1
+        const tradeAmtKRW = Math.round(tradeAmt * tradeRate)
         if (trade.type === 'buy') {
           holdingQty += trade.quantity
           totalBuyAmt += tradeAmt
+          totalBuyAmtKRW += tradeAmtKRW
         } else {
           const avgCost = holdingQty > 0 ? totalBuyAmt / holdingQty : 0
+          const avgCostKRW = holdingQty > 0 ? totalBuyAmtKRW / holdingQty : 0
           realizedPnl += (tradeAmt - fee) - avgCost * trade.quantity
           holdingQty = Math.max(0, holdingQty - trade.quantity)
           totalBuyAmt = holdingQty * avgCost
+          totalBuyAmtKRW = Math.round(holdingQty * avgCostKRW)
         }
       })
 
       const avgPrice = holdingQty > 0 ? totalBuyAmt / holdingQty : 0
-      map.set(inv.id, { investment: inv, avgPrice, holdingQty, totalBuyAmt, totalFee, realizedPnl })
+      const avgPriceKRW = holdingQty > 0 ? totalBuyAmtKRW / holdingQty : 0
+      map.set(inv.id, { investment: inv, avgPrice, avgPriceKRW, holdingQty, totalBuyAmt, totalBuyAmtKRW, totalFee, realizedPnl })
     })
     return map
   }, [investments, investmentTrades])
@@ -516,14 +526,14 @@ export default function InvestmentsPage() {
     const byType: Record<string, number> = {}
     const byAccount: Record<string, { buy: number; eval: number; divs: number }> = {}
 
-    holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalFee: invFee, realizedPnl }) => {
+    holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalBuyAmtKRW, totalFee: invFee, realizedPnl }) => {
       const isForeign = investment.currency !== 'KRW'
       const fxRate = isForeign ? (exchangeRates[investment.currency] ?? 0) : 1
       const toKRW = (v: number) => isForeign && fxRate > 0 ? Math.round(v * fxRate) : v
 
       const currentPrice = investment.currentPrice ?? 0
       const evalAmt    = toKRW(holdingQty * currentPrice)
-      const buyAmtKRW  = toKRW(totalBuyAmt)
+      const buyAmtKRW  = totalBuyAmtKRW  // 거래 당시 환율 기준 KRW (예수금 차감과 동일 로직)
       const realizedKRW = toKRW(realizedPnl)
       const feeKRW     = toKRW(invFee)
 
@@ -1060,18 +1070,19 @@ export default function InvestmentsPage() {
           if (isForeign && hasFx) {
             if (showInKRW) {
               dispCurrentPrice = currentPrice * fxRate
-              dispAvgPrice    = costIsKRW ? h.avgPrice      : h.avgPrice      * fxRate
-              dispTotalBuyAmt = costIsKRW ? h.totalBuyAmt   : h.totalBuyAmt   * fxRate
+              // 매수금액은 거래 당시 환율로 이미 KRW 환산된 값 사용
+              dispAvgPrice    = h.avgPriceKRW
+              dispTotalBuyAmt = h.totalBuyAmtKRW
             } else {
               // USD 모드
               dispCurrentPrice = currentPrice
-              dispAvgPrice    = costIsKRW ? h.avgPrice    / fxRate : h.avgPrice
-              dispTotalBuyAmt = costIsKRW ? h.totalBuyAmt / fxRate : h.totalBuyAmt
+              dispAvgPrice    = h.avgPriceKRW > 0 ? h.avgPriceKRW / fxRate : h.avgPrice
+              dispTotalBuyAmt = h.totalBuyAmtKRW > 0 ? h.totalBuyAmtKRW / fxRate : h.totalBuyAmt
             }
           } else {
             dispCurrentPrice = currentPrice
-            dispAvgPrice    = h.avgPrice
-            dispTotalBuyAmt = h.totalBuyAmt
+            dispAvgPrice    = h.avgPriceKRW || h.avgPrice
+            dispTotalBuyAmt = h.totalBuyAmtKRW || h.totalBuyAmt
           }
 
           const dispEvalAmt  = h.holdingQty * dispCurrentPrice

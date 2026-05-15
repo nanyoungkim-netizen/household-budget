@@ -358,9 +358,12 @@ export default function Dashboard() {
       .forEach(trade => {
         const h = holdingsMap.get(trade.investmentId)
         if (!h) return
+        // 거래 당시 환율 기준 KRW 금액 (exchangeRate ?? 1: 환율 미입력 시 입력값 그대로 KRW 취급)
+        const tradeRate = trade.currency !== 'KRW' ? (trade.exchangeRate ?? 1) : 1
+        const tradeAmtKRW = trade.quantity * trade.price * tradeRate
         if (trade.type === 'buy') {
           h.qty += trade.quantity
-          h.buyAmt += trade.quantity * trade.price
+          h.buyAmt += tradeAmtKRW
         } else {
           const avgCost = h.qty > 0 ? h.buyAmt / h.qty : 0
           h.qty = Math.max(0, h.qty - trade.quantity)
