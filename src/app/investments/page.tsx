@@ -527,9 +527,8 @@ export default function InvestmentsPage() {
     const byAccount: Record<string, { buy: number; eval: number; divs: number }> = {}
 
     holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalBuyAmtKRW, totalFee: invFee, realizedPnl }) => {
-      const isForeign = investment.currency !== 'KRW' || investment.assetType === 'foreign_stock'
-      const fxCurrency = investment.currency !== 'KRW' ? investment.currency : 'USD'
-      const fxRate = isForeign ? (exchangeRates[fxCurrency] ?? 0) : 1
+      const isForeign = investment.assetType === 'foreign_stock'
+      const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
       const toKRW = (v: number) => isForeign && fxRate > 0 ? Math.round(v * fxRate) : v
 
       const currentPrice = investment.currentPrice ?? 0
@@ -1055,9 +1054,7 @@ export default function InvestmentsPage() {
         </div>
 
         {h && h.holdingQty > 0 && (() => {
-          // assetType 기반으로 해외 여부 판정 (currency='KRW'로 잘못 등록된 레거시 데이터 대응)
-          const isForeign = inv.currency !== 'KRW' || inv.assetType === 'foreign_stock'
-          // 해외 종목 현재가는 API에서 항상 USD로 반환되므로 USD 환율 사용
+          const isForeign = inv.assetType === 'foreign_stock'
           const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
           const hasFx = fxRate > 0
           // 매수 비용은 inv.currency 기준으로 입력됨

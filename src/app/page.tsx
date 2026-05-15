@@ -95,7 +95,7 @@ export default function Dashboard() {
 
   // 해외주식이 있을 때 환율 자동 조회 (투자 페이지 미방문 시에도 동작)
   useEffect(() => {
-    const hasForeign = investments.some(inv => inv.currency !== 'KRW' || inv.assetType === 'foreign_stock')
+    const hasForeign = investments.some(inv => inv.assetType === 'foreign_stock')
     if (!hasForeign) return
     fetch('/api/stock/exchange-rate')
       .then(r => r.json())
@@ -375,9 +375,8 @@ export default function Dashboard() {
         const h = holdingsMap.get(inv.id)!
         const holdingQty = h?.qty ?? 0
         const buyAmt     = h?.buyAmt ?? 0
-        const isForeign  = inv.currency !== 'KRW' || inv.assetType === 'foreign_stock'
-        const fxCurrency = inv.currency !== 'KRW' ? inv.currency : 'USD'
-        const fxRate     = isForeign ? (investmentExchangeRates[fxCurrency] ?? 0) : 1
+        const isForeign  = inv.assetType === 'foreign_stock'
+        const fxRate     = isForeign ? (investmentExchangeRates['USD'] ?? 0) : 1
         const rawEval    = holdingQty > 0 && inv.currentPrice ? holdingQty * inv.currentPrice : 0
         const evalAmount = isForeign ? (fxRate > 0 ? Math.round(rawEval * fxRate) : 0) : rawEval
         const gain       = evalAmount > 0 ? evalAmount - buyAmt : 0
