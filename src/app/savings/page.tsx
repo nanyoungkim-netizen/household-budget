@@ -383,7 +383,7 @@ export default function SavingsPage() {
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${filterTab === key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
                 {label}
                 <span className="ml-1 opacity-60">
-                  {key === 'all' ? sdSavings.length : sdSavings.filter(s => s.type === key).length}
+                  {key === 'all' ? countedSdSavings.length : countedSdSavings.filter(s => s.type === key).length}
                 </span>
               </button>
             ))}

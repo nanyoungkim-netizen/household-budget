@@ -981,7 +981,7 @@ export default function Dashboard() {
                       <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                         <span className="text-xs text-gray-500 font-medium">미납 합계</span>
                         {totalUnpaid > 0
-                          ? <span className="text-base font-bold text-red-500 tabular-nums">-{fmtKRW(totalUnpaid)}</span>
+                          ? <span className="text-base font-bold text-red-500 tabular-nums">{fmtKRW(totalUnpaid)}</span>
                           : <span className="text-sm font-bold text-emerald-600">✓ 전체 납부완료</span>
                         }
                       </div>
