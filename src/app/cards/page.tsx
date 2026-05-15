@@ -121,7 +121,7 @@ export default function CardsPage() {
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">카드 청구·납부 현황</span>
           <div className="flex items-center gap-2">
-            <input type="month" value={billingViewMonth} onChange={e => setBillingViewMonth(e.target.value)}
+            <input type="month" min="1900-01" max="2099-12" value={billingViewMonth} onChange={e => setBillingViewMonth(e.target.value)}
               className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
@@ -249,7 +249,7 @@ export default function CardsPage() {
                 <select value={instForm.totalMonths} onChange={e => setInstForm(f => ({ ...f, totalMonths: e.target.value }))} className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {[3, 6, 9, 10, 12, 18, 24, 36].map(m => <option key={m} value={m}>{m}개월</option>)}
                 </select>
-                <input type="date" value={instForm.startDate} onChange={e => setInstForm(f => ({ ...f, startDate: e.target.value }))} className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="date" min="1900-01-01" max="2099-12-31" value={instForm.startDate} onChange={e => setInstForm(f => ({ ...f, startDate: e.target.value }))} className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               {instForm.totalAmount && <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">월 납입: {fmtKRW(Math.ceil(parseAmt(instForm.totalAmount) / Number(instForm.totalMonths)))}</div>}
               <button onClick={handleAddInst} className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors">추가하기</button>
@@ -276,11 +276,11 @@ export default function CardsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">카드 사용 월 (청구 기준)</label>
-                  <input type="month" value={billingForm.billingMonth} onChange={e => setBillingForm(f => ({ ...f, billingMonth: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="month" min="1900-01" max="2099-12" value={billingForm.billingMonth} onChange={e => setBillingForm(f => ({ ...f, billingMonth: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">실제 납부 월</label>
-                  <input type="month" value={billingForm.paymentMonth} onChange={e => setBillingForm(f => ({ ...f, paymentMonth: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="month" min="1900-01" max="2099-12" value={billingForm.paymentMonth} onChange={e => setBillingForm(f => ({ ...f, paymentMonth: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>

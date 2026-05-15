@@ -487,7 +487,7 @@ export default function BudgetPage() {
           >
             ← 이전달 이월
           </button>
-          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+          <input type="month" min="1900-01" max="2099-12" value={month} onChange={e => setMonth(e.target.value)}
             className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>

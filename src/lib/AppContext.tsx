@@ -104,6 +104,8 @@ interface AppData {
   dashboardWidgetOrder: string[]                   // PRD: 위젯 순서 커스터마이징
   budgetCarriedMonths: string[]                    // 예산 자동 이월 완료 월 목록
   dashboardMemo: string                            // 대시보드 메모
+  dismissedNotificationIds: string[]              // 계정별 알림 dismiss 목록
+  investmentExchangeRates: Record<string, number> // 투자 환율 캐시 (KRW 제외 통화)
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -133,6 +135,8 @@ const INITIAL_DATA: AppData = {
   dashboardWidgetOrder: ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
   budgetCarriedMonths: [],
   dashboardMemo: '',
+  dismissedNotificationIds: [],
+  investmentExchangeRates: {},
   lastModified: null,
   isSetupComplete: false,
 }
@@ -193,6 +197,10 @@ interface AppContextType {
   setBudgetCarriedMonths: (months: string[]) => void
   // 대시보드 메모
   setDashboardMemo: (memo: string) => void
+  // 계정별 알림 dismiss
+  setDismissedNotificationIds: (ids: string[]) => void
+  // 투자 환율 캐시
+  setInvestmentExchangeRates: (rates: Record<string, number>) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -289,6 +297,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
       budgetCarriedMonths: raw.budgetCarriedMonths ?? [],
       dashboardMemo: raw.dashboardMemo ?? '',
+      dismissedNotificationIds: raw.dismissedNotificationIds ?? [],
+      investmentExchangeRates: raw.investmentExchangeRates ?? {},
       dashboardWidgetOrder: (() => {
         const stored = raw.dashboardWidgetOrder ?? null
         const assetWidgets = ['cash_accounts', 'investment_accounts']
@@ -553,6 +563,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, dashboardMemo, lastModified: now() }))
   }, [update])
 
+  const setDismissedNotificationIds = useCallback((dismissedNotificationIds: string[]) => {
+    update(d => ({ ...d, dismissedNotificationIds, lastModified: now() }))
+  }, [update])
+
+  const setInvestmentExchangeRates = useCallback((investmentExchangeRates: Record<string, number>) => {
+    update(d => ({ ...d, investmentExchangeRates }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -602,6 +620,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDashboardWidgetOrder,
       setBudgetCarriedMonths,
       setDashboardMemo,
+      setDismissedNotificationIds,
+      setInvestmentExchangeRates,
       completeSetup,
       resetAll,
     }}>

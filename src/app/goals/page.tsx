@@ -375,13 +375,13 @@ export default function GoalsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-0.5">목표 시작 월</label>
-                  <input type="month" value={form.startDate}
+                  <input type="month" min="1900-01" max="2099-12" value={form.startDate}
                     onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-0.5">목표 달성 월</label>
-                  <input type="month" value={form.targetDate}
+                  <input type="month" min="1900-01" max="2099-12" value={form.targetDate}
                     onChange={e => {
                       const val = e.target.value
                       setForm(f => ({
@@ -485,7 +485,7 @@ export default function GoalsPage() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-0.5">날짜</label>
-                  <input type="date" value={paymentDate}
+                  <input type="date" min="1900-01-01" max="2099-12-31" value={paymentDate}
                     onChange={e => setPaymentDate(e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>

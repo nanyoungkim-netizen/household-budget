@@ -68,7 +68,7 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations } = useApp()
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates } = useApp()
   const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
   const investmentCashDeposits: InvestmentCashDeposit[] = data.investmentCashDeposits ?? []
   const investmentAccountTypes: InvestmentAccountType[] = data.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES
@@ -211,6 +211,7 @@ export default function InvestmentsPage() {
       if (json.rates && Object.keys(json.rates).length > 0) {
         setExchangeRates(json.rates)
         setExchangeRateUpdatedAt(new Date().toISOString())
+        setInvestmentExchangeRates(json.rates)
       }
     } catch { /* silent */ }
   }
@@ -2289,7 +2290,7 @@ export default function InvestmentsPage() {
                         </button>
                       )}
                     </div>
-                    <input type="date" value={initialBuy.date}
+                    <input type="date" min="1900-01-01" max="2099-12-31" value={initialBuy.date}
                       onChange={e => setInitialBuy(b => b && ({ ...b, date: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
@@ -2414,7 +2415,7 @@ export default function InvestmentsPage() {
                     </button>
                   )}
                 </div>
-                <input type="date" value={tradeForm.date ?? ''}
+                <input type="date" min="1900-01-01" max="2099-12-31" value={tradeForm.date ?? ''}
                   onChange={e => setTradeForm(f => ({ ...f, date: e.target.value || undefined }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
@@ -2527,7 +2528,7 @@ export default function InvestmentsPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">입금일 *</label>
-                <input type="date" value={dividendForm.date}
+                <input type="date" min="1900-01-01" max="2099-12-31" value={dividendForm.date}
                   onChange={e => setDividendForm(f => ({ ...f, date: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
@@ -2600,7 +2601,7 @@ export default function InvestmentsPage() {
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-gray-400 block mb-1">입금일 *</label>
-                <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)}
+                <input type="date" min="1900-01-01" max="2099-12-31" value={depositDate} onChange={e => setDepositDate(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>

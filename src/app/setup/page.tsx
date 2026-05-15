@@ -289,13 +289,13 @@ export default function SetupPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-xs text-gray-400 mb-0.5 block">가입일</label>
-                    <input type="date" value={savingForm.startDate}
+                    <input type="date" min="1900-01-01" max="2099-12-31" value={savingForm.startDate}
                       onChange={e => setSavingForm(f => ({ ...f, startDate: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-0.5 block">만기일</label>
-                    <input type="date" value={savingForm.maturityDate}
+                    <input type="date" min="1900-01-01" max="2099-12-31" value={savingForm.maturityDate}
                       onChange={e => setSavingForm(f => ({ ...f, maturityDate: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
@@ -350,7 +350,7 @@ export default function SetupPage() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-0.5 block">목표 기한</label>
-                  <input type="date" value={goalForm.deadline}
+                  <input type="date" min="1900-01-01" max="2099-12-31" value={goalForm.deadline}
                     onChange={e => setGoalForm(f => ({ ...f, deadline: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApp, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
 import { Transaction, PaymentMethod, Saving, ConsumptionType } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
@@ -53,6 +53,31 @@ function fmtMonthLabel(ym: string): string {
   return `${y}년 ${parseInt(m)}월`
 }
 
+const TOAST_EXPENSE = [
+  '소비도 기록이 쌓이면 습관이 돼요 💪',
+  '오늘 지출, 내일의 나를 위한 데이터예요 📊',
+  '작은 지출도 모이면 큰 금액이 돼요 🔍',
+  '기록하는 습관이 부자 습관의 시작이에요 ✨',
+  '이번 달 예산 확인해보셨나요? 💡',
+  '커피 한 잔도 기록하면 1년이 보여요 ☕',
+  '지출 패턴을 파악하면 절약이 쉬워져요 🎯',
+  '오늘도 알뜰하게! 통장 지키는 중 🛡️',
+  '지출 기록 완료! 예산 현황도 확인해보세요 📋',
+  '소비를 알아야 절약할 수 있어요 🌱',
+]
+const TOAST_INCOME = [
+  '수입 기록 완료! 오늘도 파이팅 🎉',
+  '들어온 돈, 잘 굴려봐요 💰',
+  '수입이 쌓이면 목표가 가까워져요 🏆',
+  '좋은 하루예요! 수입 기록 완료 😊',
+  '버는 것보다 중요한 건 관리예요 🧠',
+  '수입 기록 완료! 재무 목표도 확인해보세요 🎯',
+  '오늘 수입, 미래의 나에게 선물 🎁',
+  '꾸준한 기록이 재정 자유의 첫 걸음이에요 🚀',
+  '수입 등록! 밤티 지갑이 두둑해지고 있어요 💵',
+  '좋은 소식이네요! 잘 불려봐요 📈',
+]
+
 export default function TransactionsPage() {
   const { data, categories, addTransaction, updateTransaction, deleteTransaction, setSavings } = useApp()
   const { accounts, transactions, cards, categoryExcludeMonths } = data
@@ -60,6 +85,17 @@ export default function TransactionsPage() {
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
     return cat?.role === 'card_payment'
+  }
+
+  const [toast, setToast] = useState<{ msg: string; type: 'expense' | 'income' } | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(type: 'expense' | 'income') {
+    const list = type === 'expense' ? TOAST_EXPENSE : TOAST_INCOME
+    const msg = list[Math.floor(Math.random() * list.length)]
+    setToast({ msg, type })
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }
 
   const [month, setMonth] = useState(currentMonth)
@@ -505,6 +541,8 @@ export default function TransactionsPage() {
       updateTransaction(editingId, tx)
     } else {
       addTransaction(tx)
+      if (formType === 'expense' || formType === 'refund') showToast('expense')
+      else if (formType === 'income') showToast('income')
     }
     closeModal()
   }
@@ -857,12 +895,12 @@ export default function TransactionsPage() {
           <span className="text-sm text-gray-700 font-medium">실소비만 보기</span>
           {realConsumptionFilter && <span className="text-xs text-blue-500">저축이체·카드대금 제외</span>}
         </div>
-        <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+        <input type="month" min="1900-01" max="2099-12" value={month} onChange={e => setMonth(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+        <input type="date" min="1900-01-01" max="2099-12-31" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <span className="text-gray-400 text-sm self-center">~</span>
-        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+        <input type="date" min="1900-01-01" max="2099-12-31" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         {/* 전체 탭일 때만 계좌 드롭다운 표시 */}
         {paymentTab === 'all' && (
@@ -1141,7 +1179,7 @@ export default function TransactionsPage() {
               {/* ── 이체 ── */}
               {formType === 'transfer' ? (
                 <>
-                  <input type="date" value={form.date}
+                  <input type="date" min="1900-01-01" max="2099-12-31" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <input type="text" inputMode="numeric" placeholder="이체 금액" value={form.amount}
@@ -1207,7 +1245,7 @@ export default function TransactionsPage() {
                       </button>
                     ))}
                   </div>
-                  <input type="date" value={form.date}
+                  <input type="date" min="1900-01-01" max="2099-12-31" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <input type="text" placeholder="내용"
@@ -1664,14 +1702,14 @@ export default function TransactionsPage() {
                   className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <div>
                   <label className="text-xs text-gray-400 block mb-0.5">가입일</label>
-                  <input type="date" value={quickSavingForm.startDate}
+                  <input type="date" min="1900-01-01" max="2099-12-31" value={quickSavingForm.startDate}
                     onChange={e => setQuickSavingForm(f => ({ ...f, startDate: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-0.5">만기일</label>
-                <input type="date" value={quickSavingForm.maturityDate}
+                <input type="date" min="1900-01-01" max="2099-12-31" value={quickSavingForm.maturityDate}
                   onChange={e => setQuickSavingForm(f => ({ ...f, maturityDate: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
@@ -1701,6 +1739,15 @@ export default function TransactionsPage() {
           }}
           onCancel={() => setDeleteConfirmId(null)}
         />
+      )}
+
+      {/* 거래 등록 토스트 */}
+      {toast && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1 px-5 py-3 rounded-2xl shadow-lg text-white text-center transition-all animate-fade-in
+          ${toast.type === 'expense' ? 'bg-rose-500' : 'bg-emerald-500'}`}>
+          <span className="text-base font-bold">밤티 등록! 🐿️</span>
+          <span className="text-xs opacity-90">{toast.msg}</span>
+        </div>
       )}
     </div>
   )

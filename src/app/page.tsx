@@ -66,9 +66,9 @@ function calcStats(txs: Transaction[]) {
 }
 
 export default function Dashboard() {
-  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo } = useApp()
+  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo, setDismissedNotificationIds } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, cardBillings, dashboardMemo } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -174,34 +174,17 @@ export default function Dashboard() {
   }
 
   // ── 알림 닫기 (localStorage 지속) ──────────────────────────────────────────
-  const NOTIF_KEY = 'hb_dismissed_notifications'
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [showNotifHistory, setShowNotifHistory] = useState(false)
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(NOTIF_KEY)
-      if (stored) setDismissedIds(new Set(JSON.parse(stored) as string[]))
-    } catch { /* ignore */ }
-  }, [])
+  const dismissedIds = new Set(dismissedNotificationIds)
 
   const dismissNotif = useCallback((id: string) => {
-    setDismissedIds(prev => {
-      const next = new Set(prev)
-      next.add(id)
-      try { localStorage.setItem(NOTIF_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
-      return next
-    })
-  }, [])
+    setDismissedNotificationIds([...dismissedNotificationIds, id])
+  }, [dismissedNotificationIds, setDismissedNotificationIds])
 
   const restoreNotif = useCallback((id: string) => {
-    setDismissedIds(prev => {
-      const next = new Set(prev)
-      next.delete(id)
-      try { localStorage.setItem(NOTIF_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
-      return next
-    })
-  }, [])
+    setDismissedNotificationIds(dismissedNotificationIds.filter(x => x !== id))
+  }, [dismissedNotificationIds, setDismissedNotificationIds])
 
   const isToday      = selectedDay === todayStr
   const isThisMonth  = selectedMonth === currentMonth
@@ -374,13 +357,16 @@ export default function Dashboard() {
         const h = holdingsMap.get(inv.id)!
         const holdingQty = h?.qty ?? 0
         const buyAmt     = h?.buyAmt ?? 0
-        const evalAmount = holdingQty > 0 && inv.currentPrice ? holdingQty * inv.currentPrice : 0
+        const isForeign  = inv.currency !== 'KRW'
+        const fxRate     = isForeign ? (investmentExchangeRates[inv.currency] ?? 0) : 1
+        const rawEval    = holdingQty > 0 && inv.currentPrice ? holdingQty * inv.currentPrice : 0
+        const evalAmount = isForeign && fxRate > 0 ? Math.round(rawEval * fxRate) : rawEval
         const gain       = evalAmount > 0 ? evalAmount - buyAmt : 0
         const gainRate   = buyAmt > 0 && evalAmount > 0 ? (gain / buyAmt) * 100 : 0
         return { ...inv, holdingQty, buyAmt, evalAmount, gain, gainRate }
       })
       .filter(inv => inv.holdingQty > 0)
-  }, [investments, investmentTrades])
+  }, [investments, investmentTrades, investmentExchangeRates])
 
   // PRD 3-1: 투자 탭 총 평가금액
   const investmentTotalEval = useMemo(
@@ -626,11 +612,11 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-1.5">
             {viewMode === 'day' ? (
-              <input type="date" value={selectedDay} max={todayStr}
+              <input type="date" min="1900-01-01" value={selectedDay} max={todayStr}
                 onChange={e => setSelectedDay(e.target.value)}
                 className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent text-center cursor-pointer" />
             ) : (
-              <input type="month" value={selectedMonth} max={currentMonth}
+              <input type="month" min="1900-01" value={selectedMonth} max={currentMonth}
                 onChange={e => setSelectedMonth(e.target.value)}
                 className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent text-center cursor-pointer" />
             )}

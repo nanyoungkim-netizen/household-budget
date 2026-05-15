@@ -1266,7 +1266,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                           </td>
                           {/* 날짜 */}
                           <td className="px-3 py-2">
-                            <input type="date" value={row.date}
+                            <input type="date" min="1900-01-01" max="2099-12-31" value={row.date}
                               onChange={e => updateRow(row._key, { date: e.target.value })}
                               className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400" />
                           </td>

@@ -873,14 +873,14 @@ export default function SavingsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-gray-400 block mb-0.5">가입일</label>
-                  <input type="date" value={form.startDate}
+                  <input type="date" min="1900-01-01" max="2099-12-31" value={form.startDate}
                     onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 {form.type !== 'subscription' && (
                   <div>
                     <label className="text-xs text-gray-400 block mb-0.5">만기일</label>
-                    <input type="date" value={form.maturityDate}
+                    <input type="date" min="1900-01-01" max="2099-12-31" value={form.maturityDate}
                       onChange={e => setForm(f => ({ ...f, maturityDate: e.target.value }))}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
@@ -1067,7 +1067,7 @@ export default function SavingsPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1">입금 날짜</label>
                 <input
-                  type="date"
+                  type="date" min="1900-01-01" max="2099-12-31"
                   value={maturityDate}
                   onChange={e => setMaturityDate(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

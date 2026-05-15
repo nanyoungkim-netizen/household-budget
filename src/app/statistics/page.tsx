@@ -387,14 +387,14 @@ export default function StatisticsPage() {
         {showCustomRange && (
           <div className="mt-3 flex items-center gap-2">
             <input
-              type="month"
+              type="month" min="1900-01" max="2099-12"
               value={rangeStart}
               onChange={e => setRangeStart(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <span className="text-gray-400 text-sm">~</span>
             <input
-              type="month"
+              type="month" min="1900-01"
               value={rangeEnd}
               max={currentMonth}
               onChange={e => setRangeEnd(e.target.value)}
