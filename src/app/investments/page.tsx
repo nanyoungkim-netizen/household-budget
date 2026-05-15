@@ -101,7 +101,7 @@ export default function InvestmentsPage() {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [priceLoadingIds, setPriceLoadingIds] = useState<Set<string>>(new Set())
   const [priceRefreshing, setPriceRefreshing] = useState(false)
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(data.investmentExchangeRates ?? {})
   const [exchangeRateUpdatedAt, setExchangeRateUpdatedAt] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [showExchangeRates, setShowExchangeRates] = useState(false)

@@ -1743,7 +1743,7 @@ export default function TransactionsPage() {
 
       {/* 거래 등록 토스트 */}
       {toast && (
-        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1 px-5 py-3 rounded-2xl shadow-lg text-white text-center transition-all animate-fade-in
+        <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1 px-5 py-3 rounded-2xl shadow-lg text-white text-center transition-all animate-fade-in
           ${toast.type === 'expense' ? 'bg-rose-500' : 'bg-emerald-500'}`}>
           <span className="text-base font-bold">밤티 등록! 🐿️</span>
           <span className="text-xs opacity-90">{toast.msg}</span>

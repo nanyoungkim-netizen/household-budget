@@ -68,7 +68,7 @@ function calcStats(txs: Transaction[]) {
 export default function Dashboard() {
   const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo, setDismissedNotificationIds } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, investmentAccounts, investmentCashDeposits, investmentDividends, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
 
   type ViewMode = 'day' | 'month'
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
@@ -368,11 +368,17 @@ export default function Dashboard() {
       .filter(inv => inv.holdingQty > 0)
   }, [investments, investmentTrades, investmentExchangeRates])
 
-  // PRD 3-1: 투자 탭 총 평가금액
-  const investmentTotalEval = useMemo(
-    () => investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0),
-    [investmentHoldings]
-  )
+  // PRD 3-1: 투자 탭 총 평가금액 (보유종목 평가금액 + 예수금)
+  const investmentTotalEval = useMemo(() => {
+    const holdingsTotal = investmentHoldings.reduce((s, inv) => s + inv.evalAmount, 0)
+    const cashTotal = investmentAccounts.reduce((s, acc) => {
+      const legacy = acc.cashDeposits ?? 0
+      const fromHistory = investmentCashDeposits.filter(d => d.accountId === acc.id).reduce((sum, d) => sum + d.amount, 0)
+      const fromDividends = investmentDividends.filter(d => d.accountId === acc.id).reduce((sum, d) => sum + d.netAmount, 0)
+      return s + legacy + fromHistory + fromDividends
+    }, 0)
+    return holdingsTotal + Math.max(0, cashTotal)
+  }, [investmentHoldings, investmentAccounts, investmentCashDeposits, investmentDividends])
 
   // PRD 3-1: 자산 유형별 요약
   const assetSummary = useMemo(() => {
