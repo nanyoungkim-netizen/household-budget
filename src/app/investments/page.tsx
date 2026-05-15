@@ -1044,7 +1044,10 @@ export default function InvestmentsPage() {
       ? investments.filter(inv => inv.accountId === selectedTradeAccountId)
       : investments
     const seen = new Set<string>()
-    return base.map(inv => inv.name).filter(n => { if (seen.has(n)) return false; seen.add(n); return true })
+    return base
+      .filter(inv => (holdingsMap.get(inv.id)?.holdingQty ?? 0) > 0)
+      .map(inv => inv.name)
+      .filter(n => { if (seen.has(n)) return false; seen.add(n); return true })
   })()
 
   // 거래 이력 - 이름 기준 그룹화 (같은 이름 = 같은 종목), 특정 이름 선택 시 null
