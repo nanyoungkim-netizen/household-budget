@@ -527,8 +527,9 @@ export default function InvestmentsPage() {
     const byAccount: Record<string, { buy: number; eval: number; divs: number }> = {}
 
     holdingsMap.forEach(({ investment, holdingQty, totalBuyAmt, totalBuyAmtKRW, totalFee: invFee, realizedPnl }) => {
-      const isForeign = investment.currency !== 'KRW'
-      const fxRate = isForeign ? (exchangeRates[investment.currency] ?? 0) : 1
+      const isForeign = investment.currency !== 'KRW' || investment.assetType === 'foreign_stock'
+      const fxCurrency = investment.currency !== 'KRW' ? investment.currency : 'USD'
+      const fxRate = isForeign ? (exchangeRates[fxCurrency] ?? 0) : 1
       const toKRW = (v: number) => isForeign && fxRate > 0 ? Math.round(v * fxRate) : v
 
       const currentPrice = investment.currentPrice ?? 0
