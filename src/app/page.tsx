@@ -931,11 +931,11 @@ export default function Dashboard() {
                   if (!chargesByCardMonth[t.cardId!]) chargesByCardMonth[t.cardId!] = {}
                   chargesByCardMonth[t.cardId!][m] = (chargesByCardMonth[t.cardId!][m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
                 })
-              // 카드별·청구월별 납부 여부 판정 (3단계)
-              const cardRows: { cardId: string; cardName: string; month: string; total: number; isPaid: boolean }[] = []
+              // 카드별 납부 여부 판정 (3단계) 후 월별로 집계
+              const monthMap: Record<string, { total: number; allPaid: boolean }> = {}
               cards.forEach(card => {
-                const monthMap = chargesByCardMonth[card.id] || {}
-                Object.entries(monthMap).forEach(([m, v]) => {
+                const cardMonths = chargesByCardMonth[card.id] || {}
+                Object.entries(cardMonths).forEach(([m, v]) => {
                   const total = Math.max(0, v)
                   if (total === 0) return
                   const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === m)
@@ -951,14 +951,17 @@ export default function Dashboard() {
                       isPaid = !!payTxs.find(t => t.amount === total)
                     }
                   }
-                  cardRows.push({ cardId: card.id, cardName: card.name, month: m, total, isPaid })
+                  if (!monthMap[m]) monthMap[m] = { total: 0, allPaid: true }
+                  monthMap[m].total += total
+                  if (!isPaid) monthMap[m].allPaid = false
                 })
               })
-              const sortedRows = cardRows
-                .sort((a, b) => b.month.localeCompare(a.month) || a.cardName.localeCompare(b.cardName))
-                .slice(0, 10)
-              if (sortedRows.length === 0 && !editMode) return null
-              const totalUnpaid = sortedRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
+              const monthRows = Object.entries(monthMap)
+                .map(([month, { total, allPaid }]) => ({ month, total, isPaid: allPaid }))
+                .sort((a, b) => b.month.localeCompare(a.month))
+                .slice(0, 6)
+              if (monthRows.length === 0 && !editMode) return null
+              const totalUnpaid = monthRows.filter(r => !r.isPaid).reduce((s, r) => s + r.total, 0)
               return (
                 <div className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
@@ -968,22 +971,21 @@ export default function Dashboard() {
                     </div>
                     <Link href="/budget" className="text-xs text-blue-600">자세히 →</Link>
                   </div>
-                  {sortedRows.length > 0 ? (
+                  {monthRows.length > 0 ? (
                     <>
                       <div className="space-y-2">
-                        {sortedRows.map(row => {
+                        {monthRows.map(row => {
                           const mo = parseInt(row.month.split('-')[1])
                           return (
-                            <div key={`${row.cardId}-${row.month}`} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs text-gray-500 w-7 flex-shrink-0 font-medium">{mo}월</span>
-                                <span className="text-xs text-gray-600 truncate">{row.cardName}</span>
+                            <div key={row.month} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 w-7 font-medium">{mo}월</span>
                                 {row.isPaid
-                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">✓ 납부완료</span>
-                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">미납</span>
+                                  ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">✓ 납부완료</span>
+                                  : <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">미납</span>
                                 }
                               </div>
-                              <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ml-2 ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
+                              <span className={`text-sm font-semibold tabular-nums ${row.isPaid ? 'text-gray-400 line-through decoration-gray-300' : 'text-red-500'}`}>
                                 {fmtKRW(row.total)}
                               </span>
                             </div>
