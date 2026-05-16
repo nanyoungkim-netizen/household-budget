@@ -452,6 +452,10 @@ export default function InvestmentsPage() {
 
   function handleDeleteDeposit(id: string) {
     setInvestmentCashDeposits(investmentCashDeposits.filter(d => d.id !== id))
+    // 이 예수금 차감에 연동된 매수 거래의 linkedDepositId 초기화 (거래 자체는 유지)
+    setInvestmentTrades(investmentTrades.map(t =>
+      t.linkedDepositId === id ? { ...t, linkedDepositId: undefined } : t
+    ))
     setDeleteDepositId(null)
   }
 
