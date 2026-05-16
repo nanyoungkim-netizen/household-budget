@@ -15,11 +15,24 @@
   box-sizing: border-box;
 }
 
+/* 모바일 기본 폰트 크기 축소 — 모든 rem 기반 텍스트가 비율대로 작아짐 */
+html {
+  font-size: 15px;
+}
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
 body {
   background-color: #F2F4F6;
   color: #191F28;
   font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* 숫자·금액이 줄 중간에서 끊기지 않도록 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
