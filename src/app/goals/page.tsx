@@ -1,9 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useApp } from '@/lib/AppContext'
 import { Goal, GoalCategory, GoalPayment } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
+
+const TOAST_GOAL_SAVE = [
+  '목표에 한 걸음 더 가까워졌어요 🎯',
+  '꾸준함이 목표를 이루는 가장 빠른 길이에요 🚀',
+  '차곡차곡 쌓이고 있어요! 잘 하고 있어요 💪',
+  '밤티가 응원하고 있어요! 파이팅 🐿️',
+  '오늘의 저축이 미래의 선물이에요 🎁',
+  '목표 달성이 점점 현실이 되고 있어요 ✨',
+  '포기하지 않으면 반드시 이뤄져요 🌟',
+  '작은 금액도 쌓이면 큰 힘이 돼요 💰',
+  '오늘도 미래의 나에게 투자했어요 📈',
+  '저금 완료! 목표가 성큼 가까워졌어요 🏆',
+  '한 번에 다 못 해도 괜찮아요, 조금씩이 최고예요 🌱',
+  '이 돈이 나중에 얼마나 큰 기쁨이 될지 기대돼요 😊',
+]
+const TOAST_GOAL_WITHDRAW = [
+  '출금 기록 완료! 잘 쓰고 오세요 👋',
+  '필요할 때 쓰는 게 목표를 만드는 이유예요 😊',
+  '잘 활용하셨길 바라요! 다시 채워봐요 💪',
+  '밤티가 기록했어요. 잘 쓰고 오세요 🐿️',
+]
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 function parseAmt(s: string): number { return parseInt(s.replace(/[^0-9]/g, '')) || 0 }
@@ -66,6 +87,17 @@ function targetDateToDeadline(targetDate: string): string {
 export default function GoalsPage() {
   const { data, setGoals, setGoalPayments } = useApp()
   const { goals, goalPayments = [] } = data
+
+  const [toast, setToast] = useState<{ msg: string; type: 'save' | 'withdraw' } | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(type: 'save' | 'withdraw') {
+    const list = type === 'save' ? TOAST_GOAL_SAVE : TOAST_GOAL_WITHDRAW
+    const msg = list[Math.floor(Math.random() * list.length)]
+    setToast({ msg, type })
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+  }
 
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -182,6 +214,7 @@ export default function GoalsPage() {
     }
     setGoalPayments([...goalPayments, payment])
     setPaymentGoalId(null)
+    showToast(paymentType === 'save' ? 'save' : 'withdraw')
   }
 
   function handleDeletePayment(id: string) {
@@ -510,6 +543,17 @@ export default function GoalsPage() {
           onConfirm={() => handleDelete(deleteConfirmId)}
           onCancel={() => setDeleteConfirmId(null)}
         />
+      )}
+
+      {/* 납입 등록 토스트 */}
+      {toast && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className={`flex flex-col items-center gap-1 px-5 py-3 rounded-2xl shadow-lg text-white text-center animate-fade-in
+            ${toast.type === 'save' ? 'bg-blue-500' : 'bg-amber-500'}`}>
+            <span className="text-base font-bold">밤티 등록! 🐿️</span>
+            <span className="text-xs opacity-90">{toast.msg}</span>
+          </div>
+        </div>
       )}
     </div>
   )
