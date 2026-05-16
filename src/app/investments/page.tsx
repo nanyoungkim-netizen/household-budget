@@ -2711,7 +2711,7 @@ export default function InvestmentsPage() {
                       ? 'bg-blue-50 border-blue-200 text-blue-700'
                       : 'bg-gray-50 border-gray-200 text-gray-500'
                   }`}>
-                  <span className="font-medium">예수금 연동</span>
+                  <span className="font-medium">{tradeForm.type === 'buy' ? '예수금 차감 연동' : '예수금 입금 연동'}</span>
                   <span className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 ${tradeUsesCash ? 'bg-blue-500' : 'bg-gray-300'}`}>
                     <span className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${tradeUsesCash ? 'translate-x-5' : 'translate-x-0'}`} />
                   </span>
@@ -2727,14 +2727,14 @@ export default function InvestmentsPage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-gray-400">매수일 <span className="text-gray-300">(선택)</span></label>
+                  <label className="text-xs text-gray-400">{tradeForm.type === 'buy' ? '매수일' : '매도일'} <span className="text-gray-300">(선택)</span></label>
                   {tradeForm.date && (
                     <button
                       type="button"
                       onClick={() => setTradeForm(f => ({ ...f, date: undefined }))}
                       className="text-xs text-gray-400 hover:text-red-400 transition-colors"
                     >
-                      날짜 지우기 ×
+                      {tradeForm.type === 'buy' ? '매수일' : '매도일'} 지우기 ×
                     </button>
                   )}
                 </div>
