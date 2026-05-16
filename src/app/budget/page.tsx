@@ -733,7 +733,7 @@ export default function BudgetPage() {
               {!isCollapsed && (
                 <div>
                   {/* 컬럼 헤더 */}
-                  <div className="grid grid-cols-4 px-3 py-1.5 bg-gray-50 border-t border-b border-gray-200 text-[11px] font-semibold text-gray-500 tracking-wide">
+                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr] px-3 py-1.5 bg-gray-50 border-t border-b border-gray-200 text-[11px] font-semibold text-gray-500 tracking-wide">
                     <span>소분류</span>
                     <span className="text-right">예산</span>
                     <span className="text-right">실제</span>
@@ -753,7 +753,7 @@ export default function BudgetPage() {
 
                     return (
                       <div key={cat.id} className={`border-b border-gray-50 last:border-0 group ${isExcludedThisMonth(cat.id) && !isExcludedThisMonth(parent.id) ? 'bg-blue-50/40' : ''}`}>
-                        <div className="grid grid-cols-4 px-3 py-1.5 items-center hover:bg-gray-50 transition-colors">
+                        <div className="grid grid-cols-[2fr_1fr_1fr_1fr] px-3 py-1.5 items-center hover:bg-gray-50 transition-colors">
                           {/* 소분류명 */}
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="text-sm flex-shrink-0">{cat.icon}</span>
@@ -847,7 +847,7 @@ export default function BudgetPage() {
 
                   {/* 합계 행 */}
                   {children.length > 0 && (
-                    <div className="grid grid-cols-4 px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-500 border-t border-gray-100">
+                    <div className="grid grid-cols-[2fr_1fr_1fr_1fr] px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-500 border-t border-gray-100">
                       <span>소계</span>
                       <span className="text-right">{grpBudget > 0 ? fmtKRW(grpBudget) : '-'}</span>
                       <span className="text-right">{grpActual > 0 ? fmtKRW(grpActual) : '-'}</span>

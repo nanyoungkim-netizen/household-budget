@@ -274,10 +274,9 @@ export default function HistoryPage() {
           {/* 상세 보기 */}
           {viewMode === 'detail' && (
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-4 text-xs font-semibold text-gray-500">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-[5rem_1fr_auto] text-xs font-semibold text-gray-500">
                 <span>날짜</span>
                 <span>내용</span>
-                <span>카테고리</span>
                 <span className="text-right">금액</span>
               </div>
               <div className="max-h-[600px] overflow-y-auto">
@@ -287,11 +286,13 @@ export default function HistoryPage() {
                   .map(r => {
                     const cat = DEFAULT_CATEGORIES.find(c => c.id === r.categoryId)
                     return (
-                      <div key={r.id} className="px-4 py-2.5 border-b border-gray-50 last:border-0 grid grid-cols-4 items-center hover:bg-gray-50">
+                      <div key={r.id} className="px-4 py-2.5 border-b border-gray-50 last:border-0 grid grid-cols-[5rem_1fr_auto] items-center gap-2 hover:bg-gray-50">
                         <span className="text-xs text-gray-500">{r.date.slice(0, 7)}</span>
-                        <span className="text-sm text-gray-900 truncate">{r.description}</span>
-                        <span className="text-xs text-gray-400">{cat?.icon} {cat?.name}</span>
-                        <span className={`text-sm font-medium text-right ${r.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
+                        <div className="min-w-0">
+                          <div className="text-sm text-gray-900 truncate">{r.description}</div>
+                          <div className="text-xs text-gray-400">{cat?.icon} {cat?.name}</div>
+                        </div>
+                        <span className={`text-sm font-medium text-right whitespace-nowrap ${r.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
                           {r.type === 'income' ? '+' : '-'}{fmtKRW(r.amount)}
                         </span>
                       </div>
