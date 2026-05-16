@@ -215,10 +215,31 @@ export interface InvestmentAccount {
   cashDeposits?: number     // 예수금 입금 누계 (수동 입금 합계)
 }
 
-// F-05: 목표 투자 비율
+// F-05: 목표 투자 비율 (레거시 — PortfolioPlan으로 대체)
 export interface InvestmentTargetAllocation {
   investmentId: string
   targetPct: number  // 0~100
+}
+
+// F-05 v2: 계좌별 포트폴리오 플랜
+export interface PortfolioPlanItem {
+  id: string
+  investmentId?: string  // Investment.id — 없으면 커스텀 종목
+  customName?: string    // investmentId 없을 때 표시명
+  targetPct: number      // 부모 컨텍스트 내 비율 (그룹 내: 그룹 대비 %, 미그룹: 계좌 대비 %)
+}
+
+export interface PortfolioPlanGroup {
+  id: string
+  name: string
+  targetPct: number           // 계좌 전체 대비 %
+  items: PortfolioPlanItem[]  // targetPct 합 = 100 (그룹 내 비율)
+}
+
+export interface PortfolioPlan {
+  accountId: string
+  items: PortfolioPlanItem[]    // 미그룹 종목 — targetPct = 계좌 대비 %
+  groups: PortfolioPlanGroup[]
 }
 
 export interface Investment {

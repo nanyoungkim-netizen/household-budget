@@ -5,6 +5,7 @@ import { useApp, DEFAULT_INVESTMENT_ACCOUNT_TYPES } from '@/lib/AppContext'
 import {
   Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit,
   InvestmentAssetType, InvestmentCurrency, InvestmentAccountType, InvestmentTargetAllocation,
+  PortfolioPlan, PortfolioPlanGroup, PortfolioPlanItem,
 } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
@@ -82,11 +83,12 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates } = useApp()
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates, setPortfolioPlans } = useApp()
   const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
   const investmentCashDeposits: InvestmentCashDeposit[] = data.investmentCashDeposits ?? []
   const investmentAccountTypes: InvestmentAccountType[] = data.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES
   const investmentTargetAllocations: InvestmentTargetAllocation[] = data.investmentTargetAllocations ?? []
+  const portfolioPlans: PortfolioPlan[] = data.portfolioPlans ?? []
 
   const [pageTab, setPageTab] = useState<PageTab>('dashboard')
 
@@ -463,10 +465,15 @@ export default function InvestmentsPage() {
     })
   }
 
-  // F-05: 포트폴리오 관리
-  const [targetInputs, setTargetInputs] = useState<Record<string, string>>({})
+  // F-05 v2: 포트폴리오 관리
+  const [portfolioAccId, setPortfolioAccId] = useState<string | null>(null)
+  const [editingPlan, setEditingPlan] = useState<PortfolioPlan | null>(null)
+  const [showInvPicker, setShowInvPicker] = useState<{ mode: 'ungrouped' | 'group'; groupId?: string } | null>(null)
+  const [pickerCustomName, setPickerCustomName] = useState('')
+  const [newGroupName, setNewGroupName] = useState('')
+  const [showAddGroup, setShowAddGroup] = useState(false)
   const [additionalInvestment, setAdditionalInvestment] = useState('')
-  const [rebalanceResult, setRebalanceResult] = useState<{ id: string; name: string; addAmt: number; expectedPct: number }[] | null>(null)
+  const [rebalanceResult, setRebalanceResult] = useState<{ id: string; name: string; addAmt: number; expectedPct: number; action: 'buy' | 'sell' }[] | null>(null)
 
   // ── 보유 종목별 계산 ────────────────────────────────────────────────────────
   const holdingsMap = useMemo(() => {
@@ -928,87 +935,171 @@ export default function InvestmentsPage() {
     investments.filter(inv => (holdingsMap.get(inv.id)?.holdingQty ?? 0) > 0)
   , [investments, holdingsMap])
 
-  const totalEvalForPortfolio = useMemo(() =>
-    holdingInvestments.reduce((s, inv) => {
-      const h = holdingsMap.get(inv.id)
-      return s + (h ? h.holdingQty * (inv.currentPrice ?? 0) : 0)
-    }, 0)
-  , [holdingInvestments, holdingsMap])
-
-  // 현재 비율 계산
-  const currentPctMap = useMemo(() => {
+  // 계좌별 보유 종목 평가금액
+  const evalByAccount = useMemo(() => {
     const map: Record<string, number> = {}
     holdingInvestments.forEach(inv => {
       const h = holdingsMap.get(inv.id)
-      const evalAmt = h ? h.holdingQty * (inv.currentPrice ?? 0) : 0
-      map[inv.id] = totalEvalForPortfolio > 0 ? (evalAmt / totalEvalForPortfolio) * 100 : 0
+      const accId = inv.accountId ?? '__none__'
+      map[accId] = (map[accId] ?? 0) + (h ? h.holdingQty * (inv.currentPrice ?? 0) : 0)
     })
     return map
-  }, [holdingInvestments, holdingsMap, totalEvalForPortfolio])
+  }, [holdingInvestments, holdingsMap])
 
-  // 목표 비율 합계
-  const targetPctSum = useMemo(() => {
-    return holdingInvestments.reduce((s, inv) => {
-      const v = parseFloat(targetInputs[inv.id] ?? '') || 0
-      return s + v
-    }, 0)
-  }, [holdingInvestments, targetInputs])
-
-  // 저장된 목표 비율 합계
-  const savedTargetPctSum = investmentTargetAllocations.reduce((s, a) => s + a.targetPct, 0)
-
-  // 포트폴리오 탭 계좌별 그룹화
-  const portfolioGroups = useMemo(() => {
-    const groups: Array<{ accId: string; accName: string; invs: typeof holdingInvestments }> = []
-    const seen = new Set<string>()
-    for (const inv of holdingInvestments) {
-      const accId = inv.accountId ?? '__none__'
-      if (!seen.has(accId)) {
-        seen.add(accId)
-        const acc = investmentAccounts.find(a => a.id === accId)
-        groups.push({ accId, accName: acc?.name ?? '미분류', invs: [] })
-      }
-      groups.find(g => g.accId === accId)!.invs.push(inv)
-    }
-    return groups
+  // 포트폴리오 계좌 목록 (보유종목 있는 계좌)
+  const portfolioAccounts = useMemo(() => {
+    const accIds = [...new Set(holdingInvestments.map(inv => inv.accountId ?? '__none__'))]
+    return accIds.map(id => ({
+      id,
+      name: investmentAccounts.find(a => a.id === id)?.name ?? '미분류',
+    }))
   }, [holdingInvestments, investmentAccounts])
 
-  function handleSaveTargetAllocations() {
-    const allocations: InvestmentTargetAllocation[] = holdingInvestments.map(inv => ({
-      investmentId: inv.id,
-      targetPct: parseFloat(targetInputs[inv.id] ?? '') || 0,
-    }))
-    setInvestmentTargetAllocations(allocations)
-  }
-
-  function initTargetInputs() {
-    const inputs: Record<string, string> = {}
-    holdingInvestments.forEach(inv => {
-      const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
-      inputs[inv.id] = saved ? String(saved.targetPct) : ''
-    })
-    setTargetInputs(inputs)
+  // 계좌 선택 시 플랜 로드
+  function loadPlanForAccount(accId: string) {
+    const existing = portfolioPlans.find(p => p.accountId === accId)
+    if (existing) {
+      setEditingPlan(JSON.parse(JSON.stringify(existing)))
+    } else {
+      const accInvs = holdingInvestments.filter(inv => (inv.accountId ?? '__none__') === accId)
+      const n = accInvs.length
+      const base = n > 0 ? parseFloat((100 / n).toFixed(1)) : 0
+      setEditingPlan({
+        accountId: accId,
+        items: accInvs.map((inv, i) => ({
+          id: `item_${inv.id}`,
+          investmentId: inv.id,
+          targetPct: i === n - 1 ? parseFloat((100 - base * (n - 1)).toFixed(1)) : base,
+        })),
+        groups: [],
+      })
+    }
+    setRebalanceResult(null)
   }
 
   useEffect(() => {
-    initTargetInputs()
+    if (pageTab === 'portfolio' && portfolioAccounts.length > 0 && !portfolioAccId) {
+      const firstId = portfolioAccounts[0].id
+      setPortfolioAccId(firstId)
+      loadPlanForAccount(firstId)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holdingInvestments.length, investmentTargetAllocations.length])
+  }, [pageTab, portfolioAccounts.length])
 
-  function handleCalcRebalance() {
-    const addAmt = parseAmt(additionalInvestment)
-    const currentEval = totalEvalForPortfolio
-    const totalAfter = currentEval + addAmt
-    const results = holdingInvestments.map(inv => {
-      const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
-      const targetPct = saved?.targetPct ?? 0
-      const h = holdingsMap.get(inv.id)
-      const currentInvEval = h ? h.holdingQty * (inv.currentPrice ?? 0) : 0
-      const targetAmt = (targetPct / 100) * totalAfter
-      const addInv = Math.max(0, targetAmt - currentInvEval)
-      const expectedPct = totalAfter > 0 ? ((currentInvEval + addInv) / totalAfter) * 100 : 0
-      return { id: inv.id, name: inv.name, addAmt: addInv, expectedPct }
+  // 편집 중인 플랜 합계 %
+  const accountTotalPct = editingPlan
+    ? editingPlan.items.reduce((s, i) => s + i.targetPct, 0) +
+      editingPlan.groups.reduce((s, g) => s + g.targetPct, 0)
+    : 0
+
+  // 편집 플랜 저장
+  function savePlan() {
+    if (!editingPlan) return
+    const others = portfolioPlans.filter(p => p.accountId !== editingPlan.accountId)
+    setPortfolioPlans([...others, editingPlan])
+  }
+
+  // 저장된 플랜 (현재 계좌)
+  const savedPlan = portfolioAccId ? portfolioPlans.find(p => p.accountId === portfolioAccId) ?? null : null
+
+  // 플랜 항목 이름 헬퍼
+  function getItemName(item: PortfolioPlanItem) {
+    if (item.investmentId) return investments.find(i => i.id === item.investmentId)?.name ?? item.investmentId
+    return item.customName ?? '?'
+  }
+
+  // 그룹 내 균등분배
+  function equalizeGroup(groupId: string) {
+    setEditingPlan(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        groups: prev.groups.map(g => {
+          if (g.id !== groupId) return g
+          const n = g.items.length
+          if (n === 0) return g
+          const base = parseFloat((100 / n).toFixed(1))
+          return {
+            ...g,
+            items: g.items.map((item, i) => ({
+              ...item,
+              targetPct: i === n - 1 ? parseFloat((100 - base * (n - 1)).toFixed(1)) : base,
+            })),
+          }
+        }),
+      }
     })
+  }
+
+  // 종목 추가 (피커에서)
+  function addItemFromPicker(investmentId?: string, customName?: string) {
+    if (!editingPlan || (!investmentId && !customName)) return
+    const newItem: PortfolioPlanItem = {
+      id: `item_${Date.now()}`,
+      investmentId,
+      customName: investmentId ? undefined : customName,
+      targetPct: 0,
+    }
+    if (showInvPicker?.mode === 'group' && showInvPicker.groupId) {
+      setEditingPlan(prev => prev ? {
+        ...prev,
+        groups: prev.groups.map(g => g.id === showInvPicker.groupId
+          ? { ...g, items: [...g.items, newItem] }
+          : g
+        ),
+      } : prev)
+    } else {
+      setEditingPlan(prev => prev ? { ...prev, items: [...prev.items, newItem] } : prev)
+    }
+    setShowInvPicker(null)
+    setPickerCustomName('')
+  }
+
+  // 리밸런싱 계산
+  function handleCalcRebalance() {
+    if (!savedPlan || !portfolioAccId) return
+    const addAmt = parseAmt(additionalInvestment)
+    const accEval = evalByAccount[portfolioAccId] ?? 0
+    const totalAfter = accEval + addAmt
+
+    // 플랜 내 전체 항목 (유효 계좌 %)
+    const planItems: { itemId: string; invId?: string; name: string; effectivePct: number }[] = []
+    savedPlan.items.forEach(item => {
+      planItems.push({ itemId: item.id, invId: item.investmentId, name: getItemName(item), effectivePct: item.targetPct })
+    })
+    savedPlan.groups.forEach(g => {
+      g.items.forEach(item => {
+        planItems.push({ itemId: item.id, invId: item.investmentId, name: getItemName(item), effectivePct: g.targetPct * item.targetPct / 100 })
+      })
+    })
+
+    const results: { id: string; name: string; addAmt: number; expectedPct: number; action: 'buy' | 'sell' }[] = []
+
+    planItems.forEach(({ itemId, invId, name, effectivePct }) => {
+      const inv = invId ? investments.find(i => i.id === invId) : undefined
+      const h = inv ? holdingsMap.get(inv.id) : undefined
+      const isForeign = inv?.assetType === 'foreign_stock'
+      const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
+      const currentEval = h && inv
+        ? (isForeign && fxRate > 0 ? Math.round(h.holdingQty * (inv.currentPrice ?? 0) * fxRate) : h.holdingQty * (inv.currentPrice ?? 0))
+        : 0
+      const targetAmt = (effectivePct / 100) * totalAfter
+      const diff = targetAmt - currentEval
+      results.push({ id: itemId, name, addAmt: Math.abs(diff), expectedPct: totalAfter > 0 ? (Math.max(0, currentEval + Math.max(0, diff)) / totalAfter) * 100 : 0, action: diff >= 0 ? 'buy' : 'sell' })
+    })
+
+    // 보유 중이지만 플랜에 없는 종목 → 매도 추천
+    const planInvIds = new Set(planItems.map(p => p.invId).filter(Boolean))
+    holdingInvestments
+      .filter(inv => (inv.accountId ?? '__none__') === portfolioAccId && !planInvIds.has(inv.id))
+      .forEach(inv => {
+        const h = holdingsMap.get(inv.id)
+        const isForeign = inv.assetType === 'foreign_stock'
+        const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
+        const currentEval = h ? (isForeign && fxRate > 0 ? Math.round(h.holdingQty * (inv.currentPrice ?? 0) * fxRate) : h.holdingQty * (inv.currentPrice ?? 0)) : 0
+        results.push({ id: inv.id, name: inv.name, addAmt: currentEval, expectedPct: 0, action: 'sell' })
+      })
+
     setRebalanceResult(results)
   }
 
@@ -1941,93 +2032,207 @@ export default function InvestmentsPage() {
             </div>
           ) : (
             <>
-              {/* 목표 비율 설정 테이블 */}
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-sm font-semibold text-gray-800">목표 비율 설정</div>
-                  <div className={`text-xs font-medium px-2 py-1 rounded-lg ${Math.abs(targetPctSum - 100) < 0.01 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                    합계 {targetPctSum.toFixed(1)}%
-                    {Math.abs(targetPctSum - 100) >= 0.01 && ' ⚠️ 100% 필요'}
-                  </div>
-                </div>
-                <div className="space-y-3 mb-3">
-                  {portfolioGroups.map(group => (
-                    <div key={group.accId}>
-                      {portfolioGroups.length > 1 && (
-                        <div className="text-xs font-semibold text-indigo-500 mb-1.5 px-1 flex items-center gap-1">
-                          <span>🏦</span> {group.accName}
-                        </div>
+              {/* 계좌 탭 */}
+              {portfolioAccounts.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {portfolioAccounts.map(acc => (
+                    <button key={acc.id}
+                      onClick={() => { setPortfolioAccId(acc.id); loadPlanForAccount(acc.id) }}
+                      className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${portfolioAccId === acc.id ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 shadow-sm'}`}>
+                      {acc.name}
+                      {portfolioPlans.find(p => p.accountId === acc.id) && (
+                        <span className="ml-1 text-xs text-emerald-400">✓</span>
                       )}
-                      <div className="space-y-2">
-                        {group.invs.map(inv => (
-                          <div key={inv.id} className="flex items-center gap-3">
-                            <div className="flex-1 text-sm text-gray-700 truncate">{ASSET_TYPE_META[inv.assetType].icon} {inv.name}</div>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number" min={0} max={100} step={0.1}
-                                placeholder="0"
-                                value={targetInputs[inv.id] ?? ''}
-                                onChange={e => setTargetInputs(prev => ({ ...prev, [inv.id]: e.target.value }))}
-                                className="w-20 text-right border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              />
-                              <span className="text-xs text-gray-400">%</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    </button>
                   ))}
-                </div>
-                <button
-                  onClick={handleSaveTargetAllocations}
-                  disabled={Math.abs(targetPctSum - 100) >= 0.01}
-                  className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  저장하기
-                </button>
-              </div>
-
-              {/* 현재 vs 목표 비율 비교 */}
-              {investmentTargetAllocations.length > 0 && Math.abs(savedTargetPctSum - 100) < 0.01 && (
-                <div className="bg-white rounded-2xl p-4 shadow-sm">
-                  <div className="text-sm font-semibold text-gray-800 mb-3">현재 vs 목표 비율</div>
-                  <div className="grid grid-cols-4 text-xs font-semibold text-gray-400 mb-2 px-1">
-                    <span>종목</span>
-                    <span className="text-right">목표</span>
-                    <span className="text-right">현재</span>
-                    <span className="text-right">차이</span>
-                  </div>
-                  <div className="space-y-3">
-                    {portfolioGroups.map(group => (
-                      <div key={group.accId}>
-                        {portfolioGroups.length > 1 && (
-                          <div className="text-xs font-semibold text-indigo-500 py-1 flex items-center gap-1 border-b border-indigo-50 mb-1">
-                            <span>🏦</span> {group.accName}
-                          </div>
-                        )}
-                        {group.invs.map(inv => {
-                          const saved = investmentTargetAllocations.find(a => a.investmentId === inv.id)
-                          const targetPct = saved?.targetPct ?? 0
-                          const curPct = currentPctMap[inv.id] ?? 0
-                          const diff = curPct - targetPct
-                          return (
-                            <div key={inv.id} className="grid grid-cols-4 items-center py-1.5 border-b border-gray-50 last:border-0">
-                              <div className="text-sm text-gray-700 truncate">{inv.name}</div>
-                              <div className="text-right text-sm text-gray-600">{targetPct.toFixed(1)}%</div>
-                              <div className="text-right text-sm text-gray-600">{curPct.toFixed(1)}%</div>
-                              <div className={`text-right text-sm font-semibold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
+              {/* 목표 비율 설정 */}
+              {editingPlan && (
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold text-gray-800">목표 비율 설정</div>
+                    <div className={`text-xs font-medium px-2 py-1 rounded-lg ${Math.abs(accountTotalPct - 100) < 0.1 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                      합계 {accountTotalPct.toFixed(1)}%
+                      {Math.abs(accountTotalPct - 100) >= 0.1 && ' ⚠️'}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mb-3">
+                    {/* 그룹 목록 */}
+                    {editingPlan.groups.map(group => {
+                      const groupItemSum = group.items.reduce((s, i) => s + i.targetPct, 0)
+                      return (
+                        <div key={group.id} className="border border-indigo-100 rounded-xl overflow-hidden">
+                          {/* 그룹 헤더 */}
+                          <div className="flex items-center gap-2 px-3 py-2.5 bg-indigo-50">
+                            <span className="text-sm">📦</span>
+                            <input
+                              type="text" value={group.name}
+                              onChange={e => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.map(g => g.id === group.id ? { ...g, name: e.target.value } : g) } : prev)}
+                              className="flex-1 text-sm font-semibold text-indigo-700 bg-transparent border-none outline-none min-w-0"
+                              placeholder="그룹명"
+                            />
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <input
+                                type="number" min={0} max={100} step={0.1}
+                                value={group.targetPct || ''}
+                                onChange={e => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.map(g => g.id === group.id ? { ...g, targetPct: parseFloat(e.target.value) || 0 } : g) } : prev)}
+                                className="w-16 text-right border border-indigo-200 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                              />
+                              <span className="text-xs text-indigo-400">%</span>
+                              <button onClick={() => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.filter(g => g.id !== group.id) } : prev)}
+                                className="ml-1 text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                            </div>
+                          </div>
+                          {/* 그룹 내 종목 */}
+                          <div className="px-3 py-2 space-y-2">
+                            {group.items.length === 0 && (
+                              <div className="text-xs text-gray-400 py-1">종목을 추가하세요</div>
+                            )}
+                            {group.items.map(item => (
+                              <div key={item.id} className="flex items-center gap-2">
+                                <div className="flex-1 text-sm text-gray-700 truncate">{getItemName(item)}</div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <input
+                                    type="number" min={0} max={100} step={0.1}
+                                    value={item.targetPct || ''}
+                                    onChange={e => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.map(g => g.id === group.id ? { ...g, items: g.items.map(i => i.id === item.id ? { ...i, targetPct: parseFloat(e.target.value) || 0 } : i) } : g) } : prev)}
+                                    className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                  />
+                                  <span className="text-xs text-gray-400">%</span>
+                                  <button onClick={() => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.map(g => g.id === group.id ? { ...g, items: g.items.filter(i => i.id !== item.id) } : g) } : prev)}
+                                    className="ml-1 text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                                </div>
+                              </div>
+                            ))}
+                            {group.items.length > 0 && (
+                              <div className={`text-xs px-1 ${Math.abs(groupItemSum - 100) < 0.1 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                그룹 내 합계 {groupItemSum.toFixed(1)}%
+                              </div>
+                            )}
+                            <div className="flex gap-2 pt-1">
+                              <button onClick={() => { setShowInvPicker({ mode: 'group', groupId: group.id }); setPickerCustomName('') }}
+                                className="text-xs text-indigo-500 hover:text-indigo-700">+ 종목 추가</button>
+                              {group.items.length > 1 && (
+                                <button onClick={() => equalizeGroup(group.id)}
+                                  className="text-xs text-gray-400 hover:text-gray-600">균등분배</button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    {/* 미그룹 종목 */}
+                    {editingPlan.items.map(item => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <div className="flex-1 text-sm text-gray-700 truncate">{getItemName(item)}</div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <input
+                            type="number" min={0} max={100} step={0.1}
+                            value={item.targetPct || ''}
+                            onChange={e => setEditingPlan(prev => prev ? { ...prev, items: prev.items.map(i => i.id === item.id ? { ...i, targetPct: parseFloat(e.target.value) || 0 } : i) } : prev)}
+                            className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                          <button onClick={() => setEditingPlan(prev => prev ? { ...prev, items: prev.items.filter(i => i.id !== item.id) } : prev)}
+                            className="ml-1 text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 액션 버튼 */}
+                  <div className="flex gap-2 mb-3">
+                    <button onClick={() => { setShowInvPicker({ mode: 'ungrouped' }); setPickerCustomName('') }}
+                      className="flex-1 py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors">
+                      + 종목 추가
+                    </button>
+                    {showAddGroup ? (
+                      <div className="flex gap-1 flex-1">
+                        <input type="text" placeholder="그룹명" value={newGroupName}
+                          onChange={e => setNewGroupName(e.target.value)}
+                          className="flex-1 border border-indigo-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && newGroupName.trim()) {
+                              setEditingPlan(prev => prev ? { ...prev, groups: [...prev.groups, { id: `g_${Date.now()}`, name: newGroupName.trim(), targetPct: 0, items: [] }] } : prev)
+                              setNewGroupName(''); setShowAddGroup(false)
+                            }
+                            if (e.key === 'Escape') { setNewGroupName(''); setShowAddGroup(false) }
+                          }}
+                          autoFocus
+                        />
+                        <button onClick={() => {
+                          if (newGroupName.trim()) {
+                            setEditingPlan(prev => prev ? { ...prev, groups: [...prev.groups, { id: `g_${Date.now()}`, name: newGroupName.trim(), targetPct: 0, items: [] }] } : prev)
+                            setNewGroupName('')
+                          }
+                          setShowAddGroup(false)
+                        }} className="px-3 py-2 bg-indigo-600 text-white text-xs rounded-xl">추가</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setShowAddGroup(true)}
+                        className="flex-1 py-2 border border-dashed border-indigo-300 rounded-xl text-xs text-indigo-500 hover:border-indigo-500 transition-colors">
+                        + 그룹 추가
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={savePlan}
+                    disabled={Math.abs(accountTotalPct - 100) >= 0.1}
+                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    저장하기
+                  </button>
+                </div>
+              )}
+
+              {/* 현재 vs 목표 비율 비교 */}
+              {savedPlan && (() => {
+                // 플랜 내 모든 항목 (effectivePct 포함)
+                const allItems: { name: string; effectivePct: number; invId?: string }[] = []
+                savedPlan.items.forEach(item => allItems.push({ name: getItemName(item), effectivePct: item.targetPct, invId: item.investmentId }))
+                savedPlan.groups.forEach(g => {
+                  allItems.push({ name: `📦 ${g.name}`, effectivePct: g.targetPct })
+                  g.items.forEach(item => allItems.push({ name: `  └ ${getItemName(item)}`, effectivePct: g.targetPct * item.targetPct / 100, invId: item.investmentId }))
+                })
+                const accEval = evalByAccount[portfolioAccId!] ?? 0
+                return (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm">
+                    <div className="text-sm font-semibold text-gray-800 mb-3">현재 vs 목표 비율</div>
+                    <div className="grid grid-cols-4 text-xs font-semibold text-gray-400 mb-2 px-1">
+                      <span className="col-span-2">종목</span>
+                      <span className="text-right">목표</span>
+                      <span className="text-right">현재</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {allItems.map((item, idx) => {
+                        const inv = item.invId ? investments.find(i => i.id === item.invId) : undefined
+                        const h = inv ? holdingsMap.get(inv.id) : undefined
+                        const isForeign = inv?.assetType === 'foreign_stock'
+                        const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
+                        const evalAmt = h && inv ? (isForeign && fxRate > 0 ? Math.round(h.holdingQty * (inv.currentPrice ?? 0) * fxRate) : h.holdingQty * (inv.currentPrice ?? 0)) : 0
+                        const curPct = accEval > 0 ? (evalAmt / accEval) * 100 : 0
+                        const isGroup = item.name.startsWith('📦')
+                        return (
+                          <div key={idx} className={`grid grid-cols-4 items-center py-1.5 border-b border-gray-50 last:border-0 ${isGroup ? 'font-semibold text-indigo-700' : ''}`}>
+                            <div className="col-span-2 text-sm truncate">{item.name}</div>
+                            <div className="text-right text-sm text-gray-600">{item.effectivePct.toFixed(1)}%</div>
+                            <div className={`text-right text-sm font-medium ${!isGroup ? (curPct > item.effectivePct + 1 ? 'text-emerald-600' : curPct < item.effectivePct - 1 ? 'text-red-500' : 'text-gray-600') : 'text-gray-400'}`}>
+                              {isGroup ? '-' : `${curPct.toFixed(1)}%`}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* 리밸런싱 추천 */}
-              {investmentTargetAllocations.length > 0 && Math.abs(savedTargetPctSum - 100) < 0.01 && (
+              {savedPlan && (
                 <div className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="text-sm font-semibold text-gray-800 mb-3">리밸런싱 추천</div>
                   <div className="flex gap-2 mb-3">
@@ -2045,29 +2250,18 @@ export default function InvestmentsPage() {
                   {rebalanceResult && (
                     <div>
                       <div className="grid grid-cols-3 text-xs font-semibold text-gray-400 mb-2 px-1">
-                        <span>종목</span>
-                        <span className="text-right">추천 매수금액</span>
+                        <span className="col-span-1">종목</span>
+                        <span className="text-right">금액</span>
                         <span className="text-right">예상 비율</span>
                       </div>
-                      <div className="space-y-3">
-                        {portfolioGroups.map(group => (
-                          <div key={group.accId}>
-                            {portfolioGroups.length > 1 && (
-                              <div className="text-xs font-semibold text-indigo-500 py-1 flex items-center gap-1 border-b border-indigo-50 mb-1">
-                                <span>🏦</span> {group.accName}
-                              </div>
-                            )}
-                            {group.invs.map(inv => {
-                              const r = rebalanceResult.find(x => x.id === inv.id)
-                              if (!r) return null
-                              return (
-                                <div key={r.id} className="grid grid-cols-3 items-center py-1.5 border-b border-gray-50 last:border-0">
-                                  <div className="text-sm text-gray-700 truncate">{ASSET_TYPE_META[inv.assetType].icon} {r.name}</div>
-                                  <div className="text-right text-sm font-semibold text-blue-600">{r.addAmt > 0 ? fmtKRW(Math.round(r.addAmt)) : '-'}</div>
-                                  <div className="text-right text-sm text-gray-600">{r.expectedPct.toFixed(1)}%</div>
-                                </div>
-                              )
-                            })}
+                      <div className="space-y-1.5">
+                        {rebalanceResult.map(r => (
+                          <div key={r.id} className="grid grid-cols-3 items-center py-1.5 border-b border-gray-50 last:border-0">
+                            <div className="text-sm text-gray-700 truncate">{r.name}</div>
+                            <div className={`text-right text-sm font-semibold ${r.action === 'sell' ? 'text-red-500' : 'text-blue-600'}`}>
+                              {r.action === 'sell' ? '매도 ' : '매수 '}{r.addAmt > 0 ? fmtKRW(Math.round(r.addAmt)) : '-'}
+                            </div>
+                            <div className="text-right text-sm text-gray-600">{r.expectedPct.toFixed(1)}%</div>
                           </div>
                         ))}
                       </div>
@@ -2077,6 +2271,61 @@ export default function InvestmentsPage() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── 포트폴리오 종목 피커 모달 ─────────────────────────────────────────── */}
+      {showInvPicker && editingPlan && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">종목 추가</h2>
+              <button onClick={() => { setShowInvPicker(null); setPickerCustomName('') }} className="text-gray-400 text-xl">×</button>
+            </div>
+            {/* 현재 계좌 보유 종목 중 아직 플랜에 없는 것 */}
+            {(() => {
+              const planInvIds = new Set([
+                ...editingPlan.items.map(i => i.investmentId).filter(Boolean),
+                ...editingPlan.groups.flatMap(g => g.items.map(i => i.investmentId).filter(Boolean)),
+              ])
+              const available = holdingInvestments.filter(inv =>
+                (inv.accountId ?? '__none__') === portfolioAccId && !planInvIds.has(inv.id)
+              )
+              return (
+                <>
+                  {available.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      <div className="text-xs font-semibold text-gray-400 mb-1">보유 종목</div>
+                      {available.map(inv => (
+                        <button key={inv.id}
+                          onClick={() => addItemFromPicker(inv.id)}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 hover:bg-gray-50 text-left">
+                          <span>{ASSET_TYPE_META[inv.assetType].icon}</span>
+                          <span className="text-sm text-gray-800">{inv.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-xs font-semibold text-gray-400 mb-1">직접 입력</div>
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="종목명 직접 입력"
+                        value={pickerCustomName}
+                        onChange={e => setPickerCustomName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && pickerCustomName.trim() && addItemFromPicker(undefined, pickerCustomName.trim())}
+                        className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button onClick={() => pickerCustomName.trim() && addItemFromPicker(undefined, pickerCustomName.trim())}
+                        disabled={!pickerCustomName.trim()}
+                        className="px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40">
+                        추가
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
         </div>
       )}
 

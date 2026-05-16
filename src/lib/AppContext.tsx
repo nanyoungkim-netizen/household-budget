@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -97,7 +97,8 @@ interface AppData {
   investmentDividends: InvestmentDividend[] // PRD: 배당금
   investmentCashDeposits: InvestmentCashDeposit[] // 예수금 입금 내역
   investmentAccountTypes: InvestmentAccountType[]  // F-03
-  investmentTargetAllocations: InvestmentTargetAllocation[]  // F-05
+  investmentTargetAllocations: InvestmentTargetAllocation[]  // F-05 레거시
+  portfolioPlans: PortfolioPlan[]  // F-05 v2
   savingPayments: SavingPayment[]  // PRD 2.2
   categoryHiddenMonths: Record<string, string[]>   // 월별 카테고리 숨김
   categoryExcludeMonths: Record<string, string[]>  // 월별 실소비 제외 토글
@@ -129,6 +130,7 @@ const INITIAL_DATA: AppData = {
   investmentCashDeposits: [],
   investmentAccountTypes: DEFAULT_INVESTMENT_ACCOUNT_TYPES,
   investmentTargetAllocations: [],
+  portfolioPlans: [],
   savingPayments: [],
   categoryHiddenMonths: {},
   categoryExcludeMonths: {},
@@ -185,6 +187,7 @@ interface AppContextType {
   setInvestmentCashDeposits: (deposits: InvestmentCashDeposit[]) => void
   setInvestmentAccountTypes: (types: InvestmentAccountType[]) => void
   setInvestmentTargetAllocations: (allocations: InvestmentTargetAllocation[]) => void
+  setPortfolioPlans: (plans: PortfolioPlan[]) => void
   // PRD 2.2: 납입 이력
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
@@ -292,6 +295,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       investmentCashDeposits: raw.investmentCashDeposits ?? [],
       investmentAccountTypes: raw.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES,
       investmentTargetAllocations: raw.investmentTargetAllocations ?? [],
+      portfolioPlans: raw.portfolioPlans ?? [],
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
@@ -539,6 +543,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, investmentTargetAllocations, lastModified: now() }))
   }, [update])
 
+  const setPortfolioPlans = useCallback((portfolioPlans: PortfolioPlan[]) => {
+    update(d => ({ ...d, portfolioPlans, lastModified: now() }))
+  }, [update])
+
   const setSavingPayments = useCallback((savingPayments: SavingPayment[]) => {
     update(d => ({ ...d, savingPayments, lastModified: now() }))
   }, [update])
@@ -614,6 +622,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestmentCashDeposits,
       setInvestmentAccountTypes,
       setInvestmentTargetAllocations,
+      setPortfolioPlans,
       setSavingPayments,
       setCategoryHiddenMonths,
       setCategoryExcludeMonths,
