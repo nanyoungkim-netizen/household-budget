@@ -48,7 +48,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
 // 기존 데이터에 role 자동 부여 (이름/ID 기반 → 1회 마이그레이션)
 export function migrateCategories(cats: Category[]): Category[] {
   return cats.map(cat => {
-    if (cat.role !== undefined) return cat  // 이미 설정된 경우 절대 덮어쓰지 않음
+    if (cat.role !== undefined) return cat
     if (cat.id === 'card' || /카드대금/.test(cat.name)) return { ...cat, role: 'card_payment' as const }
     if (cat.parentId === null && /적금|예금|저축/.test(cat.name)) return { ...cat, role: 'savings' as const }
     if (cat.savingId) return { ...cat, role: 'savings' as const }
@@ -69,7 +69,6 @@ export const DEFAULT_CARDS: Card[] = [
   { id: 'card4', name: '삼성카드', bank: '삼성카드', billingDate: 20, color: '#1259AA' },
 ]
 
-// F-03: 투자 계좌 유형 기본값
 export const DEFAULT_INVESTMENT_ACCOUNT_TYPES: InvestmentAccountType[] = [
   { id: 'iat_general', name: '일반계좌',    isDefault: true },
   { id: 'iat_isa',     name: 'ISA',         isDefault: true },
@@ -91,22 +90,22 @@ interface AppData {
   goalPayments: GoalPayment[]
   cardBillings: CardBilling[]
   mappingRules: MappingRule[]
-  investments: Investment[]            // PRD 2.6
-  investmentTrades: InvestmentTrade[]  // PRD 2.6
-  investmentAccounts: InvestmentAccount[]   // PRD 2.6 계좌
-  investmentDividends: InvestmentDividend[] // PRD: 배당금
-  investmentCashDeposits: InvestmentCashDeposit[] // 예수금 입금 내역
-  investmentAccountTypes: InvestmentAccountType[]  // F-03
-  investmentTargetAllocations: InvestmentTargetAllocation[]  // F-05 레거시
-  portfolioPlans: PortfolioPlan[]  // F-05 v2
-  savingPayments: SavingPayment[]  // PRD 2.2
-  categoryHiddenMonths: Record<string, string[]>   // 월별 카테고리 숨김
-  categoryExcludeMonths: Record<string, string[]>  // 월별 실소비 제외 토글
-  dashboardWidgetOrder: string[]                   // PRD: 위젯 순서 커스터마이징
-  budgetCarriedMonths: string[]                    // 예산 자동 이월 완료 월 목록
-  dashboardMemo: string                            // 대시보드 메모
-  dismissedNotificationIds: string[]              // 계정별 알림 dismiss 목록
-  investmentExchangeRates: Record<string, number> // 투자 환율 캐시 (KRW 제외 통화)
+  investments: Investment[]
+  investmentTrades: InvestmentTrade[]
+  investmentAccounts: InvestmentAccount[]
+  investmentDividends: InvestmentDividend[]
+  investmentCashDeposits: InvestmentCashDeposit[]
+  investmentAccountTypes: InvestmentAccountType[]
+  investmentTargetAllocations: InvestmentTargetAllocation[]
+  portfolioPlans: PortfolioPlan[]
+  savingPayments: SavingPayment[]
+  categoryHiddenMonths: Record<string, string[]>
+  categoryExcludeMonths: Record<string, string[]>
+  dashboardWidgetOrder: string[]
+  budgetCarriedMonths: string[]
+  dashboardMemo: string
+  dismissedNotificationIds: string[]
+  investmentExchangeRates: Record<string, number>
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -143,7 +142,33 @@ const INITIAL_DATA: AppData = {
   isSetupComplete: false,
 }
 
-const STORAGE_KEY = 'household_budget_v1'
+// ── 멀티 가계부 타입 ──────────────────────────────────────────────────────────
+export interface BudgetMeta {
+  id: string
+  name: string
+  createdAt: string
+}
+
+interface MultiData {
+  budgetList: BudgetMeta[]
+  budgets: Record<string, AppData>
+  activeBudgetId: string
+}
+
+const DEFAULT_BUDGET_ID = 'budget_default'
+
+function makeDefaultMeta(): BudgetMeta {
+  return { id: DEFAULT_BUDGET_ID, name: '내 가계부', createdAt: new Date().toISOString() }
+}
+
+const INITIAL_MULTI_DATA: MultiData = {
+  budgetList: [makeDefaultMeta()],
+  budgets: { [DEFAULT_BUDGET_ID]: INITIAL_DATA },
+  activeBudgetId: DEFAULT_BUDGET_ID,
+}
+
+const STORAGE_KEY_V1 = 'household_budget_v1'
+const STORAGE_KEY    = 'household_budget_v2'
 
 // ── 컨텍스트 타입 ─────────────────────────────────────────────────────────────
 interface AppContextType {
@@ -151,6 +176,13 @@ interface AppContextType {
   categories: Category[]
   user: User | null
   isLoading: boolean
+  // 멀티 가계부
+  budgetList: BudgetMeta[]
+  activeBudgetId: string
+  createBudget: (name: string) => void
+  switchBudget: (id: string) => void
+  deleteBudget: (id: string) => void
+  renameBudget: (id: string, name: string) => void
   // Auth
   signIn: (email: string, password: string) => Promise<string | null>
   signUp: (email: string, password: string) => Promise<string | null>
@@ -179,7 +211,7 @@ interface AppContextType {
   setCategories: (categories: Category[]) => void
   // 자동 분류 규칙
   setMappingRules: (rules: MappingRule[]) => void
-  // PRD 2.6: 투자
+  // 투자
   setInvestments: (investments: Investment[]) => void
   setInvestmentTrades: (trades: InvestmentTrade[]) => void
   setInvestmentAccounts: (accounts: InvestmentAccount[]) => void
@@ -188,7 +220,7 @@ interface AppContextType {
   setInvestmentAccountTypes: (types: InvestmentAccountType[]) => void
   setInvestmentTargetAllocations: (allocations: InvestmentTargetAllocation[]) => void
   setPortfolioPlans: (plans: PortfolioPlan[]) => void
-  // PRD 2.2: 납입 이력
+  // 납입 이력
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
   setCategoryHiddenMonths: (map: Record<string, string[]>) => void
@@ -212,30 +244,45 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null)
 
+// ── 헬퍼: 구 AppData 포맷인지 판별 ──────────────────────────────────────────
+function isMultiData(obj: unknown): obj is MultiData {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    Array.isArray((obj as MultiData).budgetList) &&
+    typeof (obj as MultiData).budgets === 'object' &&
+    typeof (obj as MultiData).activeBudgetId === 'string'
+  )
+}
+
 // ── AppProvider ───────────────────────────────────────────────────────────────
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState<AppData>(INITIAL_DATA)
+  const [multiData, setMultiData] = useState<MultiData>(INITIAL_MULTI_DATA)
   const [user, setUser] = useState<User | null>(null)
   const [hydrated, setHydrated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userRef = useRef<User | null>(null)
+  const multiDataRef = useRef<MultiData>(INITIAL_MULTI_DATA)
 
   userRef.current = user
+  multiDataRef.current = multiData
 
-  // ── localStorage → Supabase 동기화 ─────────────────────────────────────────
-  async function syncToSupabase(userId: string, nextData: AppData) {
+  // 현재 활성 가계부 데이터
+  const data: AppData = multiData.budgets[multiData.activeBudgetId] ?? INITIAL_DATA
+
+  // ── Supabase 동기화 ─────────────────────────────────────────────────────────
+  async function syncToSupabase(userId: string, next: MultiData) {
     if (!supabase) return
     try {
       await supabase.from('user_data').upsert(
-        { user_id: userId, data: nextData, updated_at: new Date().toISOString() },
+        { user_id: userId, data: next, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
       )
     } catch { /* ignore */ }
   }
 
-  // ── 저장: localStorage 즉시 + Supabase debounce 500ms ───────────────────────
-  function saveToStorage(next: AppData) {
+  function saveToStorage(next: MultiData) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     } catch { /* ignore */ }
@@ -247,27 +294,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // ── 데이터 병합: lastModified 기준으로 더 새로운 쪽 선택 ─────────────────────
-  function mergeData(localData: AppData | null, remoteData: AppData | null): AppData {
-    if (!localData && !remoteData) return INITIAL_DATA
-    if (!localData) return remoteData!
-    if (!remoteData) return localData
-
-    const localTime = localData.lastModified ? new Date(localData.lastModified).getTime() : 0
-    const remoteTime = remoteData.lastModified ? new Date(remoteData.lastModified).getTime() : 0
-    return localTime >= remoteTime ? localData : remoteData
+  // ── 구 AppData → MultiData 래핑 ─────────────────────────────────────────────
+  function wrapLegacy(raw: Partial<AppData>): MultiData {
+    return {
+      budgetList: [makeDefaultMeta()],
+      budgets: { [DEFAULT_BUDGET_ID]: hydrateData(raw) },
+      activeBudgetId: DEFAULT_BUDGET_ID,
+    }
   }
 
-  // dividends 마이그레이션: investmentId만 있는 경우 accountId 추가
+  // ── MultiData 병합 (로컬 vs 리모트) ─────────────────────────────────────────
+  function mergeMultiData(local: MultiData | null, remote: MultiData | null): MultiData {
+    if (!local && !remote) return INITIAL_MULTI_DATA
+    if (!local) return remote!
+    if (!remote) return local
+
+    // 각 가계부별로 lastModified가 더 최신인 쪽 선택
+    const allIds = new Set([...Object.keys(local.budgets), ...Object.keys(remote.budgets)])
+    const mergedBudgets: Record<string, AppData> = {}
+    for (const id of allIds) {
+      const l = local.budgets[id]
+      const r = remote.budgets[id]
+      if (!l) { mergedBudgets[id] = r; continue }
+      if (!r) { mergedBudgets[id] = l; continue }
+      const lt = l.lastModified ? new Date(l.lastModified).getTime() : 0
+      const rt = r.lastModified ? new Date(r.lastModified).getTime() : 0
+      mergedBudgets[id] = lt >= rt ? l : r
+    }
+
+    // 가계부 목록은 합집합 (현존하는 id만)
+    const metaMap = new Map<string, BudgetMeta>()
+    ;[...local.budgetList, ...remote.budgetList].forEach(m => metaMap.set(m.id, m))
+    const budgetList = Array.from(metaMap.values()).filter(m => mergedBudgets[m.id])
+
+    // activeBudgetId는 로컬 우선, 없으면 첫 번째
+    const activeId = mergedBudgets[local.activeBudgetId]
+      ? local.activeBudgetId
+      : budgetList[0]?.id ?? DEFAULT_BUDGET_ID
+
+    return { budgetList, budgets: mergedBudgets, activeBudgetId: activeId }
+  }
+
+  // ── dividends 마이그레이션 ──────────────────────────────────────────────────
   function migrateDividends(divs: InvestmentDividend[], investments: Investment[]): InvestmentDividend[] {
     return divs.map(d => {
-      if ((d as any).accountId) return d  // 이미 마이그레이션됨
+      if ((d as any).accountId) return d
       const inv = investments.find(i => i.id === d.investmentId)
       return { ...d, accountId: inv?.accountId ?? '__none__' }
     })
   }
 
-  // F-03: 기존 InvestmentSubType → typeId 마이그레이션
   function migrateInvestmentAccounts(accs: InvestmentAccount[]): InvestmentAccount[] {
     const subTypeMap: Record<string, string> = {
       pension_savings:    'iat_pension',
@@ -275,7 +351,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       general_investment: 'iat_general',
     }
     return accs.map(acc => {
-      if (acc.typeId) return acc  // 이미 마이그레이션됨
+      if (acc.typeId) return acc
       const legacyType = acc.type as string | undefined
       const typeId = (legacyType && subTypeMap[legacyType]) ? subTypeMap[legacyType] : 'iat_general'
       return { ...acc, typeId }
@@ -308,7 +384,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const assetWidgets = ['cash_accounts', 'investment_accounts']
         const legacyWidgets = ['card_payment', 'savings_summary', 'budget', 'goals', 'transactions']
         if (!stored) return [...assetWidgets, ...legacyWidgets]
-        // 기존 사용자 마이그레이션: asset 위젯이 없으면 앞에 추가
         const hasAssetWidgets = stored.some(id => assetWidgets.includes(id))
         if (!hasAssetWidgets) return [...assetWidgets, ...stored]
         return stored
@@ -316,15 +391,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function hydrateMultiData(raw: unknown): MultiData {
+    if (isMultiData(raw)) {
+      const budgets: Record<string, AppData> = {}
+      for (const [id, d] of Object.entries(raw.budgets)) {
+        budgets[id] = hydrateData(d as Partial<AppData>)
+      }
+      const budgetList = (raw.budgetList ?? []).filter((m: BudgetMeta) => budgets[m.id])
+      const activeBudgetId = budgets[raw.activeBudgetId]
+        ? raw.activeBudgetId
+        : budgetList[0]?.id ?? DEFAULT_BUDGET_ID
+      return { budgetList, budgets, activeBudgetId }
+    }
+    // 구 형식 (AppData) → 자동 마이그레이션
+    return wrapLegacy(raw as Partial<AppData>)
+  }
+
   // ── 최초 초기화 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cleanupFn: (() => void) | undefined
 
     async function init() {
-      let localData: AppData | null = null
+      // 1) 로컬에서 v2 로드, 없으면 v1 마이그레이션
+      let localMulti: MultiData | null = null
       try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) localData = hydrateData(JSON.parse(stored) as Partial<AppData>)
+        const v2 = localStorage.getItem(STORAGE_KEY)
+        if (v2) {
+          localMulti = hydrateMultiData(JSON.parse(v2))
+        } else {
+          const v1 = localStorage.getItem(STORAGE_KEY_V1)
+          if (v1) {
+            localMulti = wrapLegacy(JSON.parse(v1) as Partial<AppData>)
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(localMulti))
+          }
+        }
       } catch { /* ignore */ }
 
       if (supabase) {
@@ -340,17 +440,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               .eq('user_id', session.user.id)
               .single()
 
-            let remoteData: AppData | null = null
-            if (remoteRow?.data) remoteData = hydrateData(remoteRow.data as Partial<AppData>)
+            let remoteMulti: MultiData | null = null
+            if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
 
-            const winner = mergeData(localData, remoteData)
-            setData(winner)
+            const winner = mergeMultiData(localMulti, remoteMulti)
+            setMultiData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-            if (!remoteData || (localData && winner === localData)) {
+            if (!remoteMulti || winner === localMulti) {
               await syncToSupabase(session.user.id, winner)
             }
           } else {
-            if (localData) setData(localData)
+            if (localMulti) setMultiData(localMulti)
           }
 
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -358,8 +458,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             userRef.current = session?.user ?? null
 
             if (event === 'SIGNED_OUT') {
-              // localStorage는 보존 — 재로그인 시 데이터 복구 가능하도록
-              setData(INITIAL_DATA)
+              setMultiData(INITIAL_MULTI_DATA)
             }
             if (event === 'SIGNED_IN' && session?.user) {
               const { data: remoteRow } = await supabase!
@@ -368,18 +467,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 .eq('user_id', session.user.id)
                 .single()
 
-              let remoteData: AppData | null = null
-              if (remoteRow?.data) remoteData = hydrateData(remoteRow.data as Partial<AppData>)
+              let remoteMulti: MultiData | null = null
+              if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
 
-              let currentLocal: AppData | null = null
+              let currentLocal: MultiData | null = null
               try {
                 const stored = localStorage.getItem(STORAGE_KEY)
-                if (stored) currentLocal = hydrateData(JSON.parse(stored) as Partial<AppData>)
+                if (stored) currentLocal = hydrateMultiData(JSON.parse(stored))
               } catch { /* ignore */ }
 
-              const winner = mergeData(currentLocal, remoteData)
+              const winner = mergeMultiData(currentLocal, remoteMulti)
               if (winner) {
-                setData(winner)
+                setMultiData(winner)
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
                 if (currentLocal && winner === currentLocal) {
                   await syncToSupabase(session.user.id, winner)
@@ -391,7 +490,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           cleanupFn = () => subscription.unsubscribe()
         } catch { /* ignore */ }
       } else {
-        if (localData) setData(localData)
+        if (localMulti) setMultiData(localMulti)
       }
 
       setHydrated(true)
@@ -410,7 +509,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           const stored = localStorage.getItem(STORAGE_KEY)
           if (stored && userRef.current) {
-            const d = JSON.parse(stored) as AppData
+            const d = JSON.parse(stored) as MultiData
             syncToSupabase(userRef.current.id, d)
           }
         } catch { /* ignore */ }
@@ -426,15 +525,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ── 상태 업데이트 헬퍼 ─────────────────────────────────────────────────────
   const update = useCallback((updater: (d: AppData) => AppData) => {
-    setData(d => {
-      const next = updater(d)
+    setMultiData(prev => {
+      const activeId = prev.activeBudgetId
+      const current = prev.budgets[activeId] ?? INITIAL_DATA
+      const next = updater(current)
+      const newMulti: MultiData = {
+        ...prev,
+        budgets: { ...prev.budgets, [activeId]: next },
+      }
+      saveToStorage(newMulti)
+      return newMulti
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const now = () => new Date().toISOString()
+
+  // ── 멀티 가계부 관리 ────────────────────────────────────────────────────────
+  const createBudget = useCallback((name: string) => {
+    const id = `budget_${Date.now()}`
+    const meta: BudgetMeta = { id, name: name.trim() || '새 가계부', createdAt: new Date().toISOString() }
+    setMultiData(prev => {
+      const next: MultiData = {
+        budgetList: [...prev.budgetList, meta],
+        budgets: { ...prev.budgets, [id]: { ...INITIAL_DATA, isSetupComplete: true } },
+        activeBudgetId: id,
+      }
       saveToStorage(next)
       return next
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const now = () => new Date().toISOString()
+  const switchBudget = useCallback((id: string) => {
+    setMultiData(prev => {
+      if (!prev.budgets[id]) return prev
+      const next: MultiData = { ...prev, activeBudgetId: id }
+      saveToStorage(next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const deleteBudget = useCallback((id: string) => {
+    setMultiData(prev => {
+      if (prev.budgetList.length <= 1) return prev  // 마지막 가계부는 삭제 불가
+      const newBudgetList = prev.budgetList.filter(m => m.id !== id)
+      const newBudgets = { ...prev.budgets }
+      delete newBudgets[id]
+      const newActiveId = prev.activeBudgetId === id
+        ? newBudgetList[0].id
+        : prev.activeBudgetId
+      const next: MultiData = { budgetList: newBudgetList, budgets: newBudgets, activeBudgetId: newActiveId }
+      saveToStorage(next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const renameBudget = useCallback((id: string, name: string) => {
+    setMultiData(prev => {
+      const next: MultiData = {
+        ...prev,
+        budgetList: prev.budgetList.map(m => m.id === id ? { ...m, name: name.trim() || m.name } : m),
+      }
+      saveToStorage(next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Auth ────────────────────────────────────────────────────────────────────
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
@@ -454,7 +613,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (supabase) await supabase.auth.signOut()
     setUser(null)
     userRef.current = null
-    setData(INITIAL_DATA)
+    setMultiData(INITIAL_MULTI_DATA)
     localStorage.removeItem(STORAGE_KEY)
   }, [])
 
@@ -584,9 +743,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [update])
 
   const resetAll = useCallback(() => {
-    const reset = { ...INITIAL_DATA }
-    setData(reset)
-    saveToStorage(reset)
+    setMultiData(prev => {
+      const activeId = prev.activeBudgetId
+      const next: MultiData = {
+        ...prev,
+        budgets: { ...prev.budgets, [activeId]: { ...INITIAL_DATA } },
+      }
+      saveToStorage(next)
+      return next
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -598,6 +763,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       categories: data.categories,
       user,
       isLoading,
+      budgetList: multiData.budgetList,
+      activeBudgetId: multiData.activeBudgetId,
+      createBudget,
+      switchBudget,
+      deleteBudget,
+      renameBudget,
       signIn,
       signUp,
       signOut,
@@ -647,7 +818,6 @@ export function useApp() {
 
 // ── PRD 2.1: 실소비 필터링 헬퍼 ────────────────────────────────────────────────
 export function getConsumptionType(tx: Transaction, categories: Category[]): 'normal' | 'savings_transfer' | 'card_payment' {
-  // 명시적으로 지정된 경우 우선
   if (tx.consumptionType) return tx.consumptionType
   const cat = categories.find(c => c.id === tx.categoryId)
   if (!cat) return 'normal'
@@ -667,7 +837,6 @@ export function isRealConsumption(
 ): boolean {
   if (tx.type !== 'expense') return false
   if (getConsumptionType(tx, categories) !== 'normal') return false
-  // 월별 실소비 제외 체크
   if (categoryExcludeMonths && month) {
     const cat = categories.find(c => c.id === tx.categoryId)
     if (!cat) return true
@@ -682,7 +851,6 @@ export function isRealConsumption(
   return true
 }
 
-// 편의 함수
 export function getMonthlyStats(transactions: Transaction[], month: string) {
   const txs = transactions.filter(t => t.date.startsWith(month))
   const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
@@ -720,7 +888,6 @@ export function getCategoryExpenses(transactions: Transaction[], month: string) 
   return map
 }
 
-// PRD 2.1: 실소비만 집계하는 카테고리 지출 (카드대금·적금이체 제외, 통장환급 차감)
 export function getRealCategoryExpenses(
   transactions: Transaction[],
   categories: Category[],
@@ -732,8 +899,7 @@ export function getRealCategoryExpenses(
     .filter(t => {
       if (!t.date.startsWith(month)) return false
       const ct = getConsumptionType(t, categories)
-      if (ct === 'savings_transfer') return false  // 저축이체만 자동 제외, card_payment는 수동 제외
-      // 월별 실소비 제외 체크
+      if (ct === 'savings_transfer') return false
       if (categoryExcludeMonths) {
         const cat = categories.find(c => c.id === t.categoryId)
         if (cat) {
@@ -747,7 +913,6 @@ export function getRealCategoryExpenses(
         }
       }
       if (t.type === 'expense') return true
-      // 카드 환급은 카드 청구 쪽에서 처리되므로 제외, 통장 환급만 차감
       if (t.type === 'refund' && t.paymentMethod !== 'card') return true
       return false
     })
