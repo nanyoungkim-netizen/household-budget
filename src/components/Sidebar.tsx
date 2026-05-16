@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useApp, BudgetMeta } from '@/lib/AppContext'
 import { useState, useRef, useEffect } from 'react'
 
@@ -23,6 +23,7 @@ const mobileNavItems = navItems.slice(0, 4)
 // ── 가계부 전환 드롭다운 ─────────────────────────────────────────────────────
 function BudgetSwitcher() {
   const { budgetList, activeBudgetId, createBudget, switchBudget, deleteBudget, renameBudget } = useApp()
+  const router = useRouter()
 
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -30,7 +31,9 @@ function BudgetSwitcher() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const wrapRef = useRef<HTMLDivElement>(null)
+  const DELETE_PHRASE = '진짜 삭제할게요.'
 
   const activeMeta = budgetList.find(m => m.id === activeBudgetId)
 
@@ -54,6 +57,7 @@ function BudgetSwitcher() {
     setNewName('')
     setCreating(false)
     setOpen(false)
+    router.push('/settings')
   }
 
   function handleRename(id: string) {
@@ -66,11 +70,20 @@ function BudgetSwitcher() {
     setRenamingId(meta.id)
     setRenameValue(meta.name)
     setConfirmDeleteId(null)
+    setDeleteConfirmText('')
+  }
+
+  function startDelete(id: string) {
+    setConfirmDeleteId(id)
+    setDeleteConfirmText('')
+    setRenamingId(null)
   }
 
   function handleDelete(id: string) {
+    if (deleteConfirmText !== DELETE_PHRASE) return
     deleteBudget(id)
     setConfirmDeleteId(null)
+    setDeleteConfirmText('')
     setOpen(false)
   }
 
@@ -96,20 +109,32 @@ function BudgetSwitcher() {
           <div className="p-1.5 space-y-0.5 max-h-64 overflow-y-auto">
             {budgetList.map(meta => {
               if (confirmDeleteId === meta.id) {
+                const confirmed = deleteConfirmText === DELETE_PHRASE
                 return (
-                  <div key={meta.id} className="px-3 py-2.5 bg-red-50 rounded-xl">
-                    <p className="text-xs text-red-600 font-medium mb-2">
-                      "{meta.name}" 가계부를 삭제하면<br />모든 데이터가 영구 삭제됩니다.
-                    </p>
+                  <div key={meta.id} className="px-3 py-3 bg-red-50 rounded-xl space-y-2">
+                    <p className="text-xs text-red-700 font-semibold">"{meta.name}" 삭제</p>
+                    <p className="text-xs text-red-500">모든 데이터가 영구 삭제됩니다.<br />아래에 정확히 입력하세요:</p>
+                    <p className="text-xs font-mono font-bold text-red-600 bg-red-100 rounded-lg px-2 py-1 text-center">{DELETE_PHRASE}</p>
+                    <input
+                      autoFocus
+                      value={deleteConfirmText}
+                      onChange={e => setDeleteConfirmText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && confirmed) handleDelete(meta.id) }}
+                      placeholder="위 문구를 그대로 입력"
+                      className="w-full text-xs border border-red-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-red-200 bg-white"
+                    />
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => handleDelete(meta.id)}
-                        className="flex-1 text-xs bg-red-500 text-white rounded-lg py-1.5 font-semibold"
+                        disabled={!confirmed}
+                        className={`flex-1 text-xs rounded-lg py-1.5 font-semibold transition-colors ${
+                          confirmed ? 'bg-red-500 text-white' : 'bg-red-200 text-red-300 cursor-not-allowed'
+                        }`}
                       >
                         삭제
                       </button>
                       <button
-                        onClick={() => setConfirmDeleteId(null)}
+                        onClick={() => { setConfirmDeleteId(null); setDeleteConfirmText('') }}
                         className="flex-1 text-xs bg-gray-100 text-gray-600 rounded-lg py-1.5"
                       >
                         취소
@@ -176,7 +201,7 @@ function BudgetSwitcher() {
                   {/* 삭제 (마지막 가계부는 숨김) */}
                   {budgetList.length > 1 && (
                     <button
-                      onClick={() => { setConfirmDeleteId(meta.id); setRenamingId(null) }}
+                      onClick={() => startDelete(meta.id)}
                       className="text-gray-300 hover:text-red-500 text-sm px-1 shrink-0 transition-colors"
                       title="삭제"
                     >

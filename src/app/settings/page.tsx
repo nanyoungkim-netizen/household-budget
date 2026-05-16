@@ -50,7 +50,7 @@ function AccIcon({ acc }: { acc: Account }) {
 type TabType = '통장' | '카드' | '카테고리' | '규칙'
 
 export default function SettingsPage() {
-  const { data, user, signOut, setAccounts, setCards, setCategories, setMappingRules, resetAll } = useApp()
+  const { data, user, signOut, setAccounts, setCards, setCategories, setMappingRules, resetAll, completeSetup } = useApp()
   const { accounts, cards, categories, transactions, mappingRules } = data
   const [tab, setTab] = useState<TabType>('통장')
 
@@ -413,6 +413,39 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold text-gray-900">기초 설정</h1>
         <p className="text-sm text-gray-500 mt-1">통장, 카드, 카테고리를 관리하세요</p>
       </div>
+
+      {/* 새 가계부 안내 배너 */}
+      {!data.isSetupComplete && (
+        <div className="bg-blue-600 rounded-2xl p-4 mb-5 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-bold text-base mb-1">새 가계부가 만들어졌어요!</p>
+              <p className="text-sm text-blue-100 mb-3">
+                가계부를 사용하기 전에 먼저 통장과 카드를 등록해 보세요.<br />
+                아래 "통장" 탭에서 "+ 통장 추가" 를 눌러 시작하세요.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 text-sm">
+                <div className="flex items-center gap-1.5 bg-blue-500 rounded-xl px-3 py-1.5">
+                  <span>1️⃣</span><span>통장 추가</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-blue-500 rounded-xl px-3 py-1.5">
+                  <span>2️⃣</span><span>카드 추가</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-blue-500 rounded-xl px-3 py-1.5">
+                  <span>3️⃣</span><span>거래내역 입력 시작!</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => completeSetup({})}
+              className="text-blue-200 hover:text-white text-lg shrink-0 mt-0.5"
+              title="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 계정 정보 */}
       <div className="bg-blue-50 rounded-2xl p-4 mb-5 flex items-center justify-between">

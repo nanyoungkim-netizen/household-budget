@@ -545,10 +545,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const createBudget = useCallback((name: string) => {
     const id = `budget_${Date.now()}`
     const meta: BudgetMeta = { id, name: name.trim() || '새 가계부', createdAt: new Date().toISOString() }
+    // 새 가계부는 기본 계좌·카드 없이 시작, isSetupComplete=false 로 설정 안내 표시
+    const emptyData: AppData = {
+      ...INITIAL_DATA,
+      accounts: [],
+      cards: [],
+      isSetupComplete: false,
+    }
     setMultiData(prev => {
       const next: MultiData = {
         budgetList: [...prev.budgetList, meta],
-        budgets: { ...prev.budgets, [id]: { ...INITIAL_DATA, isSetupComplete: true } },
+        budgets: { ...prev.budgets, [id]: emptyData },
         activeBudgetId: id,
       }
       saveToStorage(next)
