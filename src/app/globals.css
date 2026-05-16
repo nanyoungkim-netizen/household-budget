@@ -26,6 +26,9 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
 
+/* 모바일 탭바 스크롤바 숨김 */
+nav .overflow-x-auto::-webkit-scrollbar { display: none; }
+
 .fade-in { animation: fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 

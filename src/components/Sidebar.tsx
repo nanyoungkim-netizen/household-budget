@@ -18,7 +18,6 @@ const navItems = [
   { href: '/settings', icon: '⚙️', label: '기초 설정' },
 ]
 
-const mobileNavItems = navItems.slice(0, 4)
 
 // ── 가계부 전환 드롭다운 ─────────────────────────────────────────────────────
 function BudgetSwitcher() {
@@ -261,18 +260,31 @@ function BudgetSwitcher() {
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut } = useApp()
-  const isSettingsArea = ['/settings', '/accounts', '/cards'].includes(pathname)
+  const [spinning, setSpinning] = useState(false)
+
+  function handleRefresh() {
+    setSpinning(true)
+    setTimeout(() => window.location.reload(), 300)
+  }
 
   return (
     <>
       {/* 데스크탑 사이드바 */}
       <aside className="hidden md:flex flex-col fixed left-0 top-0 h-full w-56 bg-white border-r border-gray-100 z-30 shadow-sm">
         <div className="p-5 pb-3 border-b border-gray-100 space-y-3">
-          <button onClick={() => window.location.reload()} className="flex items-center gap-2 w-full hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-lg">🌰</div>
-            <div className="text-left">
+          <button
+            onClick={handleRefresh}
+            title="새로고침"
+            className="flex items-center gap-2 w-full hover:opacity-80 transition-opacity group"
+          >
+            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-lg relative">
+              🌰
+            </div>
+            <div className="text-left flex-1 min-w-0">
               <div className="font-bold text-sm text-gray-900">밤티부</div>
-              <div className="text-xs text-gray-400">스마트 재무 관리</div>
+              <div className="text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
+                {spinning ? '새로고침 중...' : '↺ 새로고침'}
+              </div>
             </div>
           </button>
           <BudgetSwitcher />
@@ -307,38 +319,42 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* 모바일 상단 가계부 전환바 */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-100 z-30 px-4 py-2">
-        <BudgetSwitcher />
+      {/* 모바일 상단: 로고 + 가계부 전환 */}
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-100 z-30 px-3 py-2 flex items-center gap-2">
+        <button
+          onClick={handleRefresh}
+          className={`w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-base shrink-0 transition-transform active:scale-90 ${spinning ? 'animate-spin' : ''}`}
+        >
+          🌰
+        </button>
+        <div className="flex-1 min-w-0">
+          <BudgetSwitcher />
+        </div>
       </div>
 
-      {/* 모바일 하단 탭바 */}
+      {/* 모바일 하단 탭바 — 전체 메뉴 가로 스크롤 */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30">
-        <div className="flex items-center justify-around px-2 py-1">
-          {mobileNavItems.map(item => {
+        <div
+          className="flex items-center overflow-x-auto gap-1 px-2 py-1"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+        >
+          {navItems.map(item => {
             const isActive = pathname === item.href
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-colors ${
-                  isActive ? 'text-blue-600' : 'text-gray-400'
+                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-colors shrink-0 ${
+                  isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-400'
                 }`}
               >
-                <span className="text-xl">{item.icon}</span>
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <span className="text-xl leading-none">{item.icon}</span>
+                <span className={`text-[10px] font-medium whitespace-nowrap mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
+                  {item.label}
+                </span>
               </Link>
             )
           })}
-          <Link
-            href="/settings"
-            className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-colors ${
-              isSettingsArea ? 'text-blue-600' : 'text-gray-400'
-            }`}
-          >
-            <span className="text-xl">⚙️</span>
-            <span className="text-[10px] font-medium">설정</span>
-          </Link>
         </div>
       </nav>
     </>
