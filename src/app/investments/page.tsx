@@ -478,6 +478,10 @@ export default function InvestmentsPage() {
   const [showAddGroup, setShowAddGroup] = useState(false)
   const [additionalInvestment, setAdditionalInvestment] = useState('')
   const [rebalanceResult, setRebalanceResult] = useState<{ id: string; name: string; addAmt: number; expectedPct: number; action: 'buy' | 'sell' }[] | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)  // group.id | 'ungrouped'
+  // 최신 portfolioPlans를 항상 참조 (stale closure 방지)
+  const portfolioPlansRef = useRef(portfolioPlans)
+  portfolioPlansRef.current = portfolioPlans
 
   // ── 보유 종목별 계산 ────────────────────────────────────────────────────────
   const holdingsMap = useMemo(() => {
@@ -959,9 +963,9 @@ export default function InvestmentsPage() {
     }))
   }, [holdingInvestments, investmentAccounts])
 
-  // 계좌 선택 시 플랜 로드
+  // 계좌 선택 시 플랜 로드 (portfolioPlansRef로 항상 최신 데이터 사용)
   function loadPlanForAccount(accId: string) {
-    const existing = portfolioPlans.find(p => p.accountId === accId)
+    const existing = portfolioPlansRef.current.find(p => p.accountId === accId)
     if (existing) {
       setEditingPlan(JSON.parse(JSON.stringify(existing)))
     } else {
@@ -996,15 +1000,47 @@ export default function InvestmentsPage() {
       editingPlan.groups.reduce((s, g) => s + g.targetPct, 0)
     : 0
 
-  // 편집 플랜 저장
+  // 편집 플랜 저장 (저장 즉시 ref도 갱신되므로 editingPlan은 그대로 유지)
   function savePlan() {
     if (!editingPlan) return
-    const others = portfolioPlans.filter(p => p.accountId !== editingPlan.accountId)
+    const others = portfolioPlansRef.current.filter(p => p.accountId !== editingPlan.accountId)
     setPortfolioPlans([...others, editingPlan])
   }
 
   // 저장된 플랜 (현재 계좌)
   const savedPlan = portfolioAccId ? portfolioPlans.find(p => p.accountId === portfolioAccId) ?? null : null
+
+  // DnD: 아이템 드롭 처리
+  function handleItemDrop(itemId: string, sourceGroupId: string | null, destGroupId: string | null) {
+    setEditingPlan(prev => {
+      if (!prev) return prev
+      // 출발지에서 아이템 추출
+      let item: PortfolioPlanItem | undefined
+      let newItems = prev.items
+      let newGroups = prev.groups
+      if (sourceGroupId === null) {
+        item = prev.items.find(i => i.id === itemId)
+        newItems = prev.items.filter(i => i.id !== itemId)
+      } else {
+        const srcGroup = prev.groups.find(g => g.id === sourceGroupId)
+        item = srcGroup?.items.find(i => i.id === itemId)
+        newGroups = prev.groups.map(g =>
+          g.id === sourceGroupId ? { ...g, items: g.items.filter(i => i.id !== itemId) } : g
+        )
+      }
+      if (!item) return prev
+      // 목적지에 아이템 추가 (targetPct는 그대로 유지)
+      if (destGroupId === null) {
+        newItems = [...newItems, item]
+      } else {
+        newGroups = newGroups.map(g =>
+          g.id === destGroupId ? { ...g, items: [...g.items, item!] } : g
+        )
+      }
+      return { ...prev, items: newItems, groups: newGroups }
+    })
+    setDragOverId(null)
+  }
 
   // 플랜 항목 이름 헬퍼
   function getItemName(item: PortfolioPlanItem) {
@@ -2067,8 +2103,19 @@ export default function InvestmentsPage() {
                     {/* 그룹 목록 */}
                     {editingPlan.groups.map(group => {
                       const groupItemSum = group.items.reduce((s, i) => s + i.targetPct, 0)
+                      const isOver = dragOverId === group.id
                       return (
-                        <div key={group.id} className="border border-indigo-100 rounded-xl overflow-hidden">
+                        <div key={group.id}
+                          className={`border rounded-xl overflow-hidden transition-colors ${isOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-indigo-100'}`}
+                          onDragOver={e => { e.preventDefault(); setDragOverId(group.id) }}
+                          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
+                          onDrop={e => {
+                            e.preventDefault()
+                            const itemId = e.dataTransfer.getData('itemId')
+                            const srcGroupId = e.dataTransfer.getData('sourceGroupId')
+                            if (itemId && srcGroupId !== group.id) handleItemDrop(itemId, srcGroupId === 'null' ? null : srcGroupId, group.id)
+                          }}
+                        >
                           {/* 그룹 헤더 */}
                           <div className="flex items-center gap-2 px-3 py-2.5 bg-indigo-50">
                             <span className="text-sm">📦</span>
@@ -2093,10 +2140,21 @@ export default function InvestmentsPage() {
                           {/* 그룹 내 종목 */}
                           <div className="px-3 py-2 space-y-2">
                             {group.items.length === 0 && (
-                              <div className="text-xs text-gray-400 py-1">종목을 추가하세요</div>
+                              <div className="text-xs text-gray-400 py-2 text-center border border-dashed border-indigo-200 rounded-lg">
+                                {isOver ? '여기에 놓으세요' : '종목을 드래그하거나 추가하세요'}
+                              </div>
                             )}
                             {group.items.map(item => (
-                              <div key={item.id} className="flex items-center gap-2">
+                              <div key={item.id}
+                                draggable
+                                onDragStart={e => {
+                                  e.dataTransfer.setData('itemId', item.id)
+                                  e.dataTransfer.setData('sourceGroupId', group.id)
+                                  e.dataTransfer.effectAllowed = 'move'
+                                }}
+                                className="flex items-center gap-2 cursor-grab active:cursor-grabbing"
+                              >
+                                <span className="text-gray-300 text-sm select-none">⠿</span>
                                 <div className="flex-1 text-sm text-gray-700 truncate">{getItemName(item)}</div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <input
@@ -2104,6 +2162,7 @@ export default function InvestmentsPage() {
                                     value={item.targetPct || ''}
                                     onChange={e => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.map(g => g.id === group.id ? { ...g, items: g.items.map(i => i.id === item.id ? { ...i, targetPct: parseFloat(e.target.value) || 0 } : i) } : g) } : prev)}
                                     className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    onClick={e => e.stopPropagation()}
                                   />
                                   <span className="text-xs text-gray-400">%</span>
                                   <button onClick={() => setEditingPlan(prev => prev ? { ...prev, groups: prev.groups.map(g => g.id === group.id ? { ...g, items: g.items.filter(i => i.id !== item.id) } : g) } : prev)}
@@ -2130,22 +2189,47 @@ export default function InvestmentsPage() {
                     })}
 
                     {/* 미그룹 종목 */}
-                    {editingPlan.items.map(item => (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <div className="flex-1 text-sm text-gray-700 truncate">{getItemName(item)}</div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <input
-                            type="number" min={0} max={100} step={0.1}
-                            value={item.targetPct || ''}
-                            onChange={e => setEditingPlan(prev => prev ? { ...prev, items: prev.items.map(i => i.id === item.id ? { ...i, targetPct: parseFloat(e.target.value) || 0 } : i) } : prev)}
-                            className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                          />
-                          <span className="text-xs text-gray-400">%</span>
-                          <button onClick={() => setEditingPlan(prev => prev ? { ...prev, items: prev.items.filter(i => i.id !== item.id) } : prev)}
-                            className="ml-1 text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                    <div
+                      className={`space-y-2 rounded-xl transition-colors ${dragOverId === 'ungrouped' ? 'bg-blue-50/60 ring-1 ring-blue-300 p-2' : editingPlan.items.length === 0 && editingPlan.groups.length > 0 ? '' : ''}`}
+                      onDragOver={e => { e.preventDefault(); setDragOverId('ungrouped') }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
+                      onDrop={e => {
+                        e.preventDefault()
+                        const itemId = e.dataTransfer.getData('itemId')
+                        const srcGroupId = e.dataTransfer.getData('sourceGroupId')
+                        if (itemId && srcGroupId !== 'null') handleItemDrop(itemId, srcGroupId === 'null' ? null : srcGroupId, null)
+                      }}
+                    >
+                      {editingPlan.items.length === 0 && dragOverId === 'ungrouped' && (
+                        <div className="text-xs text-blue-400 text-center py-1">여기에 놓으면 그룹 해제됩니다</div>
+                      )}
+                      {editingPlan.items.map(item => (
+                        <div key={item.id}
+                          draggable
+                          onDragStart={e => {
+                            e.dataTransfer.setData('itemId', item.id)
+                            e.dataTransfer.setData('sourceGroupId', 'null')
+                            e.dataTransfer.effectAllowed = 'move'
+                          }}
+                          className="flex items-center gap-2 cursor-grab active:cursor-grabbing"
+                        >
+                          <span className="text-gray-300 text-sm select-none">⠿</span>
+                          <div className="flex-1 text-sm text-gray-700 truncate">{getItemName(item)}</div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <input
+                              type="number" min={0} max={100} step={0.1}
+                              value={item.targetPct || ''}
+                              onChange={e => setEditingPlan(prev => prev ? { ...prev, items: prev.items.map(i => i.id === item.id ? { ...i, targetPct: parseFloat(e.target.value) || 0 } : i) } : prev)}
+                              className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <span className="text-xs text-gray-400">%</span>
+                            <button onClick={() => setEditingPlan(prev => prev ? { ...prev, items: prev.items.filter(i => i.id !== item.id) } : prev)}
+                              className="ml-1 text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
 
                   {/* 액션 버튼 */}
