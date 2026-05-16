@@ -257,20 +257,20 @@ export default function GoalsPage() {
 
           return (
             <div key={goal.id} className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: goal.color + '20', color: goal.color }}>
+              <div className="flex items-start justify-between mb-4 gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ backgroundColor: goal.color + '20', color: goal.color }}>
                     {catMeta?.icon || '🎯'}
                   </div>
-                  <div>
-                    <div className="font-bold text-gray-900">{goal.name}</div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-gray-900 truncate">{goal.name}</div>
                     <div className="flex items-center gap-2 mt-0.5">
                       {catMeta && <span className="text-xs text-gray-400">{catMeta.label}</span>}
                       {dday && <span className={`text-xs font-medium ${daysLeft < 30 && !isDone ? 'text-red-500' : 'text-gray-400'}`}>{dday}</span>}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => openEdit(goal)} className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">✏️ 수정</button>
                   <button onClick={() => setDeleteConfirmId(goal.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">🗑️ 삭제</button>
                 </div>

@@ -1642,38 +1642,42 @@ export default function InvestmentsPage() {
             const isCollapsed = !expandedAccounts.has(acc.id)
             return (
               <div key={acc.id}>
-                <div className="flex items-center gap-3 mb-3 cursor-pointer select-none"
-                  onClick={() => toggleCollapse(acc.id)}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
-                    {getTypeLabel(acc.typeId).slice(0, 1)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900 flex items-center gap-1.5">
-                      {acc.name}
-                      <span className="text-xs text-gray-400">{isCollapsed ? '▶' : '▼'}</span>
+                <div className="mb-3">
+                  {/* 상단 행: 아이콘 + 계좌명 + 잔액 */}
+                  <div className="flex items-center gap-3 cursor-pointer select-none mb-2"
+                    onClick={() => toggleCollapse(acc.id)}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
+                      {getTypeLabel(acc.typeId).slice(0, 1)}
                     </div>
-                    <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)} · {accInvestments.length}종목</div>
-                  </div>
-                  {(() => {
-                    const cash = cashBalanceMap.get(acc.id) ?? 0
-                    const pnl = stats ? stats.eval - stats.buy : 0
-                    return (
-                      <div className="text-right mr-1">
-                        <div className="text-sm font-semibold text-gray-900">
-                          {fmtKRW(Math.round((stats?.eval ?? 0) + Math.max(0, cash)))}
-                        </div>
-                        {stats && (
-                          <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))}
-                          </div>
-                        )}
-                        <div className={`text-xs font-medium ${cash < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                          예수금 {fmtKRW(Math.round(cash))}
-                        </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 flex items-center gap-1.5 min-w-0">
+                        <span className="truncate">{acc.name}</span>
+                        <span className="text-xs text-gray-400 shrink-0">{isCollapsed ? '▶' : '▼'}</span>
                       </div>
-                    )
-                  })()}
-                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                      <div className="text-xs text-gray-400 truncate">{acc.bank} · {getTypeLabel(acc.typeId)} · {accInvestments.length}종목</div>
+                    </div>
+                    {(() => {
+                      const cash = cashBalanceMap.get(acc.id) ?? 0
+                      const pnl = stats ? stats.eval - stats.buy : 0
+                      return (
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-sm font-semibold text-gray-900">
+                            {fmtKRW(Math.round((stats?.eval ?? 0) + Math.max(0, cash)))}
+                          </div>
+                          {stats && (
+                            <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))}
+                            </div>
+                          )}
+                          <div className={`text-xs font-medium ${cash < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                            예수금 {fmtKRW(Math.round(cash))}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  {/* 하단 행: 버튼들 (아이콘 너비만큼 들여쓰기) */}
+                  <div className="flex items-center gap-1.5 pl-[52px]" onClick={e => e.stopPropagation()}>
                     <button onClick={() => openDeposit(acc.id)}
                       className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-medium">
                       입금

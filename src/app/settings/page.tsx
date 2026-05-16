@@ -483,14 +483,14 @@ export default function SettingsPage() {
             return (
               <div key={acc.id} className="bg-white rounded-2xl p-5 shadow-sm" style={{ borderLeft: `4px solid ${acc.color}` }}>
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <AccIcon acc={acc} />
-                    <div>
-                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>
-                      <div className="font-semibold text-gray-900">{acc.name}</div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide truncate">{acc.bank}</div>
+                      <div className="font-semibold text-gray-900 truncate">{acc.name}</div>
                       {acc.memo && (
-                        <div className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[160px]" title={acc.memo}>
-                          {acc.memo.length > 20 ? acc.memo.slice(0, 20) + '...' : acc.memo}
+                        <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={acc.memo}>
+                          {acc.memo}
                         </div>
                       )}
                     </div>
