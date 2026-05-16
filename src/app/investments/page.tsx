@@ -895,9 +895,13 @@ export default function InvestmentsPage() {
 
   function handleDeleteTrade(id: string) {
     const trade = investmentTrades.find(t => t.id === id)
-    if (trade?.linkedDepositId) {
-      setInvestmentCashDeposits(investmentCashDeposits.filter(d => d.id !== trade.linkedDepositId))
-    }
+    const inv = trade ? investments.find(i => i.id === trade.investmentId) : undefined
+    const linkedId = trade?.linkedDepositId
+    setInvestmentCashDeposits(investmentCashDeposits.filter(d => {
+      if (linkedId && d.id === linkedId) return false
+      if (!linkedId && inv && d.note === `거래 연동: ${inv.name}`) return false
+      return true
+    }))
     setInvestmentTrades(investmentTrades.filter(t => t.id !== id))
     setDeleteTradeId(null)
   }
@@ -1029,13 +1033,23 @@ export default function InvestmentsPage() {
         )
       }
       if (!item) return prev
-      // 목적지에 아이템 추가 (targetPct는 그대로 유지)
+      // 목적지에 아이템 추가
       if (destGroupId === null) {
         newItems = [...newItems, item]
       } else {
-        newGroups = newGroups.map(g =>
-          g.id === destGroupId ? { ...g, items: [...g.items, item!] } : g
-        )
+        newGroups = newGroups.map(g => {
+          if (g.id !== destGroupId) return g
+          const updated = [...g.items, item!]
+          const n = updated.length
+          const base = parseFloat((100 / n).toFixed(1))
+          return {
+            ...g,
+            items: updated.map((it, i) => ({
+              ...it,
+              targetPct: i === n - 1 ? parseFloat((100 - base * (n - 1)).toFixed(1)) : base,
+            })),
+          }
+        })
       }
       return { ...prev, items: newItems, groups: newGroups }
     })
@@ -1081,13 +1095,26 @@ export default function InvestmentsPage() {
       targetPct: 0,
     }
     if (showInvPicker?.mode === 'group' && showInvPicker.groupId) {
-      setEditingPlan(prev => prev ? {
-        ...prev,
-        groups: prev.groups.map(g => g.id === showInvPicker.groupId
-          ? { ...g, items: [...g.items, newItem] }
-          : g
-        ),
-      } : prev)
+      const gid = showInvPicker.groupId
+      setEditingPlan(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          groups: prev.groups.map(g => {
+            if (g.id !== gid) return g
+            const updated = [...g.items, newItem]
+            const n = updated.length
+            const base = parseFloat((100 / n).toFixed(1))
+            return {
+              ...g,
+              items: updated.map((it, i) => ({
+                ...it,
+                targetPct: i === n - 1 ? parseFloat((100 - base * (n - 1)).toFixed(1)) : base,
+              })),
+            }
+          }),
+        }
+      })
     } else {
       setEditingPlan(prev => prev ? { ...prev, items: [...prev.items, newItem] } : prev)
     }
