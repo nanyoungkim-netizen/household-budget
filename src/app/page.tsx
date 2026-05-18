@@ -304,12 +304,35 @@ export default function Dashboard() {
   const budgetPct    = totalBudgetReal > 0 ? Math.min((budgetUsed / totalBudgetReal) * 100, 100) : 0
   const budgetLeft   = totalBudgetReal - budgetUsed
 
+  const BUDGET_GREAT_MSGS = [
+    '🌟 이 달의 절약왕! 지갑이 빵빵해요.',
+    '💰 대단해요! 이 페이스면 목돈도 문제없어요.',
+    '🏆 절약 고수 등극! 이번 달 완벽 관리 중이에요.',
+    '✨ 지출이 참 건강해요. 미래의 나도 고마워할 거예요!',
+    '🥇 예산의 30%도 안 썼어요. 진짜 절약왕이네요!',
+  ]
+  const BUDGET_GOOD_MSGS = [
+    '👍 완벽한 페이스예요. 이대로만 가요!',
+    '😊 잘 하고 있어요! 균형 잡힌 소비 습관이에요.',
+    '🚀 순항 중이에요. 이번 달도 문제없겠어요!',
+    '💚 지출 관리 아주 훌륭해요. 계속 응원할게요!',
+    '🌈 예산 절반도 안 썼어요. 여유 있는 한 달이 될 것 같아요!',
+  ]
+  const BUDGET_CAUTION_MSGS = [
+    '🙂 슬슬 속도 조절해봐요. 아직 충분히 만회할 수 있어요!',
+    '💡 지출이 조금 빨라지고 있어요. 오늘 하루 절약 어때요?',
+    '🐢 잠깐 브레이크! 꼭 필요한 소비인지 한 번만 더 체크해요.',
+    '📊 예산의 60%를 넘었어요. 남은 달도 현명하게 가요!',
+    '🤔 지출 속도가 조금 빠른 편이에요. 작은 절약부터 시작해봐요.',
+  ]
   const BUDGET_WARN_MSGS = [
     '🔔 예산이 얼마 안 남았어요. 지갑 잠금 시작!',
     '😅 바닥이 보여요! 무지출 챌린지 어때요?',
     '💸 브레이크를 밟을 시간이에요. 꼭 필요한 것만!',
     '🚨 예산 임박! 이번 달은 집밥으로 버텨봐요.',
     '⚠️ 지금 손에 든 물건, 정말 필요한가요?',
+    '🫣 예산 80% 돌파! 지금부터 무지출 모드예요.',
+    '🎯 마지막 20% 남았어요. 끝까지 잘 지켜봐요!',
   ]
   const BUDGET_OVER_MSGS = [
     '💥 예산 초과! 다음 달엔 반드시 복수해요 💪',
@@ -318,6 +341,8 @@ export default function Dashboard() {
     '💣 예산 폭발! 냉장고 털어서 버텨봐요.',
     '📉 예산 초과 달성(?)... 절약 챌린지 시작!',
     '🤯 가계부가 울고 있어요. 잠깐, 숨 고르기!',
+    '🙏 이번 달은 수고했어요. 다음 달엔 함께 잘 해봐요!',
+    '😤 초과했지만 괜찮아요. 다음 달 설욕전이에요!',
   ]
   const _budgetMsgSeed = parseInt(budgetMonth.replace('-', '')) % 100
   const budgetNudgeMsg = totalBudgetReal > 0
@@ -325,7 +350,11 @@ export default function Dashboard() {
       ? BUDGET_OVER_MSGS[_budgetMsgSeed % BUDGET_OVER_MSGS.length]
       : budgetPct >= 80
       ? BUDGET_WARN_MSGS[_budgetMsgSeed % BUDGET_WARN_MSGS.length]
-      : null
+      : budgetPct >= 60
+      ? BUDGET_CAUTION_MSGS[_budgetMsgSeed % BUDGET_CAUTION_MSGS.length]
+      : budgetPct >= 30
+      ? BUDGET_GOOD_MSGS[_budgetMsgSeed % BUDGET_GOOD_MSGS.length]
+      : BUDGET_GREAT_MSGS[_budgetMsgSeed % BUDGET_GREAT_MSGS.length]
     : null
 
   // ── 적금·예금 요약 ──────────────────────────────────────────────────────────
