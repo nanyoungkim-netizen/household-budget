@@ -465,8 +465,8 @@ export default function Dashboard() {
         const nextYear = new Date(now.getFullYear() + 1, mm - 1, dd)
         const dueDate  = thisYear >= now ? thisYear : nextYear
         const daysUntil = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        // 납부일 2개월 전 1일
-        const startMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() - 2, 1)
+        // 납부일 1개월 전 1일
+        const startMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() - 1, 1)
         // 납부 당월 말일
         const endMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0)
         if (now < startMonth || now > endMonth) return
