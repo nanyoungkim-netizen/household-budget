@@ -186,7 +186,7 @@ export default function TransactionsPage() {
     amount: '',
     accountId: accounts[0]?.id || '',
     toAccountId: accounts[1]?.id || accounts[0]?.id || '',
-    categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || '',
+    categoryId: '',
     paymentMethod: 'account',
     cardId: cards[0]?.id || '',
     installmentMonths: '1',
@@ -572,12 +572,12 @@ export default function TransactionsPage() {
     if (t === 'refund') {
       setForm(f => ({
         ...f,
-        categoryId: categories.find(c => c.type === 'expense' && c.parentId !== null)?.id || ''
+        categoryId: ''
       }))
     } else if (t !== 'transfer') {
       setForm(f => ({
         ...f,
-        categoryId: categories.find(c => c.type === t && c.parentId !== null)?.id || ''
+        categoryId: ''
       }))
     }
   }
