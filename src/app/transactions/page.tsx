@@ -613,13 +613,15 @@ export default function TransactionsPage() {
     return categories.filter(c => c.parentId === null && c.type === type)
   })()
   const searchedCats = (() => {
+    let result: typeof filteredCats
     if (catSearch.trim()) {
-      return filteredCats.filter(c => c.name.toLowerCase().includes(catSearch.trim().toLowerCase()))
+      result = filteredCats.filter(c => c.name.toLowerCase().includes(catSearch.trim().toLowerCase()))
+    } else if (catModalParent) {
+      result = filteredCats.filter(c => c.parentId === catModalParent)
+    } else {
+      result = filteredCats
     }
-    if (catModalParent) {
-      return filteredCats.filter(c => c.parentId === catModalParent)
-    }
-    return filteredCats
+    return [...result].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   })()
 
   return (
@@ -1433,7 +1435,7 @@ export default function TransactionsPage() {
                         )}
 
                         {/* 소분류 칩 그리드 */}
-                        <div className="p-2 flex flex-wrap gap-1.5 bg-white">
+                        <div className="p-2 flex flex-wrap gap-1.5 max-h-40 overflow-y-scroll bg-white">
                           {searchedCats.length === 0 ? (
                             <span className="text-xs text-gray-400 py-2 px-1">일치하는 카테고리가 없습니다</span>
                           ) : searchedCats.map(c => {
