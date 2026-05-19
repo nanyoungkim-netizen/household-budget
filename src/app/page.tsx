@@ -359,23 +359,32 @@ export default function Dashboard() {
 
   // ── 적금·예금 요약 ──────────────────────────────────────────────────────────
   const savingsSummary = useMemo(() => {
-    let totalPrincipal = 0
-    let totalExpected = 0
-    let totalInterest = 0
+    let totalPrincipal = 0  // 실납입액 합계
+    let totalRemaining = 0  // 잔여납입 합계
+    let totalExpected  = 0  // 만기수령액 합계
+    let totalInterest  = 0  // 예상이자 합계 (만기수령액 - 약정원금)
     let count = 0
     for (const s of savings) {
-      // 만기처리 완료된 것만 제외 (청약 포함)
       if (s.status === 'matured') continue
       const linkedPaid = transactions
         .filter(t => t.savingLinks?.some(l => l.savingId === s.id))
         .reduce((acc, t) => acc + (t.savingLinks?.find(l => l.savingId === s.id)?.amount ?? 0), 0)
-      const principal = (s.currentAmount ?? 0) + linkedPaid
-      totalPrincipal += principal
+      const paidAmt = (s.currentAmount ?? 0) + linkedPaid
+      // 약정원금: 예금은 currentAmount, 적금은 월납입 × 전체 개월수
+      const contractAmt = s.type === 'deposit' || !s.startDate || !s.maturityDate
+        ? (s.currentAmount ?? 0)
+        : (() => {
+            const st = new Date(s.startDate), en = new Date(s.maturityDate)
+            const months = (en.getFullYear() - st.getFullYear()) * 12 + (en.getMonth() - st.getMonth())
+            return (s.monthlyAmount ?? 0) * Math.max(months, 1)
+          })()
+      totalPrincipal += paidAmt
+      totalRemaining += Math.max(0, contractAmt - paidAmt)
       totalExpected  += s.expectedAmount ?? 0
-      totalInterest  += Math.max(0, (s.expectedAmount ?? 0) - principal)
+      totalInterest  += Math.max(0, (s.expectedAmount ?? 0) - contractAmt)
       count++
     }
-    return { totalPrincipal, totalExpected, totalInterest, count }
+    return { totalPrincipal, totalRemaining, totalExpected, totalInterest, count }
   }, [savings, transactions])
 
   // 투자 보유 내역 (종목별 qty·평가금액·손익) — 위젯 + 총평가금액 공유
@@ -1068,10 +1077,14 @@ export default function Dashboard() {
                     <Link href="/savings" className="text-xs text-blue-600">자세히 →</Link>
                   </div>
                   {savingsSummary.count > 0 ? (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <div className="bg-gray-50 rounded-xl p-3">
-                        <div className="text-xs text-gray-400 mb-1">납입원금</div>
+                        <div className="text-xs text-gray-400 mb-1">납입완료</div>
                         <div className="text-sm font-bold text-gray-900 tabular-nums">{fmtShort(savingsSummary.totalPrincipal)}</div>
+                      </div>
+                      <div className="bg-orange-50 rounded-xl p-3">
+                        <div className="text-xs text-orange-500 mb-1">잔여납입</div>
+                        <div className="text-sm font-bold text-orange-600 tabular-nums">{fmtShort(savingsSummary.totalRemaining)}</div>
                       </div>
                       <div className="bg-emerald-50 rounded-xl p-3">
                         <div className="text-xs text-emerald-600 mb-1">예상이자</div>

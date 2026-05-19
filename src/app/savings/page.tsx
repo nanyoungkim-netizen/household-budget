@@ -301,6 +301,21 @@ export default function SavingsPage() {
     return new Date(s.maturityDate) < today
   }
 
+  // ── 약정원금 헬퍼 (월납입 × 전체 개월, 예금은 currentAmount) ──────────────
+  function getContractPrincipal(s: Saving): number {
+    if (s.type === 'deposit') return s.currentAmount || 0
+    const totalMonths = s.startDate && s.maturityDate
+      ? (() => {
+          const st = new Date(s.startDate), en = new Date(s.maturityDate)
+          return (en.getFullYear() - st.getFullYear()) * 12 + (en.getMonth() - st.getMonth())
+        })()
+      : 0
+    const calc = calcMaturity(s.type, s.monthlyAmount, s.interestRate, s.startDate, s.maturityDate,
+      s.interestType ?? 'simple', (s.taxType as TaxType) ?? 'general')
+    if (calc) return calc.principal
+    return s.monthlyAmount * Math.max(totalMonths, 1)
+  }
+
   // ── 요약 ─────────────────────────────────────────────────────────────────
   const sdSavings     = savings.filter(s => s.type !== 'subscription')
   const subSavings    = savings.filter(s => s.type === 'subscription')
@@ -308,9 +323,9 @@ export default function SavingsPage() {
   const countedSdSavings = sdSavings.filter(s => s.status !== 'matured')
 
   const totalCurrent     = countedSdSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const savingPaid       = countedSdSavings.filter(s => s.type === 'saving') .reduce((sum, s) => sum + getPaidAmount(s), 0)
-  const depositPaid      = countedSdSavings.filter(s => s.type === 'deposit').reduce((sum, s) => sum + getPaidAmount(s), 0)
+  const totalRemaining   = countedSdSavings.reduce((sum, s) => sum + Math.max(0, getContractPrincipal(s) - getPaidAmount(s)), 0)
   const totalExpected    = countedSdSavings.reduce((sum, s) => sum + s.expectedAmount, 0)
+  const totalInterest    = countedSdSavings.reduce((sum, s) => sum + Math.max(0, s.expectedAmount - getContractPrincipal(s)), 0)
   const totalSubPaid     = subSavings.reduce((sum, s) => sum + getPaidAmount(s), 0)
 
   // ── 리스트 필터 ──────────────────────────────────────────────────────────
@@ -352,28 +367,24 @@ export default function SavingsPage() {
         <>
           {/* 요약 카드 */}
           <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <div className="text-xs text-gray-500 mb-0.5">납입 원금 합계</div>
-                <div className="text-lg font-bold text-gray-900">{fmtKRW(totalCurrent)}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-0.5">납입완료</div>
+                <div className="text-base font-bold text-gray-900">{fmtKRW(totalCurrent)}</div>
               </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-0.5">만기 예상 수령액</div>
-                <div className="text-lg font-bold text-emerald-600">{fmtKRW(totalExpected)}</div>
+              <div className="bg-orange-50 rounded-xl p-3">
+                <div className="text-xs text-orange-500 mb-0.5">잔여납입</div>
+                <div className="text-base font-bold text-orange-600">{fmtKRW(totalRemaining)}</div>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-3">
+                <div className="text-xs text-emerald-600 mb-0.5">예상이자</div>
+                <div className="text-base font-bold text-emerald-700">+{fmtKRW(totalInterest)}</div>
+              </div>
+              <div className="bg-blue-50 rounded-xl p-3">
+                <div className="text-xs text-blue-600 mb-0.5">만기 예상 수령액</div>
+                <div className="text-base font-bold text-blue-700">{fmtKRW(totalExpected)}</div>
               </div>
             </div>
-            {(savingPaid > 0 || depositPaid > 0) && (
-              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100">
-                <div className="bg-blue-50 rounded-xl p-2.5">
-                  <div className="text-xs text-blue-500 mb-0.5">적금 납입</div>
-                  <div className="text-sm font-bold text-blue-700">{fmtKRW(savingPaid)}</div>
-                </div>
-                <div className="bg-amber-50 rounded-xl p-2.5">
-                  <div className="text-xs text-amber-500 mb-0.5">예금 납입</div>
-                  <div className="text-sm font-bold text-amber-700">{fmtKRW(depositPaid)}</div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* 필터 탭 */}
@@ -497,7 +508,7 @@ export default function SavingsPage() {
                   {/* 만기 예상 */}
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="bg-gray-50 rounded-xl p-3">
-                      <div className="text-xs text-gray-400 mb-0.5">총 납입 원금</div>
+                      <div className="text-xs text-gray-400 mb-0.5">약정 원금</div>
                       <div className="text-sm font-semibold text-gray-900">{fmtKRW(totalPrincipal)}</div>
                     </div>
                     <div className="bg-emerald-50 rounded-xl p-3">
