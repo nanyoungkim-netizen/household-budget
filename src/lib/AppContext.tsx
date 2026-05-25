@@ -446,9 +446,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const winner = mergeMultiData(localMulti, remoteMulti)
             setMultiData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-            if (!remoteMulti || winner === localMulti) {
-              await syncToSupabase(session.user.id, winner)
-            }
+            // 항상 winner를 Supabase에 동기화 (로컬이 최신인 경우 서버 업데이트 누락 방지)
+            await syncToSupabase(session.user.id, winner)
           } else {
             if (localMulti) setMultiData(localMulti)
           }
@@ -480,9 +479,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               if (winner) {
                 setMultiData(winner)
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-                if (currentLocal && winner === currentLocal) {
-                  await syncToSupabase(session.user.id, winner)
-                }
+                // 항상 winner를 Supabase에 동기화 (로컬이 최신인 경우 서버 업데이트 누락 방지)
+                await syncToSupabase(session.user.id, winner)
               }
             }
           })

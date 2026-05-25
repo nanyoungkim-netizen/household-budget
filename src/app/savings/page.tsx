@@ -294,11 +294,9 @@ export default function SavingsPage() {
     return (s.currentAmount || 0) + linkedPaid
   }
 
-  // ── 만기 여부 판별 ───────────────────────────────────────────────────────
+  // ── 만기 여부 판별 (명시적 만기처리 버튼을 눌러야만 만기 섹션으로 이동) ───────
   function isMaturedSaving(s: Saving) {
-    if (s.status === 'matured') return true
-    if (!s.maturityDate) return false
-    return new Date(s.maturityDate) < today
+    return s.status === 'matured'
   }
 
   // ── 약정원금 헬퍼 (월납입 × 전체 개월, 예금은 currentAmount) ──────────────
