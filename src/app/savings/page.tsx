@@ -132,7 +132,7 @@ export default function SavingsPage() {
   function openMaturityModal(s: Saving, principal: number, interestIncome: number) {
     const todayStr = today.toISOString().slice(0, 10)
     setMaturityModal({ savingId: s.id, principal, interest: interestIncome, accountId: accounts[0]?.id || '', date: todayStr })
-    setMaturityInterest(interestIncome > 0 ? String(interestIncome) : '')
+    setMaturityInterest(interestIncome > 0 ? fmtInput(String(interestIncome)) : '')
     setMaturityAccountId(accounts[0]?.id || '')
     setMaturityDate(todayStr)
   }
@@ -1057,7 +1057,7 @@ export default function SavingsPage() {
                   inputMode="numeric"
                   placeholder="이자 금액 입력 (원)"
                   value={maturityInterest}
-                  onChange={e => setMaturityInterest(e.target.value.replace(/[^0-9]/g, ''))}
+                  onChange={e => setMaturityInterest(fmtInput(e.target.value))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
