@@ -179,15 +179,15 @@ export default function InvestmentsPage() {
       if (!res.ok) return null
       const json = await res.json()
       if (json.error || !json.price) return null
-      return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
+      return { id: inv.id, price: json.price as number, change: json.change as number | undefined, changeRate: json.changeRate as number | undefined, updatedAt: json.updatedAt as string }
     }
 
     const updated = await Promise.allSettled(allTargets.map(fetchPrice))
 
-    const patches: Record<string, { price: number; updatedAt: string }> = {}
+    const patches: Record<string, { price: number; change?: number; changeRate?: number; updatedAt: string }> = {}
     updated.forEach((r, i) => {
       if (r.status === 'fulfilled' && r.value) {
-        patches[allTargets[i].id] = { price: r.value.price, updatedAt: r.value.updatedAt }
+        patches[allTargets[i].id] = { price: r.value.price, change: r.value.change, changeRate: r.value.changeRate, updatedAt: r.value.updatedAt }
       }
     })
 
@@ -196,7 +196,7 @@ export default function InvestmentsPage() {
 
     setInvestments(investmentsRef.current.map(inv =>
       patches[inv.id]
-        ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
+        ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt, prevCloseDiff: patches[inv.id].change, prevCloseDiffRate: patches[inv.id].changeRate }
         : inv
     ))
   }
@@ -239,7 +239,7 @@ export default function InvestmentsPage() {
     if (targets.length === 0) { showRefreshToast('조회할 종목이 없습니다'); return }
     setPriceRefreshing(true)
     setPriceLoadingIds(new Set(targets.map(t => t.id)))
-    const patches: Record<string, { price: number; updatedAt: string }> = {}
+    const patches: Record<string, { price: number; change?: number; changeRate?: number; updatedAt: string }> = {}
     try {
       const results = await Promise.allSettled(
         targets.map(async inv => {
@@ -250,7 +250,7 @@ export default function InvestmentsPage() {
           const res = await fetch(endpoint)
           const json = await res.json()
           if (json.error || !json.price) return null
-          return { id: inv.id, price: json.price as number, updatedAt: json.updatedAt as string }
+          return { id: inv.id, price: json.price as number, change: json.change as number | undefined, changeRate: json.changeRate as number | undefined, updatedAt: json.updatedAt as string }
         })
       )
       results.forEach((r, i) => {
@@ -259,7 +259,7 @@ export default function InvestmentsPage() {
       if (Object.keys(patches).length > 0) {
         setInvestments(investments.map(inv =>
           patches[inv.id]
-            ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt }
+            ? { ...inv, currentPrice: patches[inv.id].price, currentPriceUpdatedAt: patches[inv.id].updatedAt, prevCloseDiff: patches[inv.id].change, prevCloseDiffRate: patches[inv.id].changeRate }
             : inv
         ))
       }
@@ -290,7 +290,7 @@ export default function InvestmentsPage() {
       if (!json.error && json.price) {
         setInvestments(investmentsRef.current.map(inv =>
           inv.id === invId
-            ? { ...inv, currentPrice: json.price, currentPriceUpdatedAt: json.updatedAt }
+            ? { ...inv, currentPrice: json.price, currentPriceUpdatedAt: json.updatedAt, prevCloseDiff: json.change, prevCloseDiffRate: json.changeRate }
             : inv
         ))
       }
@@ -1322,9 +1322,25 @@ export default function InvestmentsPage() {
                 <>
                   <div className="text-sm font-semibold text-gray-900">{fmtDisp(dispCurrentPrice)}</div>
                   {secPrice && <div className="text-xs text-gray-400 mt-0.5">{secPrice}</div>}
-                  <div className={`text-xs mt-0.5 ${dispPriceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  <div className={`text-xs mt-0.5 flex items-center gap-1 ${dispPriceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    <span className="bg-gray-200 text-gray-500 text-[10px] font-semibold px-1 py-0.5 rounded">평단</span>
                     {dispPriceDiff >= 0 ? '+' : ''}{fmtDisp(dispPriceDiff)} ({fmtPct(dispPriceRate)})
                   </div>
+                  {inv.prevCloseDiff !== undefined && (
+                    (() => {
+                      const diff = showInKRW && isForeign && hasFx
+                        ? Math.round(inv.prevCloseDiff * fxRate)
+                        : inv.prevCloseDiff
+                      const rate = inv.prevCloseDiffRate ?? 0
+                      const isUp = diff >= 0
+                      return (
+                        <div className={`text-xs mt-0.5 flex items-center gap-1 ${isUp ? 'text-red-500' : 'text-blue-500'}`}>
+                          <span className="bg-gray-200 text-gray-500 text-[10px] font-semibold px-1 py-0.5 rounded">전일</span>
+                          {isUp ? '▲' : '▼'}{Math.abs(diff).toLocaleString('ko-KR')} ({isUp ? '+' : ''}{rate.toFixed(2)}%)
+                        </div>
+                      )
+                    })()
+                  )}
                 </>
               ) : <div className="text-sm font-semibold text-gray-400">미입력</div>}
             </div>

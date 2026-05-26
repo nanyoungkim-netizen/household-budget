@@ -252,6 +252,8 @@ export interface Investment {
   currency: InvestmentCurrency
   currentPrice?: number   // 현재가 (수동 입력)
   currentPriceUpdatedAt?: string  // 현재가 업데이트 일시
+  prevCloseDiff?: number       // 전일 종가 대비 변화액 (주당)
+  prevCloseDiffRate?: number   // 전일 종가 대비 변화율 (%)
 }
 
 // 예수금 입금 내역
