@@ -1322,10 +1322,6 @@ export default function InvestmentsPage() {
                 <>
                   <div className="text-sm font-semibold text-gray-900">{fmtDisp(dispCurrentPrice)}</div>
                   {secPrice && <div className="text-xs text-gray-400 mt-0.5">{secPrice}</div>}
-                  <div className={`text-xs mt-0.5 flex items-center gap-1 ${dispPriceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    <span className="bg-gray-200 text-gray-500 text-[10px] font-semibold px-1 py-0.5 rounded">평단</span>
-                    {dispPriceDiff >= 0 ? '+' : ''}{fmtDisp(dispPriceDiff)} ({fmtPct(dispPriceRate)})
-                  </div>
                   {inv.prevCloseDiff !== undefined && (
                     (() => {
                       const diff = showInKRW && isForeign && hasFx
@@ -1341,6 +1337,10 @@ export default function InvestmentsPage() {
                       )
                     })()
                   )}
+                  <div className={`text-xs mt-0.5 flex items-center gap-1 ${dispPriceDiff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    <span className="bg-gray-200 text-gray-500 text-[10px] font-semibold px-1 py-0.5 rounded">평단</span>
+                    {dispPriceDiff >= 0 ? '+' : ''}{fmtDisp(dispPriceDiff)} ({fmtPct(dispPriceRate)})
+                  </div>
                 </>
               ) : <div className="text-sm font-semibold text-gray-400">미입력</div>}
             </div>
