@@ -21,6 +21,7 @@ export interface Account {
   assetType?: AssetType                  // FR-01: 현금성/예적금/투자
   investmentSubType?: InvestmentSubType  // 투자 세부 유형 (assetType==='investment'일 때)
   memo?: string                          // 대시보드 카드에 표시할 짧은 메모
+  accountNumber?: string                 // 계좌번호 (선택)
 }
 
 export type CategoryRole = 'card_payment' | 'savings'
