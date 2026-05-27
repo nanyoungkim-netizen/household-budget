@@ -5,7 +5,7 @@ import { useApp, DEFAULT_INVESTMENT_ACCOUNT_TYPES } from '@/lib/AppContext'
 import {
   Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit,
   InvestmentAssetType, InvestmentCurrency, InvestmentAccountType, InvestmentTargetAllocation,
-  PortfolioPlan, PortfolioPlanGroup, PortfolioPlanItem,
+  PortfolioPlan, PortfolioPlanGroup, PortfolioPlanItem, WatchlistItem,
 } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
 
@@ -40,7 +40,7 @@ const CURRENCIES: InvestmentCurrency[] = ['KRW', 'USD', 'USDT', 'other']
 
 const ACCOUNT_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6']
 
-type PageTab = 'dashboard' | 'holdings' | 'trades' | 'portfolio'
+type PageTab = 'dashboard' | 'holdings' | 'watchlist' | 'trades' | 'portfolio'
 
 const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
   assetType: 'domestic_stock',
@@ -84,8 +84,9 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates, setPortfolioPlans } = useApp()
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates, setPortfolioPlans, setWatchlist } = useApp()
   const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
+  const watchlist: WatchlistItem[] = data.watchlist ?? []
   const investmentCashDeposits: InvestmentCashDeposit[] = data.investmentCashDeposits ?? []
   const investmentAccountTypes: InvestmentAccountType[] = data.investmentAccountTypes ?? DEFAULT_INVESTMENT_ACCOUNT_TYPES
   const investmentTargetAllocations: InvestmentTargetAllocation[] = data.investmentTargetAllocations ?? []
@@ -122,6 +123,13 @@ export default function InvestmentsPage() {
   const [exchangeRateUpdatedAt, setExchangeRateUpdatedAt] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [showExchangeRates, setShowExchangeRates] = useState(false)
+
+  // ── 관심종목 state ─────────────────────────────────────────────────────────
+  const [watchlistQuery, setWatchlistQuery] = useState('')
+  const [watchlistResults, setWatchlistResults] = useState<{ name: string; ticker: string; assetType: InvestmentAssetType; currency: InvestmentCurrency; exchange?: string }[]>([])
+  const [watchlistSearching, setWatchlistSearching] = useState(false)
+  const [watchlistPriceLoading, setWatchlistPriceLoading] = useState(false)
+  const watchlistSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // PRD F-03: 통화 전환 토글 (localStorage 유지)
   const [currencyMode, setCurrencyMode] = useState<'KRW' | 'USD'>(() => {
@@ -231,6 +239,69 @@ export default function InvestmentsPage() {
         setInvestmentExchangeRates(json.rates)
       }
     } catch { /* silent */ }
+  }
+
+  // ── 관심종목 검색 (디바운스 300ms) ────────────────────────────────────────
+  function triggerWatchlistSearch(q: string) {
+    if (watchlistSearchTimer.current) clearTimeout(watchlistSearchTimer.current)
+    if (!q || q.length < 1) { setWatchlistResults([]); return }
+    watchlistSearchTimer.current = setTimeout(async () => {
+      setWatchlistSearching(true)
+      try {
+        const [domestic, foreign] = await Promise.allSettled([
+          fetch(`/api/stock/search?q=${encodeURIComponent(q)}`).then(r => r.json()),
+          fetch(`/api/stock/search-foreign?q=${encodeURIComponent(q)}`).then(r => r.json()),
+        ])
+        const results: typeof watchlistResults = []
+        if (domestic.status === 'fulfilled' && Array.isArray(domestic.value)) {
+          domestic.value.slice(0, 5).forEach((item: { name: string; ticker: string }) =>
+            results.push({ name: item.name, ticker: item.ticker, assetType: 'domestic_stock', currency: 'KRW' })
+          )
+        }
+        if (foreign.status === 'fulfilled' && Array.isArray(foreign.value)) {
+          foreign.value.slice(0, 5).forEach((item: { name: string; ticker: string; exchange?: string }) =>
+            results.push({ name: item.name, ticker: item.ticker, assetType: 'foreign_stock', currency: 'USD', exchange: item.exchange })
+          )
+        }
+        setWatchlistResults(results)
+      } finally {
+        setWatchlistSearching(false)
+      }
+    }, 300)
+  }
+
+  // 관심종목 시세 일괄 조회
+  async function refreshWatchlistPrices(items: WatchlistItem[]) {
+    const targets = items.filter(w => w.ticker)
+    if (targets.length === 0) return
+    setWatchlistPriceLoading(true)
+    try {
+      const results = await Promise.allSettled(
+        targets.map(async w => {
+          const isForeign = w.assetType === 'foreign_stock'
+          const endpoint = isForeign
+            ? `/api/stock/price-foreign?symbol=${encodeURIComponent(w.ticker!)}`
+            : `/api/stock/price?symbol=${encodeURIComponent(w.ticker!)}`
+          const res = await fetch(endpoint)
+          const json = await res.json()
+          if (json.error || !json.price) return null
+          return { id: w.id, price: json.price as number, change: json.change as number | undefined, changeRate: json.changeRate as number | undefined, updatedAt: json.updatedAt as string }
+        })
+      )
+      const patches: Record<string, { price: number; change?: number; changeRate?: number; updatedAt: string }> = {}
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) patches[targets[i].id] = r.value
+      })
+      if (Object.keys(patches).length > 0) {
+        setWatchlist(items.map(w =>
+          patches[w.id]
+            ? { ...w, currentPrice: patches[w.id].price, prevCloseDiff: patches[w.id].change, prevCloseDiffRate: patches[w.id].changeRate, currentPriceUpdatedAt: patches[w.id].updatedAt }
+            : w
+        ))
+      }
+    } finally {
+      setWatchlistPriceLoading(false)
+    }
   }
 
   // F-03: 전체 종목 현재가 수동 새로고침 — 완료 후 성공/실패 토스트
@@ -996,6 +1067,14 @@ export default function InvestmentsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageTab, portfolioAccounts.length])
 
+  // 관심종목 탭 진입 시 시세 자동 갱신
+  useEffect(() => {
+    if (pageTab === 'watchlist' && watchlist.length > 0) {
+      refreshWatchlistPrices(watchlist)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageTab])
+
   // 편집 중인 플랜 합계 %
   const accountTotalPct = editingPlan
     ? editingPlan.items.reduce((s, i) => s + i.targetPct, 0) +
@@ -1487,7 +1566,7 @@ export default function InvestmentsPage() {
 
       {/* 탭 */}
       <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-1 overflow-x-auto">
-        {([['dashboard','📊 대시보드'],['holdings','💼 보유 종목'],['trades','📋 거래 이력'],['portfolio','🎯 포트폴리오']] as const).map(([key, label]) => (
+        {([['dashboard','📊 대시보드'],['holdings','💼 보유 종목'],['watchlist','⭐ 관심종목'],['trades','📋 거래 이력'],['portfolio','🎯 포트폴리오']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setPageTab(key)}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pageTab === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
             {label}
@@ -1771,6 +1850,134 @@ export default function InvestmentsPage() {
               className="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-500 rounded-2xl text-sm hover:bg-indigo-50 transition-colors">
               + 새 계좌 추가
             </button>
+          )}
+        </div>
+      )}
+
+      {/* ══ 관심종목 탭 ══════════════════════════════════════════════════════ */}
+      {pageTab === 'watchlist' && (
+        <div className="space-y-4">
+          {/* 검색창 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <input
+                value={watchlistQuery}
+                onChange={e => { setWatchlistQuery(e.target.value); triggerWatchlistSearch(e.target.value) }}
+                placeholder="종목명 또는 티커 검색 (예: 삼성전자, AAPL)"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              {watchlistSearching && <div className="text-xs text-gray-400 whitespace-nowrap">검색 중…</div>}
+            </div>
+            {watchlistResults.length > 0 && (
+              <div className="mt-3 border border-gray-100 rounded-xl overflow-hidden">
+                {watchlistResults.map((item, i) => {
+                  const alreadyAdded = watchlist.some(w => w.ticker === item.ticker && w.assetType === item.assetType)
+                  return (
+                    <div key={i} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">{ASSET_TYPE_META[item.assetType].icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-800 truncate">{item.name}</div>
+                          <div className="text-xs text-gray-400">{item.ticker}{item.exchange ? ` · ${item.exchange}` : ''}</div>
+                        </div>
+                      </div>
+                      <button
+                        disabled={alreadyAdded}
+                        onClick={() => {
+                          if (alreadyAdded) return
+                          const newItem: WatchlistItem = {
+                            id: `wl_${Date.now()}`,
+                            name: item.name,
+                            ticker: item.ticker,
+                            exchange: item.exchange,
+                            assetType: item.assetType,
+                            currency: item.currency,
+                          }
+                          const updated = [...watchlist, newItem]
+                          setWatchlist(updated)
+                          setWatchlistQuery('')
+                          setWatchlistResults([])
+                          refreshWatchlistPrices(updated)
+                        }}
+                        className={`ml-2 shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${alreadyAdded ? 'bg-gray-100 text-gray-400 cursor-default' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                        {alreadyAdded ? '추가됨' : '+ 추가'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 관심종목 목록 */}
+          {watchlist.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <div className="text-5xl mb-3">⭐</div>
+              <div className="text-sm font-medium text-gray-500">관심종목이 없습니다</div>
+              <div className="text-xs mt-1">위에서 종목을 검색하여 추가해보세요</div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-gray-400 font-medium">{watchlist.length}개 종목</div>
+                <button
+                  onClick={() => refreshWatchlistPrices(watchlist)}
+                  disabled={watchlistPriceLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">
+                  {watchlistPriceLoading ? '⏳ 조회 중…' : '🔄 시세 새로고침'}
+                </button>
+              </div>
+              {watchlist.map(w => {
+                const diff = w.prevCloseDiff ?? 0
+                const rate = w.prevCloseDiffRate ?? 0
+                const isUp = diff >= 0
+                const hasChange = w.prevCloseDiff !== undefined
+                const isForeignCcy = w.currency !== 'KRW'
+                return (
+                  <div key={w.id} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                    <span className="text-2xl shrink-0">{ASSET_TYPE_META[w.assetType].icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-800 text-sm truncate">{w.name}</div>
+                      <div className="text-xs text-gray-400">{w.ticker}{w.exchange ? ` · ${w.exchange}` : ''}</div>
+                      {w.currentPriceUpdatedAt && (
+                        <div className="text-[10px] text-gray-300 mt-0.5">{new Date(w.currentPriceUpdatedAt).toLocaleString('ko-KR')}</div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      {w.currentPrice !== undefined ? (
+                        <>
+                          <div className="font-bold text-gray-800 text-sm">
+                            {isForeignCcy
+                              ? '$' + w.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : w.currentPrice.toLocaleString('ko-KR') + '원'}
+                          </div>
+                          {hasChange && (
+                            <div className={`text-xs flex items-center justify-end gap-0.5 mt-0.5 font-medium ${isUp ? 'text-red-500' : 'text-blue-500'}`}>
+                              {isUp ? '▲' : '▼'}
+                              <span>
+                                {isForeignCcy
+                                  ? Math.abs(diff).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : Math.abs(diff).toLocaleString('ko-KR')}
+                              </span>
+                              {w.prevCloseDiffRate !== undefined && (
+                                <span className="ml-0.5 text-[11px]">({rate >= 0 ? '+' : ''}{rate.toFixed(2)}%)</span>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-xs text-gray-400">시세 없음</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setWatchlist(watchlist.filter(x => x.id !== w.id))}
+                      className="text-gray-300 hover:text-red-400 transition-colors text-xl shrink-0 leading-none">
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}

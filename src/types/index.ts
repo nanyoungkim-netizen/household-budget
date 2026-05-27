@@ -246,6 +246,20 @@ export interface PortfolioPlan {
   groups: PortfolioPlanGroup[]
 }
 
+// 관심종목
+export interface WatchlistItem {
+  id: string
+  name: string
+  ticker?: string
+  exchange?: string
+  assetType: InvestmentAssetType
+  currency: InvestmentCurrency
+  currentPrice?: number
+  prevCloseDiff?: number
+  prevCloseDiffRate?: number
+  currentPriceUpdatedAt?: string
+}
+
 export interface Investment {
   id: string
   accountId?: string        // 소속 투자 계좌 ID

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan, WatchlistItem } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -106,6 +106,7 @@ interface AppData {
   dashboardMemo: string
   dismissedNotificationIds: string[]
   investmentExchangeRates: Record<string, number>
+  watchlist: WatchlistItem[]
   lastModified: string | null
   isSetupComplete: boolean
 }
@@ -138,6 +139,7 @@ const INITIAL_DATA: AppData = {
   dashboardMemo: '',
   dismissedNotificationIds: [],
   investmentExchangeRates: {},
+  watchlist: [],
   lastModified: null,
   isSetupComplete: false,
 }
@@ -236,6 +238,7 @@ interface AppContextType {
   setDismissedNotificationIds: (ids: string[]) => void
   // 투자 환율 캐시
   setInvestmentExchangeRates: (rates: Record<string, number>) => void
+  setWatchlist: (items: WatchlistItem[]) => void
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -743,6 +746,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, investmentExchangeRates }))
   }, [update])
 
+  const setWatchlist = useCallback((watchlist: WatchlistItem[]) => {
+    update(d => ({ ...d, watchlist, lastModified: now() }))
+  }, [update])
+
   const completeSetup = useCallback((setupData: Partial<AppData>) => {
     update(d => ({ ...d, ...setupData, isSetupComplete: true, lastModified: now() }))
   }, [update])
@@ -807,6 +814,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDashboardMemo,
       setDismissedNotificationIds,
       setInvestmentExchangeRates,
+      setWatchlist,
       completeSetup,
       resetAll,
     }}>
