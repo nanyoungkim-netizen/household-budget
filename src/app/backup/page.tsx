@@ -1,14 +1,17 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useApp } from '@/lib/AppContext'
+import { useApp, MultiData } from '@/lib/AppContext'
 import { ConsumptionType, InvestmentSubType } from '@/types'
 import * as XLSX from 'xlsx'
 
-const BACKUP_VERSION = '3.0'
+const BACKUP_VERSION = '3.1'
 
 // 시트명
 const S = {
+  // ★ 자동 백업 시트 — 새 기능이 추가돼도 이 시트가 항상 전체를 커버함
+  RAW_DATA:           '__raw_data__',
+  // 사람이 읽을 수 있는 개별 시트
   ACCOUNTS:           '계좌',
   CARDS:              '카드',
   CATEGORIES:         '카테고리',
@@ -42,12 +45,13 @@ function safeNum(v: unknown): number { return Number(v) || 0 }
 
 export default function BackupPage() {
   const {
-    data, categories,
+    data, multiData, categories,
     setTransactions, setCategories, setBudgets, setSavings, setSavingPayments,
     setAccounts, setCards, setGoals, setGoalPayments, setCardBillings,
     setInstallments, setMappingRules,
     setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends,
     setInvestmentCashDeposits, setInvestmentAccountTypes, setPortfolioPlans, setWatchlist,
+    restoreBudgetData, restoreAllData,
   } = useApp()
   const {
     transactions, accounts, cards, budgets, savings, goals,
@@ -60,12 +64,14 @@ export default function BackupPage() {
   const [importStatus, setImportStatus] = useState<'idle' | 'preview' | 'error' | 'success'>('idle')
   const [importError, setImportError] = useState('')
   const [importPreview, setImportPreview] = useState<{
+    budgetCount: number    // ★ 포함된 가계부 수
     accounts: number; cards: number; categories: number; budgets: number
     savings: number; savingPayments: number; goals: number; goalPayments: number
     transactions: number; installments: number; cardBillings: number; mappingRules: number
     invAccounts: number; holdings: number; trades: number
     dividends: number; cashDeposits: number; portfolioPlans: number; watchlist: number
     dateRange: string
+    usedRawJson: boolean  // ★ true면 JSON 시트로 완전 복원, false면 구 시트별 방식
   } | null>(null)
   const [pendingWb, setPendingWb] = useState<ReturnType<typeof XLSX.read> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -74,6 +80,16 @@ export default function BackupPage() {
   function handleExport() {
     const wb = XLSX.utils.book_new()
     const today = fmtDate()
+
+    // ★ 0. 전체 데이터 JSON 시트 (자동 완전 백업 — 새 기능·새 가계부도 자동 포함)
+    //    복구 시 이 시트를 우선 사용하므로 아래 개별 시트들은 "사람이 읽기 위한 참고용"
+    //    multiData 전체를 저장 → 가계부가 여러 개여도 모두 백업됨
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+      version: BACKUP_VERSION,
+      date: today,
+      budgetCount: multiData.budgetList.length,
+      json: JSON.stringify(multiData),   // ← data가 아닌 multiData 전체!
+    }]), S.RAW_DATA)
 
     // 1. 계좌
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
@@ -321,40 +337,80 @@ export default function BackupPage() {
             ? XLSX.utils.sheet_to_json<T>(wb.Sheets[sheet])
             : [] as T[]
 
-        const txRows    = rows<Record<string, unknown>>(S.TRANSACTIONS)
-        const dates     = txRows.map(r => safeStr(r['날짜'])).filter(Boolean).sort()
+        // ★ RAW_DATA 시트 있는지 확인 (v3.1+)
+        const rawRows = rows<Record<string, unknown>>(S.RAW_DATA)
+        const rawJson = rawRows[0]?.json ? safeStr(rawRows[0].json) : null
+
+        // RAW_DATA 시트 파싱 — multiData 전체 구조
+        let parsedMulti: MultiData | null = null
+        // 활성 가계부의 AppData (카운트 표시용)
+        let parsedActiveData: Record<string, unknown[]> | null = null
+        if (rawJson) {
+          try {
+            const parsed = JSON.parse(rawJson)
+            // v3.1+: MultiData 구조 (budgetList, budgets, activeBudgetId)
+            if (parsed.budgetList && parsed.budgets) {
+              parsedMulti = parsed as MultiData
+              const activeId = parsedMulti.activeBudgetId
+              parsedActiveData = (parsedMulti.budgets[activeId] ?? Object.values(parsedMulti.budgets)[0] ?? {}) as unknown as Record<string, unknown[]>
+            } else {
+              // v3.0: AppData 구조 (단일 가계부)
+              parsedActiveData = parsed as Record<string, unknown[]>
+            }
+          } catch { /* ignore */ }
+        }
+
+        function countRaw(field: string, sheetFallback: string): number {
+          if (parsedActiveData && Array.isArray(parsedActiveData[field])) return (parsedActiveData[field] as unknown[]).length
+          return rows(sheetFallback).length
+        }
+
+        // 거래 날짜 범위 계산
+        const txSource: Record<string, unknown>[] = parsedActiveData?.transactions
+          ? (parsedActiveData.transactions as Record<string, unknown>[])
+          : rows<Record<string, unknown>>(S.TRANSACTIONS)
+        const dates     = txSource.map(r => safeStr(r['date'] ?? r['날짜'])).filter(Boolean).sort()
         const dateRange = dates.length > 0 ? `${dates[0]} ~ ${dates[dates.length-1]}` : '(거래 없음)'
 
+        // 가계부 수
+        const budgetCount = parsedMulti
+          ? parsedMulti.budgetList.length
+          : rawRows[0]?.budgetCount ? safeNum(rawRows[0].budgetCount) : 1
+
         // 버전 체크
-        const metaRows  = rows<Record<string, string>>(S.META)
-        const fileVersion = metaRows.find(r => r['항목'] === '버전')?.['값'] ?? '?'
+        const metaRows    = rows<Record<string, string>>(S.META)
+        const rawVersion  = rawRows[0]?.version ? safeStr(rawRows[0].version) : null
+        const sheetVersion = metaRows.find(r => r['항목'] === '버전')?.['값'] ?? '?'
+        const fileVersion  = rawVersion ?? sheetVersion
 
         setImportPreview({
-          accounts:      rows(S.ACCOUNTS).length,
-          cards:         rows(S.CARDS).length,
-          categories:    rows<Record<string, unknown>>(S.CATEGORIES).length,
-          budgets:       rows(S.BUDGETS).length,
-          savings:       rows(S.SAVINGS).length,
-          savingPayments: rows(S.SAVING_PAYMENTS).length,
-          goals:         rows(S.GOALS).length,
-          goalPayments:  rows(S.GOAL_PAYMENTS).length,
-          transactions:  txRows.length,
-          installments:  rows(S.INSTALLMENTS).length,
-          cardBillings:  rows(S.CARD_BILLINGS).length,
-          mappingRules:  rows(S.MAPPING_RULES).length,
-          invAccounts:   rows(S.INV_ACCOUNTS).length,
-          holdings:      rows(S.INV_HOLDINGS).length,
-          trades:        rows(S.INV_TRADES).length,
-          dividends:     rows(S.INV_DIVIDENDS).length,
-          cashDeposits:  rows(S.INV_CASH_DEPOSITS).length,
-          portfolioPlans: rows(S.PORTFOLIO_PLANS).length,
-          watchlist:     rows(S.WATCHLIST).length,
+          budgetCount,
+          accounts:      countRaw('accounts',               S.ACCOUNTS),
+          cards:         countRaw('cards',                  S.CARDS),
+          categories:    countRaw('categories',             S.CATEGORIES),
+          budgets:       countRaw('budgets',                S.BUDGETS),
+          savings:       countRaw('savings',                S.SAVINGS),
+          savingPayments: countRaw('savingPayments',        S.SAVING_PAYMENTS),
+          goals:         countRaw('goals',                  S.GOALS),
+          goalPayments:  countRaw('goalPayments',           S.GOAL_PAYMENTS),
+          transactions:  txSource.length,
+          installments:  countRaw('installments',          S.INSTALLMENTS),
+          cardBillings:  countRaw('cardBillings',          S.CARD_BILLINGS),
+          mappingRules:  countRaw('mappingRules',          S.MAPPING_RULES),
+          invAccounts:   countRaw('investmentAccounts',    S.INV_ACCOUNTS),
+          holdings:      countRaw('investments',           S.INV_HOLDINGS),
+          trades:        countRaw('investmentTrades',      S.INV_TRADES),
+          dividends:     countRaw('investmentDividends',   S.INV_DIVIDENDS),
+          cashDeposits:  countRaw('investmentCashDeposits',S.INV_CASH_DEPOSITS),
+          portfolioPlans: countRaw('portfolioPlans',       S.PORTFOLIO_PLANS),
+          watchlist:     countRaw('watchlist',             S.WATCHLIST),
           dateRange,
+          usedRawJson:   !!rawJson,
         })
         setPendingWb(wb)
         setImportStatus('preview')
-        if (fileVersion !== BACKUP_VERSION) {
-          setImportError(`버전 불일치: 백업 파일 v${fileVersion} → 현재 v${BACKUP_VERSION}. 이전 버전 파일도 최대한 복원합니다.`)
+        if (!rawJson && fileVersion !== BACKUP_VERSION) {
+          setImportError(`구 버전 백업 파일(v${fileVersion})입니다. 시트별 방식으로 최대한 복원합니다.`)
         }
       } catch {
         setImportError('파일을 읽는 중 오류가 발생했습니다. 올바른 .xlsx 파일인지 확인하세요.')
@@ -374,6 +430,29 @@ export default function BackupPage() {
         ? XLSX.utils.sheet_to_json<T>(wb.Sheets[sheet])
         : [] as T[]
 
+    // ★ RAW_DATA 시트가 있으면 JSON 통째로 복원 (v3.1+ — 새 필드·모든 가계부 자동 포함)
+    if (wb.SheetNames.includes(S.RAW_DATA)) {
+      const rawRows = rows<Record<string, unknown>>(S.RAW_DATA)
+      const jsonStr = rawRows[0]?.json ? safeStr(rawRows[0].json) : null
+      if (jsonStr) {
+        try {
+          const parsed = JSON.parse(jsonStr)
+          // v3.1+: MultiData 전체 구조
+          if (parsed.budgetList && parsed.budgets) {
+            restoreAllData(parsed as MultiData)
+          } else {
+            // v3.0: AppData 단일 가계부 구조
+            restoreBudgetData(parsed)
+          }
+          setImportStatus('success')
+          setPendingWb(null)
+          setImportPreview(null)
+          return
+        } catch { /* JSON 파싱 실패 시 아래 시트별 방식으로 fallback */ }
+      }
+    }
+
+    // ── Fallback: 구 버전 백업(v3.0 이하) — 시트별 수동 복원 ──────────────────
     // 1. 계좌
     const accountRows = rows<Record<string, unknown>>(S.ACCOUNTS)
     if (accountRows.length > 0) {
@@ -721,6 +800,16 @@ export default function BackupPage() {
         <p className="text-sm text-gray-500 mb-4">
           모든 데이터를 엑셀(.xlsx)로 백업합니다. 총 21개 시트에 빠짐없이 저장됩니다.
         </p>
+        {/* 가계부 수 표시 */}
+        <div className="flex items-center gap-2 mb-3 bg-blue-50 rounded-xl px-3 py-2">
+          <span className="text-base">📒</span>
+          <span className="text-sm font-semibold text-blue-700">
+            {multiData.budgetList.length}개 가계부
+          </span>
+          <span className="text-xs text-blue-400">
+            ({multiData.budgetList.map(b => b.name).join(', ')}) 전체 백업
+          </span>
+        </div>
         <div className="grid grid-cols-4 gap-2 mb-4">
           {exportStats.map(({ label, count, color }) => (
             <div key={label} className={`bg-${color}-50 rounded-xl p-2.5 text-center`}>
@@ -772,7 +861,19 @@ export default function BackupPage() {
         {importStatus === 'preview' && p && (
           <div className="mt-4">
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-3">
-              <div className="text-sm font-semibold text-amber-700 mb-3">📋 복구 예정 데이터</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold text-amber-700">📋 복구 예정 데이터</div>
+                {p.usedRawJson
+                  ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">✅ 완전 자동 복원</span>
+                  : <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">⚠️ 구 버전 (일부만)</span>
+                }
+              </div>
+              {p.budgetCount > 0 && (
+                <div className="text-xs text-amber-600 bg-amber-100 rounded-lg px-2 py-1 mb-2">
+                  📒 가계부 {p.budgetCount}개 포함
+                  {p.budgetCount > 1 && ' (전체 가계부 복원)'}
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-2">
                 {[
                   ['계좌',       p.accounts],
@@ -827,7 +928,7 @@ export default function BackupPage() {
           <div className="mt-4 bg-green-50 border border-green-100 rounded-xl p-4 text-center">
             <div className="text-2xl mb-1">✅</div>
             <div className="text-sm font-semibold text-green-700">데이터 복구가 완료되었습니다!</div>
-            <div className="text-xs text-green-500 mt-1">모든 데이터가 백업 파일 기준으로 복원되었습니다.</div>
+            <div className="text-xs text-green-500 mt-1">새로운 기능 데이터도 포함하여 완전히 복원되었습니다.</div>
             <button onClick={() => setImportStatus('idle')} className="mt-2 text-xs text-green-600 hover:text-green-800 underline">확인</button>
           </div>
         )}
@@ -835,7 +936,15 @@ export default function BackupPage() {
 
       {/* 시트 구성 안내 */}
       <div className="mt-4 bg-gray-50 rounded-2xl p-4">
-        <div className="text-xs font-semibold text-gray-500 mb-2">📌 백업 파일 시트 구성 (v{BACKUP_VERSION}) — 총 21개 시트</div>
+        <div className="text-xs font-semibold text-gray-500 mb-2">📌 백업 파일 시트 구성 (v{BACKUP_VERSION}) — 총 22개 시트</div>
+        <div className="mb-2 bg-blue-50 rounded-xl px-3 py-2 flex items-start gap-2">
+          <span className="text-blue-500 text-sm shrink-0">★</span>
+          <div>
+            <span className="text-xs font-semibold text-blue-700">__raw_data__ 시트</span>
+            <span className="text-xs text-blue-500 ml-1">— 전체 데이터 JSON (복구 시 이 시트 우선 사용. 새 기능 추가돼도 자동 포함)</span>
+          </div>
+        </div>
+        <div className="text-xs text-gray-400 mb-2">아래 시트들은 엑셀로 직접 확인하기 위한 참고용입니다.</div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           {[
             ['계좌',         '계좌ID·은행·잔액·자산유형·계좌번호'],

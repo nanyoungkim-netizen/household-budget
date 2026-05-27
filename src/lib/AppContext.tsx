@@ -151,7 +151,7 @@ export interface BudgetMeta {
   createdAt: string
 }
 
-interface MultiData {
+export interface MultiData {
   budgetList: BudgetMeta[]
   budgets: Record<string, AppData>
   activeBudgetId: string
@@ -175,6 +175,7 @@ const STORAGE_KEY    = 'household_budget_v2'
 // ── 컨텍스트 타입 ─────────────────────────────────────────────────────────────
 interface AppContextType {
   data: AppData
+  multiData: MultiData          // 전체 가계부 데이터 (백업용)
   categories: Category[]
   user: User | null
   isLoading: boolean
@@ -247,6 +248,10 @@ interface AppContextType {
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
   resetAll: () => void
+  // 백업에서 현재 가계부만 복원
+  restoreBudgetData: (raw: Partial<AppData>) => void
+  // 백업에서 전체 가계부 복원 (모든 가계부 포함)
+  restoreAllData: (raw: MultiData) => void
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -845,11 +850,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 백업 파일(JSON 시트)에서 현재 가계부 데이터를 통째로 교체
+  // INITIAL_DATA와 머지해서 새로 추가된 필드도 기본값으로 채움
+  const restoreBudgetData = useCallback((raw: Partial<AppData>) => {
+    setMultiData(prev => {
+      const activeId = prev.activeBudgetId
+      const merged: AppData = { ...INITIAL_DATA, ...raw, lastModified: now() }
+      const next: MultiData = {
+        ...prev,
+        budgets: { ...prev.budgets, [activeId]: merged },
+      }
+      saveToStorage(next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 백업 파일(JSON 시트)에서 전체 멀티 가계부 데이터를 통째로 교체
+  // 모든 가계부 + 목록 + 활성 ID까지 완전 복원
+  const restoreAllData = useCallback((raw: MultiData) => {
+    // 각 가계부 데이터를 INITIAL_DATA와 머지해서 누락 필드를 기본값으로 채움
+    const mergedBudgets: Record<string, AppData> = {}
+    for (const [id, budgetData] of Object.entries(raw.budgets ?? {})) {
+      mergedBudgets[id] = { ...INITIAL_DATA, ...(budgetData as Partial<AppData>), lastModified: now() }
+    }
+    const next: MultiData = {
+      budgetList: raw.budgetList ?? [makeDefaultMeta()],
+      budgets:    mergedBudgets,
+      activeBudgetId: raw.activeBudgetId ?? Object.keys(mergedBudgets)[0] ?? DEFAULT_BUDGET_ID,
+    }
+    saveToStorage(next)
+    setMultiData(next)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (!hydrated) return null
 
   return (
     <AppContext.Provider value={{
       data,
+      multiData,
       categories: data.categories,
       user,
       isLoading,
@@ -898,6 +938,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       isSyncingNow,
       completeSetup,
       resetAll,
+      restoreBudgetData,
+      restoreAllData,
     }}>
       {children}
     </AppContext.Provider>
