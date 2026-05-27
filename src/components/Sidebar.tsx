@@ -259,7 +259,7 @@ function BudgetSwitcher() {
 // ── 사이드바 ─────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const pathname = usePathname()
-  const { user, signOut } = useApp()
+  const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow } = useApp()
   const [spinning, setSpinning] = useState(false)
 
   function handleRefresh() {
@@ -272,21 +272,36 @@ export default function Sidebar() {
       {/* 데스크탑 사이드바 */}
       <aside className="hidden md:flex flex-col fixed left-0 top-0 h-full w-56 bg-white border-r border-gray-100 z-30 shadow-sm">
         <div className="p-5 pb-3 border-b border-gray-100 space-y-3">
-          <button
-            onClick={handleRefresh}
-            title="새로고침"
-            className="flex items-center gap-2 w-full hover:opacity-80 transition-opacity group"
-          >
-            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-lg relative">
-              🌰
-            </div>
-            <div className="text-left flex-1 min-w-0">
-              <div className="font-bold text-sm text-gray-900">밤티부</div>
-              <div className="text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
-                {spinning ? '새로고침 중...' : '↺ 새로고침'}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              title="새로고침"
+              className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity group"
+            >
+              <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-lg shrink-0">
+                🌰
               </div>
-            </div>
-          </button>
+              <div className="text-left flex-1 min-w-0">
+                <div className="font-bold text-sm text-gray-900">밤티부</div>
+                <div className="text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
+                  {spinning ? '새로고침 중...' : '↺ 새로고침'}
+                </div>
+              </div>
+            </button>
+            {user && (
+              <button
+                onClick={forceSyncNow}
+                disabled={isSyncingNow}
+                title={lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장'}
+                className="shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
+              >
+                <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>☁️</span>
+                <span className="text-[10px] font-medium text-blue-600 leading-none whitespace-nowrap">
+                  {isSyncingNow ? '저장 중' : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '저장'}
+                </span>
+              </button>
+            )}
+          </div>
           <BudgetSwitcher />
         </div>
 
@@ -330,6 +345,19 @@ export default function Sidebar() {
         <div className="flex-1 min-w-0">
           <BudgetSwitcher />
         </div>
+        {user && (
+          <button
+            onClick={forceSyncNow}
+            disabled={isSyncingNow}
+            title={lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장'}
+            className="shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>☁️</span>
+            <span className="text-[9px] font-medium text-blue-600 leading-none whitespace-nowrap">
+              {isSyncingNow ? '저장중' : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '저장'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* 모바일 하단 탭바 — 전체 메뉴 가로 스크롤 */}
