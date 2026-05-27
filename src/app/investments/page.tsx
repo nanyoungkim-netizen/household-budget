@@ -69,6 +69,7 @@ const EMPTY_ACCOUNT: Omit<InvestmentAccount, 'id'> = {
   bank: '',
   typeId: 'iat_general',
   color: ACCOUNT_COLORS[0],
+  accountNumber: undefined,
 }
 
 const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
@@ -642,7 +643,7 @@ export default function InvestmentsPage() {
 
   function openEditAccount(acc: InvestmentAccount) {
     setEditAccountId(acc.id)
-    setAccountForm({ name: acc.name, bank: acc.bank, typeId: acc.typeId, color: acc.color })
+    setAccountForm({ name: acc.name, bank: acc.bank, typeId: acc.typeId, color: acc.color, accountNumber: acc.accountNumber })
     setShowAccountModal(true)
   }
 
@@ -1670,7 +1671,7 @@ export default function InvestmentsPage() {
                         <span className="truncate">{acc.name}</span>
                         <span className="text-xs text-gray-400 shrink-0">{isCollapsed ? '▶' : '▼'}</span>
                       </div>
-                      <div className="text-xs text-gray-400 truncate">{acc.bank} · {getTypeLabel(acc.typeId)} · {accInvestments.length}종목</div>
+                      <div className="text-xs text-gray-400 truncate">{acc.bank} · {getTypeLabel(acc.typeId)} · {accInvestments.length}종목{acc.accountNumber ? ` · ${acc.accountNumber}` : ''}</div>
                     </div>
                     {(() => {
                       const cash = cashBalanceMap.get(acc.id) ?? 0
@@ -2536,6 +2537,9 @@ export default function InvestmentsPage() {
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               <input type="text" placeholder="증권사 / 금융기관 (예: 미래에셋증권)" value={accountForm.bank}
                 onChange={e => setAccountForm(f => ({ ...f, bank: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input type="text" placeholder="계좌번호 (선택)" value={accountForm.accountNumber ?? ''}
+                onChange={e => setAccountForm(f => ({ ...f, accountNumber: e.target.value || undefined }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               <div>
                 <label className="text-xs text-gray-400 block mb-1.5">계좌 유형</label>

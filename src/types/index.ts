@@ -216,6 +216,7 @@ export interface InvestmentAccount {
   typeId: string            // InvestmentAccountType.id 참조
   color: string
   cashDeposits?: number     // 예수금 입금 누계 (수동 입금 합계)
+  accountNumber?: string    // 계좌번호 (선택)
 }
 
 // F-05: 목표 투자 비율 (레거시 — PortfolioPlan으로 대체)
