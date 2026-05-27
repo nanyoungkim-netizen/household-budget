@@ -322,23 +322,26 @@ export default function BackupPage() {
       { 항목: '관심종목수',     값: (watchlist ?? []).length },
     ]), S.META)
 
-    // Blob 방식으로 다운로드 — XLSX.writeFile보다 브라우저 호환성 높음
+    // Blob 방식 다운로드
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([wbout], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
+    const blob = new Blob([wbout], { type: 'application/octet-stream' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `가계부_백업_${today}.xlsx`
+    a.style.display = 'none'
     document.body.appendChild(a)
     a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    // 100ms 뒤에 정리 — 즉시 revokeObjectURL하면 브라우저가 다운로드 시작 전에 URL이 사라짐
+    setTimeout(() => {
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }, 100)
     setLastBackupDate(today)
-    } catch (e) {
-      setExportError(`백업 파일 생성 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
-    }
+  } catch (e) {
+    console.error('백업 실패:', e)
+    setExportError(`백업 파일 생성 실패: ${e instanceof Error ? e.message : String(e)}`)
+  }
   }
 
   // ── 파일 읽기 & 미리보기 ───────────────────────────────────────────────────────
