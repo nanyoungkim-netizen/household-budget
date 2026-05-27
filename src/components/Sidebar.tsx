@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useApp, BudgetMeta } from '@/lib/AppContext'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 const navItems = [
   { href: '/', icon: '🏠', label: '대시보드' },
@@ -261,6 +261,23 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow, syncError } = useApp()
   const [spinning, setSpinning] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const prevSyncedAtRef = useRef<string | null>(null)
+
+  // lastSyncedAt이 바뀌면 (= 저장 성공) 2초간 "저장됐어요!" 표시
+  useEffect(() => {
+    if (lastSyncedAt && lastSyncedAt !== prevSyncedAtRef.current) {
+      prevSyncedAtRef.current = lastSyncedAt
+      setShowSuccess(true)
+      const t = setTimeout(() => setShowSuccess(false), 2500)
+      return () => clearTimeout(t)
+    }
+  }, [lastSyncedAt])
+
+  const handleSync = useCallback(async () => {
+    setShowSuccess(false)
+    await forceSyncNow()
+  }, [forceSyncNow])
 
   function handleRefresh() {
     setSpinning(true)
@@ -290,25 +307,27 @@ export default function Sidebar() {
             </button>
             {user && (
               <button
-                onClick={forceSyncNow}
+                onClick={handleSync}
                 disabled={isSyncingNow}
-                title={
-                  syncError ? syncError
-                  : lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}`
-                  : '클라우드에 저장'
-                }
-                className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors disabled:opacity-50 ${
-                  syncError
-                    ? 'bg-red-50 hover:bg-red-100'
-                    : 'bg-blue-50 hover:bg-blue-100'
+                title={syncError ?? (lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장')}
+                className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all active:scale-95 disabled:opacity-60 ${
+                  syncError ? 'bg-red-50 hover:bg-red-100'
+                  : showSuccess ? 'bg-green-50 hover:bg-green-100'
+                  : isSyncingNow ? 'bg-blue-100'
+                  : 'bg-blue-50 hover:bg-blue-100'
                 }`}
               >
                 <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>
-                  {syncError ? '❌' : '☁️'}
+                  {syncError ? '❌' : showSuccess ? '✅' : '☁️'}
                 </span>
-                <span className={`text-[10px] font-medium leading-none whitespace-nowrap ${syncError ? 'text-red-500' : 'text-blue-600'}`}>
-                  {isSyncingNow ? '저장 중'
+                <span className={`text-[10px] font-semibold leading-none whitespace-nowrap ${
+                  syncError ? 'text-red-500'
+                  : showSuccess ? 'text-green-600'
+                  : 'text-blue-600'
+                }`}>
+                  {isSyncingNow ? '저장 중…'
                     : syncError ? '실패·재시도'
+                    : showSuccess ? '저장됐어요!'
                     : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
                     : '저장'}
                 </span>
@@ -360,19 +379,27 @@ export default function Sidebar() {
         </div>
         {user && (
           <button
-            onClick={forceSyncNow}
+            onClick={handleSync}
             disabled={isSyncingNow}
             title={syncError ?? (lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장')}
-            className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl active:scale-95 transition-all disabled:opacity-50 ${
-              syncError ? 'bg-red-50 hover:bg-red-100' : 'bg-blue-50 hover:bg-blue-100'
+            className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl active:scale-95 transition-all disabled:opacity-60 ${
+              syncError ? 'bg-red-50 hover:bg-red-100'
+              : showSuccess ? 'bg-green-50 hover:bg-green-100'
+              : isSyncingNow ? 'bg-blue-100'
+              : 'bg-blue-50 hover:bg-blue-100'
             }`}
           >
             <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>
-              {syncError ? '❌' : '☁️'}
+              {syncError ? '❌' : showSuccess ? '✅' : '☁️'}
             </span>
-            <span className={`text-[9px] font-medium leading-none whitespace-nowrap ${syncError ? 'text-red-500' : 'text-blue-600'}`}>
-              {isSyncingNow ? '저장중'
-                : syncError ? '실패'
+            <span className={`text-[9px] font-semibold leading-none whitespace-nowrap ${
+              syncError ? 'text-red-500'
+              : showSuccess ? 'text-green-600'
+              : 'text-blue-600'
+            }`}>
+              {isSyncingNow ? '저장중…'
+                : syncError ? '실패·재시도'
+                : showSuccess ? '저장됐어요!'
                 : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
                 : '저장'}
             </span>
