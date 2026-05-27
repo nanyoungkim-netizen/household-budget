@@ -130,6 +130,7 @@ export default function InvestmentsPage() {
   const [watchlistSearching, setWatchlistSearching] = useState(false)
   const [watchlistPriceLoading, setWatchlistPriceLoading] = useState(false)
   const watchlistSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const watchlistDropdownRef = useRef<HTMLDivElement>(null)
 
   // PRD F-03: 통화 전환 토글 (localStorage 유지)
   const [currencyMode, setCurrencyMode] = useState<'KRW' | 'USD'>(() => {
@@ -248,21 +249,27 @@ export default function InvestmentsPage() {
     watchlistSearchTimer.current = setTimeout(async () => {
       setWatchlistSearching(true)
       try {
-        const [domestic, foreign] = await Promise.allSettled([
+        const [domRes, forRes] = await Promise.allSettled([
           fetch(`/api/stock/search?q=${encodeURIComponent(q)}`).then(r => r.json()),
           fetch(`/api/stock/search-foreign?q=${encodeURIComponent(q)}`).then(r => r.json()),
         ])
+        const domItems: { name: string; ticker: string; market?: string }[] =
+          (domRes.status === 'fulfilled' ? domRes.value?.items ?? [] : [])
+        const forItems: { name: string; ticker: string; market?: string; nation?: string }[] =
+          (forRes.status === 'fulfilled' ? forRes.value?.items ?? [] : [])
+
         const results: typeof watchlistResults = []
-        if (domestic.status === 'fulfilled' && Array.isArray(domestic.value)) {
-          domestic.value.slice(0, 5).forEach((item: { name: string; ticker: string }) =>
-            results.push({ name: item.name, ticker: item.ticker, assetType: 'domestic_stock', currency: 'KRW' })
-          )
-        }
-        if (foreign.status === 'fulfilled' && Array.isArray(foreign.value)) {
-          foreign.value.slice(0, 5).forEach((item: { name: string; ticker: string; exchange?: string }) =>
-            results.push({ name: item.name, ticker: item.ticker, assetType: 'foreign_stock', currency: 'USD', exchange: item.exchange })
-          )
-        }
+        const seen = new Set<string>()
+        domItems.slice(0, 6).forEach(item => {
+          if (!item.ticker || seen.has(item.ticker)) return
+          seen.add(item.ticker)
+          results.push({ name: item.name, ticker: item.ticker, assetType: 'domestic_stock', currency: 'KRW', exchange: item.market })
+        })
+        forItems.slice(0, 6).forEach(item => {
+          if (!item.ticker || seen.has(item.ticker)) return
+          seen.add(item.ticker)
+          results.push({ name: item.name, ticker: item.ticker, assetType: 'foreign_stock', currency: 'USD', exchange: item.market ?? item.nation })
+        })
         setWatchlistResults(results)
       } finally {
         setWatchlistSearching(false)
@@ -378,6 +385,17 @@ export default function InvestmentsPage() {
         nameInputRef.current && !nameInputRef.current.contains(e.target as Node)
       ) {
         setNameDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // 관심종목 검색 드롭다운 — 바깥 클릭 시 닫기
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (watchlistDropdownRef.current && !watchlistDropdownRef.current.contains(e.target as Node)) {
+        setWatchlistResults([])
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -1857,51 +1875,65 @@ export default function InvestmentsPage() {
       {/* ══ 관심종목 탭 ══════════════════════════════════════════════════════ */}
       {pageTab === 'watchlist' && (
         <div className="space-y-4">
-          {/* 검색창 */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center gap-2">
+          {/* 검색창 + 드롭다운 */}
+          <div ref={watchlistDropdownRef} className="relative">
+            <div className="bg-white rounded-2xl shadow-sm flex items-center px-4 py-3 gap-2">
+              <span className="text-gray-400 text-base shrink-0">🔍</span>
               <input
                 value={watchlistQuery}
                 onChange={e => { setWatchlistQuery(e.target.value); triggerWatchlistSearch(e.target.value) }}
+                onKeyDown={e => { if (e.key === 'Escape') { setWatchlistQuery(''); setWatchlistResults([]) } }}
                 placeholder="종목명 또는 티커 검색 (예: 삼성전자, AAPL)"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="flex-1 text-sm focus:outline-none placeholder-gray-400 bg-transparent"
               />
-              {watchlistSearching && <div className="text-xs text-gray-400 whitespace-nowrap">검색 중…</div>}
+              {watchlistSearching && (
+                <div className="text-xs text-gray-400 whitespace-nowrap shrink-0">검색 중…</div>
+              )}
+              {watchlistQuery && !watchlistSearching && (
+                <button onClick={() => { setWatchlistQuery(''); setWatchlistResults([]) }}
+                  className="text-gray-300 hover:text-gray-500 text-lg shrink-0 leading-none">×</button>
+              )}
             </div>
+
+            {/* 플로팅 드롭다운 */}
             {watchlistResults.length > 0 && (
-              <div className="mt-3 border border-gray-100 rounded-xl overflow-hidden">
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
                 {watchlistResults.map((item, i) => {
                   const alreadyAdded = watchlist.some(w => w.ticker === item.ticker && w.assetType === item.assetType)
                   return (
-                    <div key={i} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-lg">{ASSET_TYPE_META[item.assetType].icon}</span>
+                    <div key={i}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-blue-50 border-b border-gray-50 last:border-0 cursor-pointer transition-colors"
+                      onClick={() => {
+                        if (alreadyAdded) return
+                        const newItem: WatchlistItem = {
+                          id: `wl_${Date.now()}`,
+                          name: item.name,
+                          ticker: item.ticker,
+                          exchange: item.exchange,
+                          assetType: item.assetType,
+                          currency: item.currency,
+                        }
+                        const updated = [...watchlist, newItem]
+                        setWatchlist(updated)
+                        setWatchlistQuery('')
+                        setWatchlistResults([])
+                        refreshWatchlistPrices(updated)
+                      }}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xl shrink-0">{ASSET_TYPE_META[item.assetType].icon}</span>
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-800 truncate">{item.name}</div>
-                          <div className="text-xs text-gray-400">{item.ticker}{item.exchange ? ` · ${item.exchange}` : ''}</div>
+                          <div className="text-sm font-semibold text-gray-800 truncate">{item.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {item.ticker}
+                            {item.exchange ? <span className="ml-1 text-gray-300">· {item.exchange}</span> : null}
+                          </div>
                         </div>
                       </div>
-                      <button
-                        disabled={alreadyAdded}
-                        onClick={() => {
-                          if (alreadyAdded) return
-                          const newItem: WatchlistItem = {
-                            id: `wl_${Date.now()}`,
-                            name: item.name,
-                            ticker: item.ticker,
-                            exchange: item.exchange,
-                            assetType: item.assetType,
-                            currency: item.currency,
-                          }
-                          const updated = [...watchlist, newItem]
-                          setWatchlist(updated)
-                          setWatchlistQuery('')
-                          setWatchlistResults([])
-                          refreshWatchlistPrices(updated)
-                        }}
-                        className={`ml-2 shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${alreadyAdded ? 'bg-gray-100 text-gray-400 cursor-default' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                        {alreadyAdded ? '추가됨' : '+ 추가'}
-                      </button>
+                      {alreadyAdded ? (
+                        <span className="ml-2 shrink-0 text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-lg">추가됨</span>
+                      ) : (
+                        <span className="ml-2 shrink-0 text-xs text-blue-600 font-semibold">+ 추가</span>
+                      )}
                     </div>
                   )
                 })}
