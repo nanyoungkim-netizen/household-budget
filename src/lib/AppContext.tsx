@@ -267,6 +267,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userRef = useRef<User | null>(null)
   const multiDataRef = useRef<MultiData>(INITIAL_MULTI_DATA)
+  const sessionTokenRef = useRef<string | null>(null)   // keepalive sync 용 JWT 캐시
+  const isExplicitSignOutRef = useRef(false)            // 의도적 로그아웃 여부
 
   userRef.current = user
   multiDataRef.current = multiData
@@ -275,6 +277,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const data: AppData = multiData.budgets[multiData.activeBudgetId] ?? INITIAL_DATA
 
   // ── Supabase 동기화 ─────────────────────────────────────────────────────────
+  // dirty flag: 저장됐지만 Supabase 미동기화 상태를 표시 — 다음 init 시 로컬 우선 보장
+  const NEEDS_SYNC_KEY = 'hb_needs_sync'
+
   async function syncToSupabase(userId: string, next: MultiData) {
     if (!supabase) return
     try {
@@ -282,18 +287,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         { user_id: userId, data: next, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
       )
+      localStorage.removeItem(NEEDS_SYNC_KEY)  // 성공 시 dirty flag 해제
+    } catch { /* ignore — dirty flag 유지돼서 다음 로드 시 재시도됨 */ }
+  }
+
+  // 페이지 이탈 직전 keepalive fetch로 Supabase REST API에 직접 기록
+  // → 브라우저가 비동기 완료를 보장 (일반 async 호출로는 보장 안 됨)
+  function syncBeforeUnload(userId: string, next: MultiData) {
+    const url  = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const token = sessionTokenRef.current
+    if (!url || !key || !token) return
+    try {
+      fetch(`${url}/rest/v1/user_data`, {
+        method: 'POST',
+        keepalive: true,   // 페이지 언로드 후에도 브라우저가 요청 완료 보장
+        headers: {
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=minimal',
+          'apikey': key,
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ user_id: userId, data: next, updated_at: new Date().toISOString() }),
+      })
     } catch { /* ignore */ }
   }
 
   function saveToStorage(next: MultiData) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      if (supabase && userRef.current) {
+        localStorage.setItem(NEEDS_SYNC_KEY, '1')  // dirty flag 설정
+      }
     } catch { /* ignore */ }
     if (supabase && userRef.current) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+      // 500ms → 200ms: 빠른 연속 입력은 묶고, 이탈 전 누락 가능성을 줄임
       syncTimerRef.current = setTimeout(() => {
         if (userRef.current) syncToSupabase(userRef.current.id, next)
-      }, 500)
+      }, 200)
     }
   }
 
@@ -436,6 +468,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (session?.user) {
             setUser(session.user)
             userRef.current = session.user
+            sessionTokenRef.current = session.access_token  // JWT 캐시
+
+            // dirty flag: 이전 세션에서 미동기 데이터가 있으면 로컬을 Supabase에 먼저 push
+            const hasPendingSync = localStorage.getItem(NEEDS_SYNC_KEY) === '1'
+            if (hasPendingSync && localMulti) {
+              await syncToSupabase(session.user.id, localMulti)
+            }
 
             const { data: remoteRow } = await supabase
               .from('user_data')
@@ -449,7 +488,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const winner = mergeMultiData(localMulti, remoteMulti)
             setMultiData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-            // 항상 winner를 Supabase에 동기화 (로컬이 최신인 경우 서버 업데이트 누락 방지)
             await syncToSupabase(session.user.id, winner)
           } else {
             if (localMulti) setMultiData(localMulti)
@@ -458,11 +496,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             setUser(session?.user ?? null)
             userRef.current = session?.user ?? null
+            if (session?.access_token) sessionTokenRef.current = session.access_token
 
             if (event === 'SIGNED_OUT') {
-              setMultiData(INITIAL_MULTI_DATA)
+              // 명시적 로그아웃(signOut 호출)일 때만 데이터 초기화
+              // 토큰 만료 등 비의도적 SIGNED_OUT에서는 데이터를 지우지 않음
+              if (isExplicitSignOutRef.current) {
+                isExplicitSignOutRef.current = false
+                setMultiData(INITIAL_MULTI_DATA)
+              }
             }
             if (event === 'SIGNED_IN' && session?.user) {
+              sessionTokenRef.current = session.access_token
+
+              // dirty flag 있으면 현재 로컬을 먼저 push해서 원격에 반영
+              let currentLocal: MultiData | null = null
+              try {
+                const stored = localStorage.getItem(STORAGE_KEY)
+                if (stored) currentLocal = hydrateMultiData(JSON.parse(stored))
+              } catch { /* ignore */ }
+
+              const hasPending = localStorage.getItem(NEEDS_SYNC_KEY) === '1'
+              if (hasPending && currentLocal) {
+                await syncToSupabase(session.user.id, currentLocal)
+              }
+
               const { data: remoteRow } = await supabase!
                 .from('user_data')
                 .select('data')
@@ -472,17 +530,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               let remoteMulti: MultiData | null = null
               if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
 
-              let currentLocal: MultiData | null = null
-              try {
-                const stored = localStorage.getItem(STORAGE_KEY)
-                if (stored) currentLocal = hydrateMultiData(JSON.parse(stored))
-              } catch { /* ignore */ }
-
               const winner = mergeMultiData(currentLocal, remoteMulti)
               if (winner) {
                 setMultiData(winner)
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-                // 항상 winner를 Supabase에 동기화 (로컬이 최신인 경우 서버 업데이트 누락 방지)
                 await syncToSupabase(session.user.id, winner)
               }
             }
@@ -504,17 +555,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })
 
     const handlePageHide = () => {
+      // 1) 대기 중인 디바운스 취소
       if (syncTimerRef.current) {
         clearTimeout(syncTimerRef.current)
         syncTimerRef.current = null
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY)
-          if (stored && userRef.current) {
-            const d = JSON.parse(stored) as MultiData
-            syncToSupabase(userRef.current.id, d)
-          }
-        } catch { /* ignore */ }
       }
+      // 2) keepalive fetch로 브라우저가 보장하는 최종 동기화
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored && userRef.current) {
+          const d = JSON.parse(stored) as MultiData
+          syncBeforeUnload(userRef.current.id, d)  // keepalive: true
+        }
+      } catch { /* ignore */ }
     }
     window.addEventListener('pagehide', handlePageHide)
 
@@ -618,11 +671,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    isExplicitSignOutRef.current = true  // 명시적 로그아웃 표시
     if (supabase) await supabase.auth.signOut()
     setUser(null)
     userRef.current = null
+    sessionTokenRef.current = null
     setMultiData(INITIAL_MULTI_DATA)
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(NEEDS_SYNC_KEY)
   }, [])
 
   // ── Data Actions ────────────────────────────────────────────────────────────
