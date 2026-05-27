@@ -244,6 +244,7 @@ interface AppContextType {
   forceSyncNow: () => Promise<void>
   lastSyncedAt: string | null
   isSyncingNow: boolean
+  syncError: string | null   // 저장 실패 메시지
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -290,6 +291,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const NEEDS_SYNC_KEY = 'hb_needs_sync'
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [isSyncingNow, setIsSyncingNow] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   async function syncToSupabase(userId: string, next: MultiData) {
     if (!supabase) return
@@ -308,24 +310,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore — dirty flag 유지돼서 다음 로드 시 재시도됨 */ }
   }
 
-  // 수동 즉시 저장 — 버튼 클릭 시 호출
+  // 수동 즉시 저장 — 버튼 클릭 시 호출 (최대 3회 자동 재시도)
   const forceSyncNow = useCallback(async () => {
     if (!supabase || !userRef.current) return
     setIsSyncingNow(true)
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (!stored) return
-      const current = JSON.parse(stored) as MultiData
-      // 10초 타임아웃: Supabase가 응답 없이 멈춰도 "저장 중" 무한 대기 방지
-      await Promise.race([
-        syncToSupabase(userRef.current.id, current),
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('sync_timeout')), 10000)
-        ),
-      ])
-    } catch { /* ignore — 실패해도 dirty flag가 다음 로그인 시 재시도 보장 */ } finally {
-      setIsSyncingNow(false)
+    setSyncError(null)
+
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) { setIsSyncingNow(false); return }
+    const current = JSON.parse(stored) as MultiData
+
+    const MAX_RETRIES = 3
+    let lastErr: unknown = null
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        await Promise.race([
+          supabase.from('user_data').upsert(
+            { user_id: userRef.current.id, data: current, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id' }
+          ).then(({ error }) => { if (error) throw error }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 10000)
+          ),
+        ])
+        // 성공
+        localStorage.removeItem(NEEDS_SYNC_KEY)
+        setLastSyncedAt(new Date().toISOString())
+        setSyncError(null)
+        setIsSyncingNow(false)
+        return
+      } catch (e) {
+        lastErr = e
+        if (attempt < MAX_RETRIES) {
+          // 재시도 전 2초 대기
+          await new Promise(r => setTimeout(r, 2000))
+        }
+      }
     }
+
+    // 3회 모두 실패
+    const msg = lastErr instanceof Error && lastErr.message === 'timeout'
+      ? '네트워크가 느려요. 잠시 후 다시 시도해주세요.'
+      : '저장에 실패했어요. 인터넷 연결을 확인해주세요.'
+    setSyncError(msg)
+    setIsSyncingNow(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -947,6 +976,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       forceSyncNow,
       lastSyncedAt,
       isSyncingNow,
+      syncError,
       completeSetup,
       resetAll,
       restoreBudgetData,

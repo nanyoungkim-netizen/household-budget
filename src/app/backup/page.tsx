@@ -61,6 +61,7 @@ export default function BackupPage() {
   } = data
 
   const [lastBackupDate, setLastBackupDate] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
   const [importStatus, setImportStatus] = useState<'idle' | 'preview' | 'error' | 'success'>('idle')
   const [importError, setImportError] = useState('')
   const [importPreview, setImportPreview] = useState<{
@@ -78,18 +79,30 @@ export default function BackupPage() {
 
   // ── 내보내기 ──────────────────────────────────────────────────────────────────
   function handleExport() {
+    setExportError(null)
+    try {
     const wb = XLSX.utils.book_new()
     const today = fmtDate()
 
     // ★ 0. 전체 데이터 JSON 시트 (자동 완전 백업 — 새 기능·새 가계부도 자동 포함)
     //    복구 시 이 시트를 우선 사용하므로 아래 개별 시트들은 "사람이 읽기 위한 참고용"
     //    multiData 전체를 저장 → 가계부가 여러 개여도 모두 백업됨
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
-      version: BACKUP_VERSION,
-      date: today,
-      budgetCount: multiData.budgetList.length,
-      json: JSON.stringify(multiData),   // ← data가 아닌 multiData 전체!
-    }]), S.RAW_DATA)
+    //    JSON이 길어도 청크로 분할해서 셀 한도(32767자) 초과 방지
+    const rawJson = JSON.stringify(multiData)
+    const CHUNK = 30000
+    const chunks = Array.from({ length: Math.ceil(rawJson.length / CHUNK) }, (_, i) =>
+      rawJson.slice(i * CHUNK, (i + 1) * CHUNK)
+    )
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+      chunks.map((chunk, i) => ({
+        version: i === 0 ? BACKUP_VERSION : '',
+        date: i === 0 ? today : '',
+        budgetCount: i === 0 ? multiData.budgetList.length : '',
+        part: i + 1,
+        total: chunks.length,
+        json: chunk,
+      }))
+    ), S.RAW_DATA)
 
     // 1. 계좌
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
@@ -309,8 +322,23 @@ export default function BackupPage() {
       { 항목: '관심종목수',     값: (watchlist ?? []).length },
     ]), S.META)
 
-    XLSX.writeFile(wb, `가계부_백업_${today}.xlsx`)
+    // Blob 방식으로 다운로드 — XLSX.writeFile보다 브라우저 호환성 높음
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([wbout], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `가계부_백업_${today}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
     setLastBackupDate(today)
+    } catch (e) {
+      setExportError(`백업 파일 생성 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
+    }
   }
 
   // ── 파일 읽기 & 미리보기 ───────────────────────────────────────────────────────
@@ -339,7 +367,10 @@ export default function BackupPage() {
 
         // ★ RAW_DATA 시트 있는지 확인 (v3.1+)
         const rawRows = rows<Record<string, unknown>>(S.RAW_DATA)
-        const rawJson = rawRows[0]?.json ? safeStr(rawRows[0].json) : null
+        // 청크 분할된 JSON을 합치기 (단일 행이면 그냥 사용)
+        const rawJson = rawRows.length > 0
+          ? rawRows.map(r => safeStr(r['json'])).join('')
+          : null
 
         // RAW_DATA 시트 파싱 — multiData 전체 구조
         let parsedMulti: MultiData | null = null
@@ -433,7 +464,10 @@ export default function BackupPage() {
     // ★ RAW_DATA 시트가 있으면 JSON 통째로 복원 (v3.1+ — 새 필드·모든 가계부 자동 포함)
     if (wb.SheetNames.includes(S.RAW_DATA)) {
       const rawRows = rows<Record<string, unknown>>(S.RAW_DATA)
-      const jsonStr = rawRows[0]?.json ? safeStr(rawRows[0].json) : null
+      // 청크 분할된 JSON을 합치기
+      const jsonStr = rawRows.length > 0
+        ? rawRows.map(r => safeStr(r['json'])).join('')
+        : null
       if (jsonStr) {
         try {
           const parsed = JSON.parse(jsonStr)
@@ -827,6 +861,11 @@ export default function BackupPage() {
           <span>⬇️</span>
           <span>가계부_백업_{fmtDate()}.xlsx 다운로드</span>
         </button>
+        {exportError && (
+          <div className="mt-2 bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-600">
+            ⚠️ {exportError}
+          </div>
+        )}
       </div>
 
       {/* 복구 섹션 */}

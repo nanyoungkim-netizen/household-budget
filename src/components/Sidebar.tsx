@@ -259,7 +259,7 @@ function BudgetSwitcher() {
 // ── 사이드바 ─────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const pathname = usePathname()
-  const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow } = useApp()
+  const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow, syncError } = useApp()
   const [spinning, setSpinning] = useState(false)
 
   function handleRefresh() {
@@ -292,12 +292,25 @@ export default function Sidebar() {
               <button
                 onClick={forceSyncNow}
                 disabled={isSyncingNow}
-                title={lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장'}
-                className="shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                title={
+                  syncError ? syncError
+                  : lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}`
+                  : '클라우드에 저장'
+                }
+                className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors disabled:opacity-50 ${
+                  syncError
+                    ? 'bg-red-50 hover:bg-red-100'
+                    : 'bg-blue-50 hover:bg-blue-100'
+                }`}
               >
-                <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>☁️</span>
-                <span className="text-[10px] font-medium text-blue-600 leading-none whitespace-nowrap">
-                  {isSyncingNow ? '저장 중' : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '저장'}
+                <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>
+                  {syncError ? '❌' : '☁️'}
+                </span>
+                <span className={`text-[10px] font-medium leading-none whitespace-nowrap ${syncError ? 'text-red-500' : 'text-blue-600'}`}>
+                  {isSyncingNow ? '저장 중'
+                    : syncError ? '실패·재시도'
+                    : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                    : '저장'}
                 </span>
               </button>
             )}
@@ -349,12 +362,19 @@ export default function Sidebar() {
           <button
             onClick={forceSyncNow}
             disabled={isSyncingNow}
-            title={lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장'}
-            className="shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 active:scale-95 transition-all disabled:opacity-50"
+            title={syncError ?? (lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장')}
+            className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl active:scale-95 transition-all disabled:opacity-50 ${
+              syncError ? 'bg-red-50 hover:bg-red-100' : 'bg-blue-50 hover:bg-blue-100'
+            }`}
           >
-            <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>☁️</span>
-            <span className="text-[9px] font-medium text-blue-600 leading-none whitespace-nowrap">
-              {isSyncingNow ? '저장중' : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '저장'}
+            <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>
+              {syncError ? '❌' : '☁️'}
+            </span>
+            <span className={`text-[9px] font-medium leading-none whitespace-nowrap ${syncError ? 'text-red-500' : 'text-blue-600'}`}>
+              {isSyncingNow ? '저장중'
+                : syncError ? '실패'
+                : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                : '저장'}
             </span>
           </button>
         )}
