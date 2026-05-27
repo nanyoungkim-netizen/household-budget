@@ -131,6 +131,8 @@ export interface Saving {
   paymentAmount?: number                         // 회차당 납입 금액 (monthlyAmount와 별도)
   targetAmount?: number                          // 목표 수령액
   skipWeekends?: boolean                         // 일납 시 주말 제외 여부
+  actualInterest?: number                        // 실제 수령 이자 (만기처리 시 입력)
+  memo?: string                                  // 메모 (재예치·투자 용도 등)
 }
 
 // FR-009: 카드 청구·납부 관리

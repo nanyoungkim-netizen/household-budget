@@ -74,7 +74,7 @@ type TaxType = 'general' | 'low_tax' | 'exempt'
 type SavingFormType = 'saving' | 'deposit' | 'subscription'
 
 const EMPTY_FORM = {
-  name: '', bank: '', accountNumber: '',
+  name: '', bank: '', accountNumber: '', memo: '',
   type: 'saving' as SavingFormType,
   monthlyAmount: '', interestRate: '', startDate: '', maturityDate: '', currentAmount: '',
   interestType: 'simple' as 'simple' | 'compound',
@@ -119,6 +119,7 @@ export default function SavingsPage() {
   const [maturityInterest, setMaturityInterest] = useState('')
   const [maturityAccountId, setMaturityAccountId] = useState('')
   const [maturityDate, setMaturityDate] = useState('')
+  const [maturityMemo, setMaturityMemo] = useState('')
 
   // ── 토스트 ─────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null)
@@ -135,6 +136,7 @@ export default function SavingsPage() {
     setMaturityInterest(interestIncome > 0 ? fmtInput(String(interestIncome)) : '')
     setMaturityAccountId(accounts[0]?.id || '')
     setMaturityDate(todayStr)
+    setMaturityMemo(s.memo ?? '')
   }
 
   function handleMaturityConfirm() {
@@ -170,8 +172,13 @@ export default function SavingsPage() {
     const newTxs = [tx1, ...(interestAmt > 0 ? [tx2] : [])]
     setTransactions([...data.transactions, ...newTxs])
 
-    // saving status = matured
-    setSavings(savings.map(sv => sv.id === s.id ? { ...sv, status: 'matured' as const } : sv))
+    // saving status = matured + 실제 수령 이자 + 메모 저장
+    setSavings(savings.map(sv => sv.id === s.id ? {
+      ...sv,
+      status: 'matured' as const,
+      actualInterest: interestAmt,
+      memo: maturityMemo.trim() || sv.memo,
+    } : sv))
     setMaturityModal(null)
     showToast('거래내역에 반영되었습니다.')
   }
@@ -234,6 +241,7 @@ export default function SavingsPage() {
       paymentAmount:  s.paymentAmount ? fmtInput(String(s.paymentAmount)) : '',
       targetAmount:   s.targetAmount ? fmtInput(String(s.targetAmount)) : '',
       skipWeekends:   s.skipWeekends ?? false,
+      memo:           s.memo ?? '',
     })
     setShowModal(true)
   }
@@ -264,9 +272,19 @@ export default function SavingsPage() {
       paymentAmount:  parseAmt(form.paymentAmount) || undefined,
       targetAmount:   parseAmt(form.targetAmount) || undefined,
       skipWeekends:   form.paymentCycle === 'daily' ? form.skipWeekends : undefined,
+      memo:           form.memo.trim() || undefined,
     }
-    if (editId) setSavings(savings.map(s => s.id === editId ? saving : s))
-    else        setSavings([...savings, saving])
+    if (editId) {
+      // 만기처리 필드(status, actualInterest)는 수정 시에도 보존
+      const existing = savings.find(s => s.id === editId)
+      setSavings(savings.map(s => s.id === editId ? {
+        ...saving,
+        status: existing?.status,
+        actualInterest: existing?.actualInterest,
+      } : s))
+    } else {
+      setSavings([...savings, saving])
+    }
     setShowModal(false); setEditId(null); setForm(EMPTY_FORM)
   }
 
@@ -558,6 +576,14 @@ export default function SavingsPage() {
                     <span>{s.maturityDate}</span>
                   </div>
 
+                  {/* 메모 */}
+                  {s.memo && (
+                    <div className="flex items-start gap-1.5 bg-yellow-50 rounded-xl px-3 py-2">
+                      <span className="text-yellow-400 text-xs mt-0.5">📝</span>
+                      <span className="text-xs text-gray-600 leading-relaxed">{s.memo}</span>
+                    </div>
+                  )}
+
                   {/* 연동 거래 내역 */}
                   {isExpanded && linkedTxs.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
@@ -624,8 +650,10 @@ export default function SavingsPage() {
                     const totalPrincipal = cardCalc
                       ? cardCalc.principal
                       : (s.type === 'saving' ? s.monthlyAmount * Math.max(totalMonths, 1) : s.currentAmount)
-                    const interestIncome = cardCalc ? cardCalc.netInterest : Math.max(0, s.expectedAmount - totalPrincipal)
-                    const displayMaturity = cardCalc ? cardCalc.maturityAmount : s.expectedAmount
+                    // 실제 수령 이자가 있으면 우선 사용, 없으면 예상값
+                    const isActual = s.actualInterest !== undefined
+                    const interestIncome = isActual ? s.actualInterest! : (cardCalc ? cardCalc.netInterest : Math.max(0, s.expectedAmount - totalPrincipal))
+                    const displayMaturity = paidAmount + interestIncome
 
                     return (
                       <div key={s.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-200 opacity-80">
@@ -653,7 +681,10 @@ export default function SavingsPage() {
                             <div className="text-sm font-semibold text-gray-600">{fmtKRW(paidAmount)}</div>
                           </div>
                           <div className="bg-white rounded-xl p-3">
-                            <div className="text-xs text-gray-400 mb-0.5">이자(세후)</div>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span className="text-xs text-gray-400">이자(세후)</span>
+                              {isActual && <span className="text-[10px] bg-purple-100 text-purple-500 px-1 py-0.5 rounded font-semibold">실수령</span>}
+                            </div>
                             <div className="text-sm font-semibold text-gray-600">+{fmtKRW(interestIncome)}</div>
                           </div>
                           <div className="bg-white rounded-xl p-3">
@@ -666,6 +697,12 @@ export default function SavingsPage() {
                           <div className="flex-1 h-px bg-gray-200" />
                           <span>{s.maturityDate}</span>
                         </div>
+                        {s.memo && (
+                          <div className="mt-2 flex items-start gap-1.5 bg-yellow-50 rounded-xl px-3 py-2">
+                            <span className="text-yellow-400 text-xs mt-0.5">📝</span>
+                            <span className="text-xs text-gray-600 leading-relaxed">{s.memo}</span>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1012,6 +1049,18 @@ export default function SavingsPage() {
                 </div>
               )}
 
+              {/* 메모 */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">메모 <span className="text-gray-400">(재예치·투자 용도 등, 선택)</span></label>
+                <textarea
+                  placeholder="예) 만기 후 삼성전자 매수 예정"
+                  value={form.memo}
+                  onChange={e => setForm(f => ({ ...f, memo: e.target.value }))}
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
               <div className="flex gap-2">
                 {editId && (
                   <button onClick={() => setDeleteConfirmId(editId)}
@@ -1080,6 +1129,16 @@ export default function SavingsPage() {
                   value={maturityDate}
                   onChange={e => setMaturityDate(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">메모 <span className="text-gray-400">(재예치·투자 등 용도 기록)</span></label>
+                <textarea
+                  placeholder="예) KB 정기예금 12개월로 재예치"
+                  value={maturityMemo}
+                  onChange={e => setMaturityMemo(e.target.value)}
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
             </div>
