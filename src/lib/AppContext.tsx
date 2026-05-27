@@ -294,10 +294,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function syncToSupabase(userId: string, next: MultiData) {
     if (!supabase) return
     try {
-      await supabase.from('user_data').upsert(
-        { user_id: userId, data: next, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      )
+      await Promise.race([
+        supabase.from('user_data').upsert(
+          { user_id: userId, data: next, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('supabase_timeout')), 15000)
+        ),
+      ])
       localStorage.removeItem(NEEDS_SYNC_KEY)  // 성공 시 dirty flag 해제
       setLastSyncedAt(new Date().toISOString())
     } catch { /* ignore — dirty flag 유지돼서 다음 로드 시 재시도됨 */ }
@@ -311,8 +316,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (!stored) return
       const current = JSON.parse(stored) as MultiData
-      await syncToSupabase(userRef.current.id, current)
-    } catch { /* ignore */ } finally {
+      // 10초 타임아웃: Supabase가 응답 없이 멈춰도 "저장 중" 무한 대기 방지
+      await Promise.race([
+        syncToSupabase(userRef.current.id, current),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('sync_timeout')), 10000)
+        ),
+      ])
+    } catch { /* ignore — 실패해도 dirty flag가 다음 로그인 시 재시도 보장 */ } finally {
       setIsSyncingNow(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
