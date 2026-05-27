@@ -84,7 +84,7 @@ const EMPTY_DIVIDEND: Omit<InvestmentDividend, 'id'> = {
 }
 
 export default function InvestmentsPage() {
-  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates, setPortfolioPlans, setWatchlist } = useApp()
+  const { data, setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends, setInvestmentCashDeposits, setInvestmentAccountTypes, setInvestmentTargetAllocations, setInvestmentExchangeRates, setPortfolioPlans, setWatchlist, forceSyncNow, lastSyncedAt, isSyncingNow, user } = useApp()
   const { investments, investmentTrades, investmentAccounts, investmentDividends } = data
   const watchlist: WatchlistItem[] = data.watchlist ?? []
   const investmentCashDeposits: InvestmentCashDeposit[] = data.investmentCashDeposits ?? []
@@ -1555,6 +1555,16 @@ export default function InvestmentsPage() {
             <span className={`inline-block transition-transform ${priceRefreshing ? 'animate-spin' : ''}`}>🔄</span>
             {priceRefreshing ? '갱신 중...' : '주가 업데이트'}
           </button>
+          {user && (
+            <button
+              onClick={forceSyncNow}
+              disabled={isSyncingNow}
+              title={lastSyncedAt ? `마지막 저장: ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR')}` : '클라우드에 저장'}
+              className="flex items-center gap-1.5 bg-blue-50 text-blue-600 text-sm font-medium px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors disabled:opacity-50">
+              <span className={`inline-block ${isSyncingNow ? 'animate-spin' : ''}`}>☁️</span>
+              {isSyncingNow ? '저장 중...' : lastSyncedAt ? `저장됨 ${new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '저장'}
+            </button>
+          )}
           <button onClick={() => openAddAccount()}
             className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
             + 계좌 추가

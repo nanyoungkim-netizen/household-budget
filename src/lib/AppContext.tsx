@@ -239,6 +239,10 @@ interface AppContextType {
   // 투자 환율 캐시
   setInvestmentExchangeRates: (rates: Record<string, number>) => void
   setWatchlist: (items: WatchlistItem[]) => void
+  // 수동 저장
+  forceSyncNow: () => Promise<void>
+  lastSyncedAt: string | null
+  isSyncingNow: boolean
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
   // 전체 초기화
@@ -279,6 +283,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Supabase 동기화 ─────────────────────────────────────────────────────────
   // dirty flag: 저장됐지만 Supabase 미동기화 상태를 표시 — 다음 init 시 로컬 우선 보장
   const NEEDS_SYNC_KEY = 'hb_needs_sync'
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
+  const [isSyncingNow, setIsSyncingNow] = useState(false)
 
   async function syncToSupabase(userId: string, next: MultiData) {
     if (!supabase) return
@@ -288,8 +294,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         { onConflict: 'user_id' }
       )
       localStorage.removeItem(NEEDS_SYNC_KEY)  // 성공 시 dirty flag 해제
+      setLastSyncedAt(new Date().toISOString())
     } catch { /* ignore — dirty flag 유지돼서 다음 로드 시 재시도됨 */ }
   }
+
+  // 수동 즉시 저장 — 버튼 클릭 시 호출
+  const forceSyncNow = useCallback(async () => {
+    if (!supabase || !userRef.current) return
+    setIsSyncingNow(true)
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (!stored) return
+      const current = JSON.parse(stored) as MultiData
+      await syncToSupabase(userRef.current.id, current)
+    } catch { /* ignore */ } finally {
+      setIsSyncingNow(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 페이지 이탈 직전 keepalive fetch로 Supabase REST API에 직접 기록
   // → 브라우저가 비동기 완료를 보장 (일반 async 호출로는 보장 안 됨)
@@ -871,6 +893,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDismissedNotificationIds,
       setInvestmentExchangeRates,
       setWatchlist,
+      forceSyncNow,
+      lastSyncedAt,
+      isSyncingNow,
       completeSetup,
       resetAll,
     }}>
