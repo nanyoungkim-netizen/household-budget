@@ -1442,29 +1442,43 @@ export default function InvestmentsPage() {
                 </>
               ) : <div className="text-sm font-semibold text-gray-400">미입력</div>}
             </div>
-            <div className={`col-span-2 rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
-              <div className={`text-xs mb-0.5 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익 (총 평가금액)</div>
-              {isForeign ? (
-                <div>
-                  <div className="flex items-baseline justify-between">
-                    <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                      {isProfit ? '+' : ''}{fmtDisp(dispEvalPnl)} <span className="text-xs font-normal">({fmtPct(dispEvalRate)})</span>
-                    </div>
-                    <div className="text-xs text-gray-500">{fmtDisp(dispEvalAmt)}</div>
-                  </div>
-                  {hasFx && showInUSD && (
-                    <div className="mt-1 text-xs text-blue-500">
-                      ≈ {isProfit ? '+' : ''}{fmtKRW(Math.round(dispEvalPnl * fxRate))} / 평가 {fmtKRW(Math.round(dispEvalAmt * fxRate))}
-                      <span className="ml-1 text-gray-400">(환율 {fxRate.toLocaleString()})</span>
-                    </div>
-                  )}
+            {/* 평가손익 셀 */}
+            <div className={`rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <div className={`text-xs mb-1 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>평가손익</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                <span className={`text-sm font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {isProfit ? '+' : ''}{fmtDisp(dispEvalPnl)}
+                </span>
+                <span className={`text-xs ${isProfit ? 'text-emerald-600' : 'text-red-500'}`}>
+                  ({fmtPct(dispEvalRate)})
+                </span>
+              </div>
+              {inv.prevCloseDiff !== undefined && h && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 600, background: '#e5e7eb', color: '#6b7280', padding: '1px 4px', borderRadius: '3px' }}>전일</span>
+                  {(() => {
+                    const dayChangeAmt = showInKRW && isForeign && hasFx
+                      ? Math.round(inv.prevCloseDiff! * h.holdingQty * fxRate)
+                      : Math.round(inv.prevCloseDiff! * h.holdingQty)
+                    const isUp = dayChangeAmt >= 0
+                    return (
+                      <span style={{ fontSize: '10px', color: isUp ? '#ef4444' : '#3b82f6' }}>
+                        {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{fmtDisp(Math.abs(dayChangeAmt) / (showInUSD ? fxRate : 1))}
+                      </span>
+                    )
+                  })()}
                 </div>
-              ) : (
-                <div className="flex items-baseline justify-between">
-                  <div className={`text-base font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
-                    {isProfit ? '+' : ''}{fmtKRW(Math.round(dispEvalPnl))} <span className="text-xs font-normal">({fmtPct(dispEvalRate)})</span>
-                  </div>
-                  <div className="text-xs text-gray-500">{fmtKRW(Math.round(dispEvalAmt))}</div>
+              )}
+            </div>
+            {/* 총 평가금액 셀 */}
+            <div className={`rounded-xl p-2.5 ${isProfit ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <div className={`text-xs mb-1 ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>총 평가금액</div>
+              <div className={`text-sm font-bold ${isProfit ? 'text-emerald-700' : 'text-red-600'}`}>
+                {fmtDisp(dispEvalAmt)}
+              </div>
+              {hasFx && showInUSD && (
+                <div className="mt-1 text-xs text-blue-500">
+                  ≈ {fmtKRW(Math.round(dispEvalAmt * fxRate))}
                 </div>
               )}
             </div>
@@ -1629,11 +1643,31 @@ export default function InvestmentsPage() {
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className={`rounded-xl p-3 ${portfolio.unrealizedPnl >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
                 <div className="text-xs opacity-70 mb-1">평가손익</div>
-                <div className="text-base font-bold">{portfolio.unrealizedPnl >= 0 ? '+' : ''}{fmtKRW(Math.round(portfolio.unrealizedPnl))}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                  <span className="text-base font-bold">{portfolio.unrealizedPnl >= 0 ? '+' : ''}{fmtKRW(Math.round(portfolio.unrealizedPnl))}</span>
+                  <span className="text-xs opacity-85">{fmtPct(portfolio.returnRate)}</span>
+                </div>
                 {currencyMode === 'USD' && portfolioUSD.pnlUSD !== 0 && (
                   <div className="text-xs opacity-70">{portfolioUSD.pnlUSD >= 0 ? '+' : ''}${portfolioUSD.pnlUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 )}
-                <div className="text-xs opacity-80">{fmtPct(portfolio.returnRate)}</div>
+                {(() => {
+                  const totalDayChange = [...holdingsMap.entries()].reduce((sum, [invId, h]) => {
+                    const inv = investments.find(i => i.id === invId)
+                    if (!inv?.prevCloseDiff) return sum
+                    return sum + inv.prevCloseDiff * h.holdingQty
+                  }, 0)
+                  const hasDayChange = investments.some(inv => inv.prevCloseDiff !== undefined)
+                  if (!hasDayChange) return null
+                  const isUp = totalDayChange >= 0
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '5px' }}>
+                      <span style={{ fontSize: '9px', fontWeight: 600, background: 'rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.9)', padding: '1px 4px', borderRadius: '3px' }}>전일</span>
+                      <span style={{ fontSize: '10px', color: isUp ? '#fca5a5' : '#93c5fd' }}>
+                        {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{fmtKRW(Math.round(totalDayChange))}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
               <div className={`rounded-xl p-3 ${portfolio.totalRealized >= 0 ? 'bg-emerald-400/20' : 'bg-red-400/20'}`}>
                 <div className="text-xs opacity-70 mb-1">실현손익</div>
@@ -1678,6 +1712,17 @@ export default function InvestmentsPage() {
                   )
                   const pnl = stats.eval - stats.buy
                   const rate = stats.buy > 0 ? (pnl / stats.buy) * 100 : 0
+                  const cash = cashBalanceMap.get(acc.id) ?? 0
+                  const accountDayChange = investments
+                    .filter(inv => inv.accountId === acc.id)
+                    .reduce((sum, inv) => {
+                      const h = holdingsMap.get(inv.id)
+                      if (!h || inv.prevCloseDiff === undefined) return sum
+                      return sum + inv.prevCloseDiff * h.holdingQty
+                    }, 0)
+                  const hasDayChange = investments
+                    .filter(inv => inv.accountId === acc.id)
+                    .some(inv => inv.prevCloseDiff !== undefined)
                   return (
                     <div key={acc.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold" style={{ backgroundColor: acc.color + '20', color: acc.color }}>
@@ -1687,12 +1732,28 @@ export default function InvestmentsPage() {
                         <div className="text-sm font-medium text-gray-900">{acc.name}</div>
                         <div className="text-xs text-gray-400">{acc.bank} · {getTypeLabel(acc.typeId)}</div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-gray-900">
-                          {fmtKRW(Math.round(stats.eval + Math.max(0, cashBalanceMap.get(acc.id) ?? 0)))}
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>
+                          {fmtKRW(Math.round(stats.eval + Math.max(0, cash)))}
                         </div>
-                        <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))} ({fmtPct(rate)})</div>
-                        <div className="text-xs text-emerald-500">예수금 {fmtKRW(Math.round(cashBalanceMap.get(acc.id) ?? 0))}</div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '2px' }}>
+                          <span style={{ fontSize: '10px', color: '#6b7280' }}>원금 <b style={{ color: '#374151', fontWeight: 500 }}>{fmtKRW(Math.round(stats.buy))}</b></span>
+                          <span style={{ fontSize: '10px', color: '#d1d5db' }}>|</span>
+                          <span style={{ fontSize: '10px', color: '#6b7280' }}>예수금 <b style={{ color: '#374151', fontWeight: 500 }}>{fmtKRW(Math.round(cash))}</b></span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px', marginTop: '3px' }}>
+                          <span style={{ fontSize: '11px', color: pnl >= 0 ? '#059669' : '#ef4444', fontWeight: 500 }}>
+                            {pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))} ({fmtPct(rate)})
+                          </span>
+                          {hasDayChange && (
+                            <>
+                              <span style={{ fontSize: '9px', fontWeight: 600, background: '#e5e7eb', color: '#6b7280', padding: '1px 4px', borderRadius: '3px' }}>전일</span>
+                              <span style={{ fontSize: '10px', color: accountDayChange >= 0 ? '#ef4444' : '#3b82f6' }}>
+                                {accountDayChange >= 0 ? '▲' : '▼'} {accountDayChange >= 0 ? '+' : ''}{fmtKRW(Math.round(accountDayChange))}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -1773,18 +1834,41 @@ export default function InvestmentsPage() {
                     {(() => {
                       const cash = cashBalanceMap.get(acc.id) ?? 0
                       const pnl = stats ? stats.eval - stats.buy : 0
+                      const rate = stats && stats.buy > 0 ? (pnl / stats.buy) * 100 : 0
+                      const accountDayChange = investments
+                        .filter(inv => inv.accountId === acc.id)
+                        .reduce((sum, inv) => {
+                          const h = holdingsMap.get(inv.id)
+                          if (!h || inv.prevCloseDiff === undefined) return sum
+                          return sum + inv.prevCloseDiff * h.holdingQty
+                        }, 0)
+                      const hasDayChange = investments
+                        .filter(inv => inv.accountId === acc.id)
+                        .some(inv => inv.prevCloseDiff !== undefined)
                       return (
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-sm font-semibold text-gray-900">
+                        <div style={{ textAlign: 'right' }} className="flex-shrink-0">
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>
                             {fmtKRW(Math.round((stats?.eval ?? 0) + Math.max(0, cash)))}
                           </div>
-                          {stats && (
-                            <div className={`text-xs ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))}
-                            </div>
-                          )}
-                          <div className={`text-xs font-medium ${cash < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                            예수금 {fmtKRW(Math.round(cash))}
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '2px' }}>
+                            <span style={{ fontSize: '10px', color: '#6b7280' }}>원금 <b style={{ color: '#374151', fontWeight: 500 }}>{fmtKRW(Math.round(stats?.buy ?? 0))}</b></span>
+                            <span style={{ fontSize: '10px', color: '#d1d5db' }}>|</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280' }}>예수금 <b style={{ color: '#374151', fontWeight: 500 }}>{fmtKRW(Math.round(cash))}</b></span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px', marginTop: '3px' }}>
+                            {stats && (
+                              <span style={{ fontSize: '11px', color: pnl >= 0 ? '#059669' : '#ef4444', fontWeight: 500 }}>
+                                {pnl >= 0 ? '+' : ''}{fmtKRW(Math.round(pnl))} ({fmtPct(rate)})
+                              </span>
+                            )}
+                            {hasDayChange && (
+                              <>
+                                <span style={{ fontSize: '9px', fontWeight: 600, background: '#e5e7eb', color: '#6b7280', padding: '1px 4px', borderRadius: '3px' }}>전일</span>
+                                <span style={{ fontSize: '10px', color: accountDayChange >= 0 ? '#ef4444' : '#3b82f6' }}>
+                                  {accountDayChange >= 0 ? '▲' : '▼'} {accountDayChange >= 0 ? '+' : ''}{fmtKRW(Math.round(accountDayChange))}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       )
