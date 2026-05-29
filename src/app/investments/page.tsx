@@ -42,6 +42,12 @@ const ACCOUNT_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '
 
 type PageTab = 'dashboard' | 'holdings' | 'watchlist' | 'trades' | 'portfolio'
 
+const ETF_NAME_PREFIXES = ['TIGER', 'KODEX', 'KBSTAR', 'ARIRANG', 'HANARO', 'KOSEF', 'TIMEFOLIO', 'ACE', 'PLUS', 'SOL', 'TREX', 'WOORI', 'KB']
+function isDomesticEtf(name: string, market?: string): boolean {
+  if (market && /ETF/i.test(market)) return true
+  return ETF_NAME_PREFIXES.some(p => name.toUpperCase().startsWith(p))
+}
+
 const EMPTY_INVESTMENT: Omit<Investment, 'id'> = {
   assetType: 'domestic_stock',
   name: '',
@@ -296,12 +302,6 @@ export default function InvestmentsPage() {
           (domRes.status === 'fulfilled' ? domRes.value?.items ?? [] : [])
         const forItems: { name: string; ticker: string; market?: string; nation?: string }[] =
           (forRes.status === 'fulfilled' ? forRes.value?.items ?? [] : [])
-
-        const ETF_NAME_PREFIXES = ['TIGER', 'KODEX', 'KBSTAR', 'ARIRANG', 'HANARO', 'KOSEF', 'TIMEFOLIO', 'ACE', 'PLUS', 'SOL', 'TREX', 'WOORI', 'KB']
-        function isDomesticEtf(name: string, market?: string): boolean {
-          if (market && /ETF/i.test(market)) return true
-          return ETF_NAME_PREFIXES.some(p => name.toUpperCase().startsWith(p))
-        }
 
         const results: typeof watchlistResults = []
         const seen = new Set<string>()
@@ -2110,7 +2110,7 @@ export default function InvestmentsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-gray-800 text-sm flex items-center gap-1.5 flex-wrap">
                         {w.name}
-                        {w.assetType === 'etf_fund' && w.ticker && (
+                        {(w.assetType === 'etf_fund' || isDomesticEtf(w.name, w.exchange)) && w.ticker && (
                           <button
                             onClick={e => openCompositionPopup(e, w.id, w.ticker!, w.name)}
                             className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionId === w.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
