@@ -563,17 +563,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               .eq('user_id', session.user.id)
               .single()
 
-            let remoteMulti: MultiData | null = null
-            // PGRST116 = no rows (신규 유저) → 정상, 계속 진행
-            // 그 외 error = 네트워크/서버 오류 → 절대 Supabase 덮어쓰기 금지!
+            // PGRST116 = no rows (신규 유저) → 정상
+            // 그 외 error = 네트워크/서버 오류 → 로컬 사용, Supabase 절대 덮어쓰기 금지
             const remoteIsNewUser = remoteErr?.code === 'PGRST116'
             const remoteFetchOk = !remoteErr || remoteIsNewUser
-            if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
+            const remoteMulti = remoteRow?.data ? hydrateMultiData(remoteRow.data) : null
 
-            const winner = mergeMultiData(localMulti, remoteMulti)
+            let winner: MultiData
+            if (!remoteFetchOk) {
+              // 원격 조회 실패 → 로컬만 사용, Supabase 덮어쓰기 금지
+              winner = localMulti ?? INITIAL_MULTI_DATA
+            } else if (remoteMulti) {
+              // 원격 조회 성공 → 항상 Supabase 데이터 우선
+              // (dirty flag가 있었으면 위에서 이미 로컬을 push했으므로 원격이 최신)
+              winner = remoteMulti
+            } else {
+              // 신규 유저 (Supabase에 데이터 없음) → 로컬 사용
+              winner = localMulti ?? INITIAL_MULTI_DATA
+            }
             setMultiData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-            // 원격 조회 실패 시 절대 쓰기 금지 — 구버전 데이터로 덮어쓰기 방지
             if (remoteFetchOk) {
               await syncToSupabase(session.user.id, winner)
             }
@@ -615,19 +624,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 .eq('user_id', session.user.id)
                 .single()
 
-              let remoteMulti: MultiData | null = null
               const remoteIsNewUser2 = remoteErr2?.code === 'PGRST116'
               const remoteFetchOk2 = !remoteErr2 || remoteIsNewUser2
-              if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
+              const remoteMulti2 = remoteRow?.data ? hydrateMultiData(remoteRow.data) : null
 
-              const winner = mergeMultiData(currentLocal, remoteMulti)
-              if (winner) {
-                setMultiData(winner)
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-                // 원격 조회 실패 시 절대 쓰기 금지
-                if (remoteFetchOk2) {
-                  await syncToSupabase(session.user.id, winner)
-                }
+              let winner2: MultiData
+              if (!remoteFetchOk2) {
+                winner2 = currentLocal ?? INITIAL_MULTI_DATA
+              } else if (remoteMulti2) {
+                winner2 = remoteMulti2  // 항상 Supabase 우선
+              } else {
+                winner2 = currentLocal ?? INITIAL_MULTI_DATA
+              }
+              setMultiData(winner2)
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(winner2))
+              if (remoteFetchOk2) {
+                await syncToSupabase(session.user.id, winner2)
               }
             }
           })
