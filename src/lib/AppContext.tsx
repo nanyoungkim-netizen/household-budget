@@ -151,6 +151,13 @@ export interface BudgetMeta {
   createdAt: string
 }
 
+// 자동 백업 사본(버전) 목록 표시용 메타
+export interface AppVersionMeta {
+  id: string
+  createdAt: string         // ISO 문자열 (만든 시각)
+  txCount: number | null    // 그 시점의 거래 건수 (목록 식별용)
+}
+
 export interface MultiData {
   budgetList: BudgetMeta[]
   budgets: Record<string, AppData>
@@ -254,6 +261,9 @@ interface AppContextType {
   restoreBudgetData: (raw: Partial<AppData>) => void
   // 백업에서 전체 가계부 복원 (모든 가계부 포함)
   restoreAllData: (raw: MultiData) => void
+  // 자동 백업(버전) — 사본 목록 조회 / 특정 시점으로 복구
+  listVersions: () => Promise<AppVersionMeta[]>
+  restoreVersion: (versionId: string) => Promise<boolean>
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -280,6 +290,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const multiDataRef = useRef<MultiData>(INITIAL_MULTI_DATA)
   const sessionTokenRef = useRef<string | null>(null)   // keepalive sync 용 JWT 캐시
   const isExplicitSignOutRef = useRef(false)            // 의도적 로그아웃 여부
+  // 자동 백업(버전) — 연속 저장 묶음 처리용
+  const lastVersionAtRef = useRef<number>(0)            // 직전 사본 생성 시각(ms)
+  const lastVersionIdRef = useRef<string | null>(null)  // 직전 사본 id (묶음 갱신 대상)
 
   userRef.current = user
   multiDataRef.current = multiData
@@ -295,7 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isPendingSync, setIsPendingSync] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
 
-  async function syncToSupabase(userId: string, next: MultiData) {
+  async function syncToSupabase(userId: string, next: MultiData, options?: { snapshot?: boolean }) {
     if (!supabase) return
     try {
       const { error } = await Promise.race([
@@ -311,7 +324,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(NEEDS_SYNC_KEY)  // 성공 시 dirty flag 해제
       setIsPendingSync(false)
       setLastSyncedAt(new Date().toISOString())
+      // 본 저장 성공 후 사본(버전) 1개 추가 — 사용자 저장 흐름에서만 (init/login 머지 제외)
+      if (options?.snapshot) {
+        createVersionSnapshot(userId, next)
+      }
     } catch { /* ignore — dirty flag 유지돼서 다음 로드 시 재시도됨 */ }
+  }
+
+  // ── 자동 백업(버전) ───────────────────────────────────────────────────────────
+  const VERSION_RETENTION_DAYS = 7            // 보관 기간: 최근 7일
+  const VERSION_BATCH_WINDOW_MS = 3 * 60_000  // 3분 이내 연속 저장은 직전 사본을 갱신(과도하게 쌓이지 않도록 — 작업 세션당 사본 1개 수준)
+
+  function countTransactions(snapshot: MultiData): number {
+    return Object.values(snapshot.budgets ?? {})
+      .reduce((sum, b) => sum + (b.transactions?.length ?? 0), 0)
+  }
+
+  // 7일보다 오래된 사본 정리 (사본 추가 직후 함께 호출)
+  async function cleanupOldVersions(userId: string) {
+    if (!supabase) return
+    try {
+      const cutoff = new Date(Date.now() - VERSION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+      await supabase.from('user_data_versions').delete().eq('user_id', userId).lt('created_at', cutoff)
+    } catch { /* ignore — 정리 실패는 본 기능에 영향 없음 */ }
+  }
+
+  // 사본 1개 추가. 직전 사본과 수 초 이내면 그 사본을 갱신(묶음 처리).
+  // forceNew=true 면 항상 새 줄로 추가 (복구 직전 "현재 상태" 보존용)
+  async function createVersionSnapshot(userId: string, snapshot: MultiData, opts?: { forceNew?: boolean }) {
+    if (!supabase) return
+    try {
+      const txCount = countTransactions(snapshot)
+      const nowMs = Date.now()
+      const withinWindow = !opts?.forceNew
+        && lastVersionIdRef.current != null
+        && (nowMs - lastVersionAtRef.current) < VERSION_BATCH_WINDOW_MS
+
+      if (withinWindow) {
+        // 직전 사본 갱신
+        const { error } = await supabase.from('user_data_versions')
+          .update({ data: snapshot, tx_count: txCount, created_at: new Date().toISOString() })
+          .eq('id', lastVersionIdRef.current!)
+        if (error) throw error
+        lastVersionAtRef.current = nowMs
+      } else {
+        // 새 사본 추가
+        const { data: inserted, error } = await supabase.from('user_data_versions')
+          .insert({ user_id: userId, data: snapshot, tx_count: txCount })
+          .select('id')
+          .single()
+        if (error) throw error
+        lastVersionIdRef.current = inserted?.id ?? null
+        lastVersionAtRef.current = nowMs
+      }
+      cleanupOldVersions(userId)
+    } catch { /* ignore — 사본 실패는 본 저장에 영향 주지 않음 */ }
   }
 
   // 수동 즉시 저장 — 버튼 클릭 시 호출 (최대 2회 자동 재시도)
@@ -346,6 +413,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLastSyncedAt(new Date().toISOString())
         setSyncError(null)
         setIsSyncingNow(false)
+        // 수동 저장 시에도 사본 1개 추가
+        createVersionSnapshot(userRef.current.id, current)
         return
       } catch (e) {
         lastErr = e
@@ -405,7 +474,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (supabase && userRef.current) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
       syncTimerRef.current = setTimeout(() => {
-        if (userRef.current) syncToSupabase(userRef.current.id, next)
+        if (userRef.current) syncToSupabase(userRef.current.id, next, { snapshot: true })
       }, 200)
     }
   }
@@ -992,6 +1061,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 자동 백업 사본 목록 조회 (최신순)
+  const listVersions = useCallback(async (): Promise<AppVersionMeta[]> => {
+    if (!supabase || !userRef.current) return []
+    try {
+      const { data: rows, error } = await supabase
+        .from('user_data_versions')
+        .select('id, created_at, tx_count')
+        .eq('user_id', userRef.current.id)
+        .order('created_at', { ascending: false })
+      if (error || !rows) return []
+      return rows.map(r => ({
+        id: r.id as string,
+        createdAt: r.created_at as string,
+        txCount: (r.tx_count ?? null) as number | null,
+      }))
+    } catch {
+      return []
+    }
+  }, [])
+
+  // 선택한 사본 시점으로 복구
+  // 1) 복구 직전 현재 상태를 사본으로 1개 추가 (되돌리기 취소용)
+  // 2) 선택 사본 데이터를 현재 데이터로 적용 → 3) 로컬·서버 모두 갱신
+  const restoreVersion = useCallback(async (versionId: string): Promise<boolean> => {
+    if (!supabase || !userRef.current) return false
+    try {
+      // 선택한 사본 읽기
+      const { data: row, error } = await supabase
+        .from('user_data_versions')
+        .select('data')
+        .eq('id', versionId)
+        .eq('user_id', userRef.current.id)
+        .single()
+      if (error || !row?.data) return false
+
+      // 복구 직전 현재 상태를 사본으로 1개 보존 (항상 새 줄로)
+      await createVersionSnapshot(userRef.current.id, multiDataRef.current, { forceNew: true })
+      // 묶음 창을 끊어, 이어지는 복구본 저장이 위 사본을 덮어쓰지 않도록 함
+      lastVersionAtRef.current = 0
+      lastVersionIdRef.current = null
+
+      // 선택 사본 적용 + 로컬·서버 갱신
+      const restored = hydrateMultiData(row.data)
+      saveToStorage(restored)   // 로컬 저장 + 디바운스 서버 동기화
+      setMultiData(restored)
+      return true
+    } catch {
+      return false
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (!hydrated) return null
 
   return (
@@ -1050,6 +1171,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       resetAll,
       restoreBudgetData,
       restoreAllData,
+      listVersions,
+      restoreVersion,
     }}>
       {children}
     </AppContext.Provider>

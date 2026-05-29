@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { useApp, MultiData } from '@/lib/AppContext'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useApp, MultiData, AppVersionMeta } from '@/lib/AppContext'
 import { ConsumptionType, InvestmentSubType } from '@/types'
 import * as XLSX from 'xlsx'
 
@@ -43,6 +43,22 @@ function fmtDate() {
 function safeStr(v: unknown): string { return v != null ? String(v) : '' }
 function safeNum(v: unknown): number { return Number(v) || 0 }
 
+// 자동 백업 사본 시각 표시: "오늘 21:40" / "어제 22:05" / "5월 27일 09:12"
+function fmtVersionTime(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  const now = new Date()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (isSameDay(d, now)) return `오늘 ${hh}:${mm}`
+  if (isSameDay(d, yesterday)) return `어제 ${hh}:${mm}`
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hh}:${mm}`
+}
+
 export default function BackupPage() {
   const {
     data, multiData, categories,
@@ -52,6 +68,7 @@ export default function BackupPage() {
     setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends,
     setInvestmentCashDeposits, setInvestmentAccountTypes, setPortfolioPlans, setWatchlist,
     restoreBudgetData, restoreAllData,
+    user, listVersions, restoreVersion,
   } = useApp()
   const {
     transactions, accounts, cards, budgets, savings, goals,
@@ -76,6 +93,35 @@ export default function BackupPage() {
   } | null>(null)
   const [pendingWb, setPendingWb] = useState<ReturnType<typeof XLSX.read> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // ── 자동 백업(버전) 상태 ───────────────────────────────────────────────────────
+  // versions === null → 아직 불러오는 중
+  const [versions, setVersions] = useState<AppVersionMeta[] | null>(null)
+  const [confirmVersion, setConfirmVersion] = useState<AppVersionMeta | null>(null)
+  const [versionRestoreStatus, setVersionRestoreStatus] = useState<'idle' | 'restoring' | 'success' | 'error'>('idle')
+
+  const loadVersions = useCallback(async () => {
+    setVersions(await listVersions())
+  }, [listVersions])
+
+  useEffect(() => {
+    let cancelled = false
+    listVersions().then(list => { if (!cancelled) setVersions(list) })
+    return () => { cancelled = true }
+  }, [user, listVersions])
+
+  async function handleVersionRestore() {
+    if (!confirmVersion) return
+    setVersionRestoreStatus('restoring')
+    const ok = await restoreVersion(confirmVersion.id)
+    setConfirmVersion(null)
+    if (ok) {
+      setVersionRestoreStatus('success')
+      await loadVersions()
+    } else {
+      setVersionRestoreStatus('error')
+    }
+  }
 
   // ── 내보내기 ──────────────────────────────────────────────────────────────────
   function handleExport() {
@@ -975,6 +1021,101 @@ export default function BackupPage() {
           </div>
         )}
       </div>
+
+      {/* 자동 백업 (버전 복구) 섹션 */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 mt-4">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold text-gray-800">자동 백업</h2>
+          {user && (
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● 켜짐</span>
+          )}
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          저장할 때마다 서버에 자동으로 사본을 보관해요. 언제든 되돌릴 수 있어요.
+        </p>
+
+        {!user ? (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center text-sm text-gray-500">
+            로그인하면 자동 백업이 켜지고 사본 목록이 표시됩니다.
+          </div>
+        ) : versions === null ? (
+          <div className="text-center py-6 text-sm text-gray-400">사본 목록을 불러오는 중…</div>
+        ) : versions.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center text-sm text-gray-500">
+            아직 보관된 사본이 없어요. 데이터를 저장하면 자동으로 사본이 쌓입니다.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {(versions ?? []).map((v, idx) => (
+              <div key={v.id} className="flex items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-800">{fmtVersionTime(v.createdAt)}</span>
+                    {idx === 0 && (
+                      <span className="text-[11px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">가장 최근</span>
+                    )}
+                  </div>
+                  {v.txCount != null && (
+                    <div className="text-xs text-gray-400 mt-0.5">거래 {v.txCount.toLocaleString('ko-KR')}건</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setVersionRestoreStatus('idle'); setConfirmVersion(v) }}
+                  className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
+                  이 버전으로 복구
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {user && (
+          <div className="text-xs text-gray-400 mt-3">
+            최근 7일치 사본을 보관해요. 오래된 사본은 자동으로 정리돼요.
+          </div>
+        )}
+
+        {versionRestoreStatus === 'success' && (
+          <div className="mt-3 bg-green-50 border border-green-100 rounded-xl p-3 text-center">
+            <div className="text-sm font-semibold text-green-700">✅ 선택한 시점으로 되돌렸어요.</div>
+            <div className="text-xs text-green-500 mt-1">복구 직전 상태도 사본으로 보관했으니, 필요하면 다시 되돌릴 수 있어요.</div>
+            <button onClick={() => setVersionRestoreStatus('idle')} className="mt-2 text-xs text-green-600 hover:text-green-800 underline">확인</button>
+          </div>
+        )}
+        {versionRestoreStatus === 'error' && (
+          <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+            <div className="text-sm font-semibold text-red-600">⚠️ 복구에 실패했어요. 잠시 후 다시 시도해주세요.</div>
+            <button onClick={() => setVersionRestoreStatus('idle')} className="mt-2 text-xs text-red-600 hover:text-red-800 underline">확인</button>
+          </div>
+        )}
+      </div>
+
+      {/* 복구 확인 창 */}
+      {confirmVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => versionRestoreStatus !== 'restoring' && setConfirmVersion(null)}>
+          <div className="bg-white rounded-2xl shadow-lg max-w-sm w-full p-5" onClick={e => e.stopPropagation()}>
+            <div className="text-base font-bold text-gray-900 mb-2">정말 되돌릴까요?</div>
+            <p className="text-sm text-gray-600 mb-4">
+              정말 이 시점(<span className="font-semibold">{fmtVersionTime(confirmVersion.createdAt)}</span>)으로 되돌릴까요?
+              지금 데이터는 사본으로 보관됩니다.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmVersion(null)}
+                disabled={versionRestoreStatus === 'restoring'}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+                취소
+              </button>
+              <button
+                onClick={handleVersionRestore}
+                disabled={versionRestoreStatus === 'restoring'}
+                className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50">
+                {versionRestoreStatus === 'restoring' ? '되돌리는 중…' : '확인'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 시트 구성 안내 */}
       <div className="mt-4 bg-gray-50 rounded-2xl p-4">
