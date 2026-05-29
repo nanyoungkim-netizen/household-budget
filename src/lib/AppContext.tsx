@@ -292,7 +292,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const isExplicitSignOutRef = useRef(false)            // 의도적 로그아웃 여부
   // 자동 백업(버전) — 연속 저장 묶음 처리용
   const lastVersionAtRef = useRef<number>(0)            // 직전 사본 생성 시각(ms)
-  const lastVersionIdRef = useRef<string | null>(null)  // 직전 사본 id (묶음 갱신 대상)
 
   userRef.current = user
   multiDataRef.current = multiData
@@ -349,34 +348,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore — 정리 실패는 본 기능에 영향 없음 */ }
   }
 
-  // 사본 1개 추가. 직전 사본과 수 초 이내면 그 사본을 갱신(묶음 처리).
-  // forceNew=true 면 항상 새 줄로 추가 (복구 직전 "현재 상태" 보존용)
+  // 사본 1개 추가. 단, 직전 사본 생성 후 묶음 시간(기본 3분) 이내면 건너뜀.
+  //   → 새 사본을 만들지 않을 뿐, 기존 사본은 절대 덮어쓰지 않는다(되돌릴 시점 보존).
+  // forceNew=true 면 묶음 시간과 무관하게 항상 새 사본을 추가 (복구 직전 "현재 상태" 보존용)
   async function createVersionSnapshot(userId: string, snapshot: MultiData, opts?: { forceNew?: boolean }) {
     if (!supabase) return
     try {
-      const txCount = countTransactions(snapshot)
       const nowMs = Date.now()
-      const withinWindow = !opts?.forceNew
-        && lastVersionIdRef.current != null
-        && (nowMs - lastVersionAtRef.current) < VERSION_BATCH_WINDOW_MS
-
-      if (withinWindow) {
-        // 직전 사본 갱신
-        const { error } = await supabase.from('user_data_versions')
-          .update({ data: snapshot, tx_count: txCount, created_at: new Date().toISOString() })
-          .eq('id', lastVersionIdRef.current!)
-        if (error) throw error
-        lastVersionAtRef.current = nowMs
-      } else {
-        // 새 사본 추가
-        const { data: inserted, error } = await supabase.from('user_data_versions')
-          .insert({ user_id: userId, data: snapshot, tx_count: txCount })
-          .select('id')
-          .single()
-        if (error) throw error
-        lastVersionIdRef.current = inserted?.id ?? null
-        lastVersionAtRef.current = nowMs
+      // 묶음 시간 이내 연속 저장은 새 사본을 만들지 않고 건너뜀 (과도하게 쌓이지 않도록)
+      if (!opts?.forceNew && (nowMs - lastVersionAtRef.current) < VERSION_BATCH_WINDOW_MS) {
+        return
       }
+      const { error } = await supabase.from('user_data_versions')
+        .insert({ user_id: userId, data: snapshot, tx_count: countTransactions(snapshot) })
+      if (error) throw error
+      lastVersionAtRef.current = nowMs
       cleanupOldVersions(userId)
     } catch { /* ignore — 사본 실패는 본 저장에 영향 주지 않음 */ }
   }
@@ -1098,9 +1084,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // 복구 직전 현재 상태를 사본으로 1개 보존 (항상 새 줄로)
       await createVersionSnapshot(userRef.current.id, multiDataRef.current, { forceNew: true })
-      // 묶음 창을 끊어, 이어지는 복구본 저장이 위 사본을 덮어쓰지 않도록 함
-      lastVersionAtRef.current = 0
-      lastVersionIdRef.current = null
 
       // 선택 사본 적용 + 로컬·서버 갱신
       const restored = hydrateMultiData(row.data)
