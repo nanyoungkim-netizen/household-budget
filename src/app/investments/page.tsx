@@ -131,7 +131,7 @@ export default function InvestmentsPage() {
   const [showExchangeRates, setShowExchangeRates] = useState(false)
 
   // ── ETF 구성 팝업 state ────────────────────────────────────────────────────
-  type CompositionItem = { name: string; pct: number }
+  type CompositionItem = { name: string; pct: number; noRealPct?: boolean }
   const [compositionCache, setCompositionCache] = useState<Record<string, CompositionItem[]>>({})
   const [compositionLoading, setCompositionLoading] = useState<Set<string>>(new Set())
   const [activeCompositionKey, setActiveCompositionKey] = useState<{ id: string; ticker: string; name: string } | null>(null)
@@ -3604,16 +3604,33 @@ export default function InvestmentsPage() {
                 <div className="text-xs text-gray-400 text-center py-4">불러오는 중…</div>
               ) : items && items.length > 0 ? (
                 <div className="space-y-2">
-                  {items.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600 whitespace-nowrap" style={{ minWidth: 'fit-content', maxWidth: 120 }}>{item.name}</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden" style={{ minWidth: 40 }}>
-                        <div className="h-full bg-blue-400 rounded-full" style={{ width: `${(item.pct / maxPct * 100).toFixed(0)}%` }} />
-                      </div>
-                      <span className="text-xs font-semibold text-gray-700 whitespace-nowrap">{item.pct}%</span>
-                    </div>
-                  ))}
-                  <div className="text-[10px] text-gray-400 text-right mt-1">네이버 금융 기준</div>
+                  {(() => {
+                    // noRealPct: 비중 미공개 ETF (균등 배분 표시)
+                    const noReal = (items[0] as { noRealPct?: boolean }).noRealPct
+                    return (
+                      <>
+                        {noReal && (
+                          <div className="text-[10px] text-amber-500 bg-amber-50 rounded-lg px-2 py-1 mb-1">
+                            ⚠ 비중 미공개 — 종목 목록만 표시
+                          </div>
+                        )}
+                        {items.map((item, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 whitespace-nowrap" style={{ minWidth: 'fit-content', maxWidth: 120 }}>{item.name}</span>
+                            {!noReal && (
+                              <>
+                                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden" style={{ minWidth: 40 }}>
+                                  <div className="h-full bg-blue-400 rounded-full" style={{ width: `${(item.pct / maxPct * 100).toFixed(0)}%` }} />
+                                </div>
+                                <span className="text-xs font-semibold text-gray-700 whitespace-nowrap">{item.pct}%</span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        <div className="text-[10px] text-gray-400 text-right mt-1">네이버 금융 기준</div>
+                      </>
+                    )
+                  })()}
                 </div>
               ) : (
                 <div className="text-xs text-gray-400 text-center py-4">구성 데이터를 불러올 수 없습니다</div>

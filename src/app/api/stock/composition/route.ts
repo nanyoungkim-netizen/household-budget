@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export interface CompositionItem {
   name: string
   pct: number
+  noRealPct?: boolean   // true → 비중 미공개, 균등 배분한 것
 }
 
 // 소수의 인기 해외 ETF — 정적 fallback
@@ -38,145 +39,82 @@ function isGoldEtf(s: string) {
   return /금현물|골드|GOLD|KRX금/i.test(s)
 }
 
-// 응답 JSON에서 구성종목 배열을 추출 (여러 가능한 키 시도)
-function extractList(json: Record<string, unknown>): unknown[] {
-  // 직접 배열인 경우
-  if (Array.isArray(json)) return json as unknown[]
-
-  // 가능한 모든 키 순서대로 시도
-  const candidates = [
-    json.etfComponentSeries,   // Naver 실제 응답 키 (가장 유력)
-    json.etfComponents,
-    json.components,
-    json.holdings,
-    json.stocks,
-    json.items,
-    // 중첩 구조 (result / data 래퍼)
-    (json.result as Record<string, unknown>)?.etfComponentSeries,
-    (json.result as Record<string, unknown>)?.etfComponents,
-    (json.result as Record<string, unknown>)?.holdings,
-    (json.data as Record<string, unknown>)?.etfComponentSeries,
-    (json.data as Record<string, unknown>)?.etfComponents,
-    json.data,
-  ]
-
-  for (const c of candidates) {
-    if (Array.isArray(c) && c.length > 0) return c
-  }
-  return []
-}
-
-// 종목 항목 파싱
-function parseItem(s: unknown): CompositionItem | null {
-  const r = s as Record<string, unknown>
-  const name = String(
-    r.itemName ?? r.stockName ?? r.name ?? r.etfName ?? r.fundName ?? r.stockFullCode ?? ''
-  ).trim()
-  // holdingRatio 는 문자열("30.00") 또는 숫자(30.00) 둘 다 처리
-  const pctRaw = r.weight ?? r.ratio ?? r.percentage ?? r.holdingRatio ?? r.pct ?? r.proportion ?? 0
-  const pct = typeof pctRaw === 'string' ? parseFloat(pctRaw.replace('%', '')) : Number(pctRaw)
-  if (!name || isNaN(pct) || pct <= 0) return null
-  return { name, pct }
-}
-
-// Naver 모바일 JSON API — 국내 ETF 구성종목
-async function fetchNaverMobileEtf(code: string): Promise<CompositionItem[] | null> {
-  const mobileHeaders = {
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21A329',
-    'Accept': 'application/json, text/plain, */*',
-    'Referer': `https://m.stock.naver.com/domestic/stock/${code}/etf`,
-  }
-
-  const endpoints = [
-    { url: `https://m.stock.naver.com/api/stock/${code}/etfComponent`, headers: mobileHeaders },
-    { url: `https://m.stock.naver.com/api/stock/${code}/etfHoldings`, headers: mobileHeaders },
-    {
-      url: `https://m.stock.naver.com/api/stock/${code}/etfComponent`,
+/**
+ * 네이버 금융 종목 메인 페이지에서 ETF 구성종목 파싱
+ * URL: https://finance.naver.com/item/main.naver?code={6자리}
+ * - UTF-8 페이지
+ * - <table class="tb_type1 tb_type1_b"> 내 구성종목 테이블
+ * - <td class="ctg"><a>종목명</a></td>  +  <td class="per">비중%</td>
+ * - 비중이 "-"인 경우 균등 배분으로 표시
+ */
+async function fetchNaverMainPage(code: string): Promise<CompositionItem[] | null> {
+  try {
+    const res = await fetch(`https://finance.naver.com/item/main.naver?code=${code}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Referer': `https://m.stock.naver.com/domestic/stock/${code}/etf`,
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+        'Referer': 'https://finance.naver.com/',
       },
-    },
-  ]
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
 
-  for (const ep of endpoints) {
-    try {
-      const res = await fetch(ep.url, { headers: ep.headers, cache: 'no-store' })
-      if (!res.ok) continue
-      const json = await res.json() as Record<string, unknown>
-      const list = extractList(json)
-      if (list.length === 0) continue
+    const html = await res.text()  // UTF-8
 
-      const items = list.map(parseItem).filter((i): i is CompositionItem => i !== null).slice(0, 15)
-      if (items.length > 0) return items
-    } catch {
-      // 다음 endpoint 시도
-    }
-  }
-  return null
-}
+    // 구성종목 테이블 위치 확인
+    const headerIdx = html.indexOf('구성종목(구성자산)')
+    if (headerIdx < 0) return null
 
-// Naver 금융 HTML 파싱 fallback
-async function fetchNaverHtmlEtf(code: string): Promise<CompositionItem[] | null> {
-  // 시도할 URL 목록 (구버전/신버전 모두 커버)
-  const urls = [
-    `https://finance.naver.com/fund/etfPortfolioInfo.naver?itemCode=${code}`,
-    `https://finance.naver.com/fund/etfItemInfo.naver?itemCode=${code}`,
-  ]
+    const tableStart = html.lastIndexOf('<table', headerIdx)
+    const tableEnd   = html.indexOf('</table>', headerIdx)
+    if (tableStart < 0 || tableEnd < 0) return null
 
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': `https://finance.naver.com/fund/etfItemInfo.naver?itemCode=${code}`,
-          'Accept-Language': 'ko-KR,ko;q=0.9',
-        },
-        cache: 'no-store',
-      })
-      if (!res.ok) continue
+    const tableHtml = html.substring(tableStart, tableEnd + 8)
 
-      const buf = await res.arrayBuffer()
-      const text = new TextDecoder('euc-kr').decode(buf)
+    // tr 단위 파싱
+    const items: CompositionItem[] = []
+    const rowRe = /<tr>([\s\S]*?)<\/tr>/g
 
-      const items: CompositionItem[] = []
+    for (const rowM of tableHtml.matchAll(rowRe)) {
+      const row = rowM[1]
 
-      // <tr> 단위로 파싱
-      const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/g
-      for (const m of text.matchAll(rowPattern)) {
-        const row = m[1]
-        // 헤더 행 제외
-        if (/<th[\s>]/.test(row)) continue
+      // 헤더·구분선 행 제외
+      if (/<th[\s>]/.test(row) || /class="blank_|class="division_/.test(row)) continue
 
-        // td 내 텍스트 추출 (태그 제거)
-        const tdTexts: string[] = []
-        const tdPattern = /<td[^>]*>([\s\S]*?)<\/td>/g
-        for (const td of row.matchAll(tdPattern)) {
-          const t = td[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
-          if (t) tdTexts.push(t)
-        }
+      // 이름: <td class="ctg"> ... <a>이름</a>
+      const nameM = row.match(/<td[^>]*class="ctg"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/)
+      if (!nameM) continue
+      const name = nameM[1].trim()
+      if (!name) continue
 
-        // 비중: 소수점 있는 숫자 (정수 순위와 구분), % 있어도 없어도 OK
-        const pctCell = tdTexts.find(t => /^\d{1,3}\.\d{1,4}%?$/.test(t))
-        // 이름: 한글 또는 영문 포함, 순수 숫자 아닌 셀
-        const nameCell = tdTexts.find(t => /[가-힣a-zA-Z]/.test(t) && !/^[\d,\s]+$/.test(t))
-
-        if (nameCell && pctCell) {
-          const name = nameCell.trim()
-          const pct = parseFloat(pctCell.replace('%', ''))
-          if (pct > 0 && pct <= 100 && !/순위|비중|종목|보유|비율/.test(name)) {
-            items.push({ name, pct })
-          }
-        }
+      // 비중: <td class="per">29.29%</td> 또는 <td class="per">-</td>
+      const perM = row.match(/<td[^>]*class="per"[^>]*>([\s\S]*?)<\/td>/)
+      let pct = 0
+      if (perM) {
+        const perText = perM[1].replace(/<[^>]+>/g, '').replace(/\s+/g, '').trim()
+        const num = parseFloat(perText.replace('%', ''))
+        if (!isNaN(num) && num > 0) pct = num
       }
 
-      if (items.length > 0) return items.slice(0, 15)
-    } catch {
-      // 다음 URL 시도
+      items.push({ name, pct })
     }
+
+    if (items.length === 0) return null
+
+    const hasRealPct = items.some(i => i.pct > 0)
+
+    if (hasRealPct) {
+      // 비중이 있는 종목만 반환
+      return items.filter(i => i.pct > 0).slice(0, 15)
+    } else {
+      // 비중 미공개 → 균등 배분으로 표시 (noRealPct 플래그)
+      const n = Math.min(items.length, 15)
+      const eq = parseFloat((100 / n).toFixed(2))
+      return items.slice(0, n).map(i => ({ ...i, pct: eq, noRealPct: true }))
+    }
+  } catch {
+    return null
   }
-  return null
 }
 
 export async function GET(req: NextRequest) {
@@ -198,17 +136,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ symbol, name, items: [{ name: '금(Gold)', pct: 100 }], source: 'static' })
   }
 
-  // 3. 국내 ETF (6자리 숫자 코드) — Naver 모바일 JSON API 우선
+  // 3. 국내 ETF (6자리 숫자 코드)
   if (/^\d{6}$/.test(symbol)) {
-    const mobileItems = await fetchNaverMobileEtf(symbol)
-    if (mobileItems) {
-      return NextResponse.json({ symbol, items: mobileItems, source: 'naver_api' })
-    }
-
-    // 4. HTML 파싱 fallback
-    const htmlItems = await fetchNaverHtmlEtf(symbol)
-    if (htmlItems) {
-      return NextResponse.json({ symbol, items: htmlItems, source: 'naver_html' })
+    const items = await fetchNaverMainPage(symbol)
+    if (items) {
+      return NextResponse.json({ symbol, items, source: 'naver_main' })
     }
   }
 
