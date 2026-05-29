@@ -571,15 +571,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             let winner: MultiData
             if (!remoteFetchOk) {
-              // 원격 조회 실패 → 로컬만 사용, Supabase 덮어쓰기 금지
+              // 원격 조회 실패 → 로컬만 사용, Supabase 덮어쓰기 절대 금지
               winner = localMulti ?? INITIAL_MULTI_DATA
-            } else if (remoteMulti) {
-              // 원격 조회 성공 → 항상 Supabase 데이터 우선
-              // (dirty flag가 있었으면 위에서 이미 로컬을 push했으므로 원격이 최신)
-              winner = remoteMulti
             } else {
-              // 신규 유저 (Supabase에 데이터 없음) → 로컬 사용
-              winner = localMulti ?? INITIAL_MULTI_DATA
+              // 원격 조회 성공 → lastModified 비교해서 더 최신 데이터 사용
+              // dirty flag가 있었으면 위에서 이미 로컬을 push했으므로 원격이 최신일 가능성 높음
+              // 단, Supabase가 다른 기기에서 잘못 덮어써진 경우 로컬이 더 최신일 수 있음
+              winner = mergeMultiData(localMulti, remoteMulti)
             }
             setMultiData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
@@ -631,10 +629,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               let winner2: MultiData
               if (!remoteFetchOk2) {
                 winner2 = currentLocal ?? INITIAL_MULTI_DATA
-              } else if (remoteMulti2) {
-                winner2 = remoteMulti2  // 항상 Supabase 우선
               } else {
-                winner2 = currentLocal ?? INITIAL_MULTI_DATA
+                winner2 = mergeMultiData(currentLocal, remoteMulti2)
               }
               setMultiData(winner2)
               localStorage.setItem(STORAGE_KEY, JSON.stringify(winner2))
