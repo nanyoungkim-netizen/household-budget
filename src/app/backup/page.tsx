@@ -68,7 +68,7 @@ export default function BackupPage() {
     setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends,
     setInvestmentCashDeposits, setInvestmentAccountTypes, setPortfolioPlans, setWatchlist,
     restoreBudgetData, restoreAllData,
-    user, listVersions, restoreVersion,
+    user, listVersions, restoreVersion, deleteVersion, currentSessionVersionId,
   } = useApp()
   const {
     transactions, accounts, cards, budgets, savings, goals,
@@ -99,6 +99,8 @@ export default function BackupPage() {
   const [versions, setVersions] = useState<AppVersionMeta[] | null>(null)
   const [confirmVersion, setConfirmVersion] = useState<AppVersionMeta | null>(null)
   const [versionRestoreStatus, setVersionRestoreStatus] = useState<'idle' | 'restoring' | 'success' | 'error'>('idle')
+  const [confirmDeleteVersion, setConfirmDeleteVersion] = useState<AppVersionMeta | null>(null)
+  const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'error'>('idle')
 
   const loadVersions = useCallback(async () => {
     setVersions(await listVersions())
@@ -120,6 +122,19 @@ export default function BackupPage() {
       await loadVersions()
     } else {
       setVersionRestoreStatus('error')
+    }
+  }
+
+  async function handleVersionDelete() {
+    if (!confirmDeleteVersion) return
+    setDeleteStatus('deleting')
+    const ok = await deleteVersion(confirmDeleteVersion.id)
+    setConfirmDeleteVersion(null)
+    if (ok) {
+      setDeleteStatus('idle')
+      await loadVersions()
+    } else {
+      setDeleteStatus('error')
     }
   }
 
@@ -1059,11 +1074,22 @@ export default function BackupPage() {
                     <div className="text-xs text-gray-400 mt-0.5">거래 {v.txCount.toLocaleString('ko-KR')}건</div>
                   )}
                 </div>
-                <button
-                  onClick={() => { setVersionRestoreStatus('idle'); setConfirmVersion(v) }}
-                  className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
-                  이 버전으로 복구
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => { setVersionRestoreStatus('idle'); setConfirmVersion(v) }}
+                    className="text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
+                    이 버전으로 복구
+                  </button>
+                  {v.id === currentSessionVersionId ? (
+                    <span className="text-[11px] text-gray-400 px-2 py-1.5 whitespace-nowrap">작업 중</span>
+                  ) : (
+                    <button
+                      onClick={() => { setDeleteStatus('idle'); setConfirmDeleteVersion(v) }}
+                      className="text-xs font-medium text-gray-400 hover:text-red-500 border border-transparent hover:border-red-200 rounded-lg px-2 py-1.5 transition-colors">
+                      삭제
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1086,6 +1112,12 @@ export default function BackupPage() {
           <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3 text-center">
             <div className="text-sm font-semibold text-red-600">⚠️ 복구에 실패했어요. 잠시 후 다시 시도해주세요.</div>
             <button onClick={() => setVersionRestoreStatus('idle')} className="mt-2 text-xs text-red-600 hover:text-red-800 underline">확인</button>
+          </div>
+        )}
+        {deleteStatus === 'error' && (
+          <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+            <div className="text-sm font-semibold text-red-600">⚠️ 삭제에 실패했어요. 잠시 후 다시 시도해주세요.</div>
+            <button onClick={() => setDeleteStatus('idle')} className="mt-2 text-xs text-red-600 hover:text-red-800 underline">확인</button>
           </div>
         )}
       </div>
@@ -1111,6 +1143,33 @@ export default function BackupPage() {
                 disabled={versionRestoreStatus === 'restoring'}
                 className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50">
                 {versionRestoreStatus === 'restoring' ? '되돌리는 중…' : '확인'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 사본 삭제 확인 창 */}
+      {confirmDeleteVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => deleteStatus !== 'deleting' && setConfirmDeleteVersion(null)}>
+          <div className="bg-white rounded-2xl shadow-lg max-w-sm w-full p-5" onClick={e => e.stopPropagation()}>
+            <div className="text-base font-bold text-gray-900 mb-2">이 사본을 삭제할까요?</div>
+            <p className="text-sm text-gray-600 mb-4">
+              <span className="font-semibold">{fmtVersionTime(confirmDeleteVersion.createdAt)}</span> 사본이 영구 삭제됩니다.
+              가계부 데이터에는 영향이 없고, 이 복구 지점만 사라져요.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDeleteVersion(null)}
+                disabled={deleteStatus === 'deleting'}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+                취소
+              </button>
+              <button
+                onClick={handleVersionDelete}
+                disabled={deleteStatus === 'deleting'}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50">
+                {deleteStatus === 'deleting' ? '삭제 중…' : '삭제'}
               </button>
             </div>
           </div>

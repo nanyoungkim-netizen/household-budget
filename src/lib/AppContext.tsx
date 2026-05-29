@@ -261,9 +261,11 @@ interface AppContextType {
   restoreBudgetData: (raw: Partial<AppData>) => void
   // 백업에서 전체 가계부 복원 (모든 가계부 포함)
   restoreAllData: (raw: MultiData) => void
-  // 자동 백업(버전) — 사본 목록 조회 / 특정 시점으로 복구
+  // 자동 백업(버전) — 사본 목록 조회 / 특정 시점으로 복구 / 사본 삭제
   listVersions: () => Promise<AppVersionMeta[]>
   restoreVersion: (versionId: string) => Promise<boolean>
+  deleteVersion: (versionId: string) => Promise<boolean>
+  currentSessionVersionId: string | null  // 현재 작업 중인 사본 id (삭제 불가 표시용)
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -307,6 +309,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isSyncingNow, setIsSyncingNow] = useState(false)
   const [isPendingSync, setIsPendingSync] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
+  // 현재 작업 중(이번 세션)인 사본 id — 이 사본은 삭제 불가로 표시하기 위해 UI에 노출
+  const [currentSessionVersionId, setCurrentSessionVersionId] = useState<string | null>(null)
+
+  // 세션 사본 id 설정 (동기 로직용 ref + UI용 state 동시 갱신)
+  function setSessionVersion(id: string | null) {
+    sessionVersionIdRef.current = id
+    setCurrentSessionVersionId(id)
+  }
 
   async function syncToSupabase(userId: string, next: MultiData, options?: { snapshot?: boolean }) {
     if (!supabase) return
@@ -390,7 +400,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .select('id')
           .single()
         if (error) throw error
-        if (!opts?.forceNew) sessionVersionIdRef.current = inserted?.id ?? null
+        if (!opts?.forceNew) setSessionVersion(inserted?.id ?? null)
         lastSnapshotJsonRef.current = json
       }
       cleanupOldVersions(userId)
@@ -777,7 +787,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } catch { /* ignore */ }
       } else {
         // 다시 들어옴 → 이번 세션 종료. 이후 수정은 새 사본으로 시작
-        sessionVersionIdRef.current = null
+        setSessionVersion(null)
       }
     }
 
@@ -1120,7 +1130,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // 복구 직전 현재 상태를 사본으로 1개 보존 (항상 새 줄로)
       await createVersionSnapshot(userRef.current.id, multiDataRef.current, { forceNew: true })
       // 세션 초기화 → 복구된 상태가 새 사본으로 잡히도록 (기존 세션 사본을 덮어쓰지 않음)
-      sessionVersionIdRef.current = null
+      setSessionVersion(null)
       lastSnapshotJsonRef.current = null
 
       // 선택 사본 적용 + 로컬·서버 갱신
@@ -1132,6 +1142,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 사본 1개 삭제 (가계부 실제 데이터에는 영향 없음 — 복구 지점만 제거)
+  const deleteVersion = useCallback(async (versionId: string): Promise<boolean> => {
+    if (!supabase || !userRef.current) return false
+    try {
+      const { error } = await supabase
+        .from('user_data_versions')
+        .delete()
+        .eq('id', versionId)
+        .eq('user_id', userRef.current.id)
+      if (error) throw error
+      // 현재 세션 사본을 삭제했다면 세션 초기화 → 다음 수정은 새 사본으로
+      if (sessionVersionIdRef.current === versionId) {
+        setSessionVersion(null)
+        lastSnapshotJsonRef.current = null
+      }
+      return true
+    } catch {
+      return false
+    }
   }, [])
 
   if (!hydrated) return null
@@ -1194,6 +1225,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       restoreAllData,
       listVersions,
       restoreVersion,
+      deleteVersion,
+      currentSessionVersionId,
     }}>
       {children}
     </AppContext.Provider>
