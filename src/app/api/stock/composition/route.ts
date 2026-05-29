@@ -73,7 +73,8 @@ async function fetchNaverMainPage(code: string): Promise<CompositionItem[] | nul
 
     // tr 단위 파싱
     const items: CompositionItem[] = []
-    const rowRe = /<tr>([\s\S]*?)<\/tr>/g
+    // <tr> 또는 <tr class="..."> 모두 매칭
+    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g
 
     for (const rowM of tableHtml.matchAll(rowRe)) {
       const row = rowM[1]
@@ -81,8 +82,10 @@ async function fetchNaverMainPage(code: string): Promise<CompositionItem[] | nul
       // 헤더·구분선 행 제외
       if (/<th[\s>]/.test(row) || /class="blank_|class="division_/.test(row)) continue
 
-      // 이름: <td class="ctg"> ... <a>이름</a>
-      const nameM = row.match(/<td[^>]*class="ctg"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/)
+      // 이름: <td class="ctg"> ... <a>이름</a> 또는 <span>이름</span>
+      // 국내주식 보유 ETF → <a href="...">이름</a>
+      // 해외주식 보유 ETF → <span>이름</span>
+      const nameM = row.match(/<td[^>]*class="ctg"[^>]*>[\s\S]*?<(?:a|span)[^>]*>([^<]+)<\/(?:a|span)>/)
       if (!nameM) continue
       const name = nameM[1].trim()
       if (!name) continue
@@ -136,8 +139,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ symbol, name, items: [{ name: '금(Gold)', pct: 100 }], source: 'static' })
   }
 
-  // 3. 국내 ETF (6자리 숫자 코드)
-  if (/^\d{6}$/.test(symbol)) {
+  // 3. 국내 ETF — 6자리 숫자(069500) 또는 영숫자 혼합(0183J0) 코드
+  //    해외 티커(AAPL.O, MSFT 등) 제외: 점(.) 포함이거나 알파벳만인 경우 스킵
+  const isDomesticCode = /^[A-Z0-9]{5,7}$/.test(symbol) && /\d/.test(symbol) && !symbol.includes('.')
+  if (isDomesticCode) {
     const items = await fetchNaverMainPage(symbol)
     if (items) {
       return NextResponse.json({ symbol, items, source: 'naver_main' })
