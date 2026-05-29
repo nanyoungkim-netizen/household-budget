@@ -345,7 +345,7 @@ export default function InvestmentsPage() {
 
         const results: typeof watchlistResults = []
         const seen = new Set<string>()
-        domItems.slice(0, 6).forEach(item => {
+        domItems.slice(0, 12).forEach(item => {
           if (!item.ticker || seen.has(item.ticker)) return
           seen.add(item.ticker)
           const assetType: InvestmentAssetType = isDomesticEtf(item.name, item.market) ? 'etf_fund' : 'domestic_stock'
