@@ -137,6 +137,7 @@ export default function InvestmentsPage() {
   const [activeCompositionKey, setActiveCompositionKey] = useState<{ id: string; ticker: string; name: string } | null>(null)
   const [compositionPopupPos, setCompositionPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const compositionPopupRef = useRef<HTMLDivElement>(null)
+  const activeButtonRef = useRef<HTMLElement | null>(null)  // 스크롤 추적용 버튼 ref
 
   async function fetchComposition(ticker: string, invName?: string) {
     if (compositionCache[ticker] || compositionLoading.has(ticker)) return
@@ -154,20 +155,48 @@ export default function InvestmentsPage() {
     }
   }
 
-  function openCompositionPopup(e: React.MouseEvent, id: string, ticker: string, invName?: string) {
-    e.stopPropagation()
-    if (activeCompositionKey?.id === id) { setActiveCompositionKey(null); return }
-    fetchComposition(ticker, invName)
-    const btn = e.currentTarget as HTMLElement
+  function calcPopupPos(btn: HTMLElement) {
     const rect = btn.getBoundingClientRect()
     const popupW = 260
     const margin = 8
     let left = rect.right + margin
     if (left + popupW > window.innerWidth - 8) left = rect.left - popupW - margin
     if (left < 8) left = 8
-    setCompositionPopupPos({ top: rect.top, left })
+    return { top: rect.top, left }
+  }
+
+  function openCompositionPopup(e: React.MouseEvent, id: string, ticker: string, invName?: string) {
+    e.stopPropagation()
+    if (activeCompositionKey?.id === id) {
+      setActiveCompositionKey(null)
+      activeButtonRef.current = null
+      return
+    }
+    fetchComposition(ticker, invName)
+    const btn = e.currentTarget as HTMLElement
+    activeButtonRef.current = btn
+    setCompositionPopupPos(calcPopupPos(btn))
     setActiveCompositionKey({ id, ticker, name: invName ?? '' })
   }
+
+  // 스크롤 시 팝업 위치를 버튼 위치에 맞게 실시간 업데이트
+  useEffect(() => {
+    if (!activeCompositionKey) {
+      activeButtonRef.current = null
+      return
+    }
+    const onScroll = () => {
+      if (!activeButtonRef.current) return
+      setCompositionPopupPos(calcPopupPos(activeButtonRef.current))
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompositionKey])
 
   // ── 관심종목 state ─────────────────────────────────────────────────────────
   const [watchlistQuery, setWatchlistQuery] = useState('')

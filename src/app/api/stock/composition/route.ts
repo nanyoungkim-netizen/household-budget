@@ -5,7 +5,7 @@ export interface CompositionItem {
   pct: number
 }
 
-// 소수의 인기 ETF만 정적 캐시 (API 장애 시 fallback)
+// 소수의 인기 해외 ETF — 정적 fallback
 const ETF_STATIC: Record<string, CompositionItem[]> = {
   SPY: [
     { name: 'Apple', pct: 7.1 }, { name: 'Microsoft', pct: 6.5 }, { name: 'NVIDIA', pct: 6.2 },
@@ -38,46 +38,77 @@ function isGoldEtf(s: string) {
   return /금현물|골드|GOLD|KRX금/i.test(s)
 }
 
+// 응답 JSON에서 구성종목 배열을 추출 (여러 가능한 키 시도)
+function extractList(json: Record<string, unknown>): unknown[] {
+  // 직접 배열인 경우
+  if (Array.isArray(json)) return json as unknown[]
+
+  // 가능한 모든 키 순서대로 시도
+  const candidates = [
+    json.etfComponentSeries,   // Naver 실제 응답 키 (가장 유력)
+    json.etfComponents,
+    json.components,
+    json.holdings,
+    json.stocks,
+    json.items,
+    // 중첩 구조 (result / data 래퍼)
+    (json.result as Record<string, unknown>)?.etfComponentSeries,
+    (json.result as Record<string, unknown>)?.etfComponents,
+    (json.result as Record<string, unknown>)?.holdings,
+    (json.data as Record<string, unknown>)?.etfComponentSeries,
+    (json.data as Record<string, unknown>)?.etfComponents,
+    json.data,
+  ]
+
+  for (const c of candidates) {
+    if (Array.isArray(c) && c.length > 0) return c
+  }
+  return []
+}
+
+// 종목 항목 파싱
+function parseItem(s: unknown): CompositionItem | null {
+  const r = s as Record<string, unknown>
+  const name = String(
+    r.itemName ?? r.stockName ?? r.name ?? r.etfName ?? r.fundName ?? r.stockFullCode ?? ''
+  ).trim()
+  // holdingRatio 는 문자열("30.00") 또는 숫자(30.00) 둘 다 처리
+  const pctRaw = r.weight ?? r.ratio ?? r.percentage ?? r.holdingRatio ?? r.pct ?? r.proportion ?? 0
+  const pct = typeof pctRaw === 'string' ? parseFloat(pctRaw.replace('%', '')) : Number(pctRaw)
+  if (!name || isNaN(pct) || pct <= 0) return null
+  return { name, pct }
+}
+
 // Naver 모바일 JSON API — 국내 ETF 구성종목
 async function fetchNaverMobileEtf(code: string): Promise<CompositionItem[] | null> {
-  const headers = {
+  const mobileHeaders = {
     'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21A329',
     'Accept': 'application/json, text/plain, */*',
     'Referer': `https://m.stock.naver.com/domestic/stock/${code}/etf`,
   }
 
-  // Naver 모바일 ETF 구성종목 API (여러 endpoint 시도)
   const endpoints = [
-    `https://m.stock.naver.com/api/stock/${code}/etfComponent`,
-    `https://m.stock.naver.com/api/fund/etf/${code}/holdings`,
+    { url: `https://m.stock.naver.com/api/stock/${code}/etfComponent`, headers: mobileHeaders },
+    { url: `https://m.stock.naver.com/api/stock/${code}/etfHoldings`, headers: mobileHeaders },
+    {
+      url: `https://m.stock.naver.com/api/stock/${code}/etfComponent`,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Referer': `https://m.stock.naver.com/domestic/stock/${code}/etf`,
+      },
+    },
   ]
 
-  for (const url of endpoints) {
+  for (const ep of endpoints) {
     try {
-      const res = await fetch(url, { headers, next: { revalidate: 3600 } })
+      const res = await fetch(ep.url, { headers: ep.headers, cache: 'no-store' })
       if (!res.ok) continue
-      const json = await res.json()
+      const json = await res.json() as Record<string, unknown>
+      const list = extractList(json)
+      if (list.length === 0) continue
 
-      // 응답 shape가 다를 수 있어서 여러 key 시도
-      // Naver 실제 응답: { etfComponentSeries: [...] } 또는 { etfComponents: [...] }
-      const list: unknown[] =
-        json.etfComponentSeries ??
-        json.etfComponents ?? json.components ?? json.holdings ??
-        json.stocks ?? json.items ?? json.data ?? []
-
-      if (!Array.isArray(list) || list.length === 0) continue
-
-      const items: CompositionItem[] = list
-        .map((s: unknown) => {
-          const r = s as Record<string, unknown>
-          return {
-            name: String(r.itemName ?? r.stockName ?? r.name ?? r.etfName ?? ''),
-            pct: Number(r.weight ?? r.ratio ?? r.percentage ?? r.holdingRatio ?? r.pct ?? 0),
-          }
-        })
-        .filter(i => i.name && i.pct > 0)
-        .slice(0, 15)
-
+      const items = list.map(parseItem).filter((i): i is CompositionItem => i !== null).slice(0, 15)
       if (items.length > 0) return items
     } catch {
       // 다음 endpoint 시도
@@ -86,45 +117,66 @@ async function fetchNaverMobileEtf(code: string): Promise<CompositionItem[] | nu
   return null
 }
 
-// Naver 금융 HTML 파싱 fallback — ETF 포트폴리오 페이지
+// Naver 금융 HTML 파싱 fallback
 async function fetchNaverHtmlEtf(code: string): Promise<CompositionItem[] | null> {
-  try {
-    const url = `https://finance.naver.com/fund/etfPortfolioInfo.naver?itemCode=${encodeURIComponent(code)}`
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Referer': `https://finance.naver.com/fund/etfItemInfo.naver?itemCode=${code}`,
-        'Accept-Language': 'ko-KR,ko;q=0.9',
-      },
-      next: { revalidate: 3600 },
-    })
-    if (!res.ok) return null
+  // 시도할 URL 목록 (구버전/신버전 모두 커버)
+  const urls = [
+    `https://finance.naver.com/fund/etfPortfolioInfo.naver?itemCode=${code}`,
+    `https://finance.naver.com/fund/etfItemInfo.naver?itemCode=${code}`,
+  ]
 
-    const buf = await res.arrayBuffer()
-    const text = new TextDecoder('euc-kr').decode(buf)
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Referer': `https://finance.naver.com/fund/etfItemInfo.naver?itemCode=${code}`,
+          'Accept-Language': 'ko-KR,ko;q=0.9',
+        },
+        cache: 'no-store',
+      })
+      if (!res.ok) continue
 
-    const items: CompositionItem[] = []
+      const buf = await res.arrayBuffer()
+      const text = new TextDecoder('euc-kr').decode(buf)
 
-    // 패턴 1: <tr> 안에 rank(숫자)·name·rate 셀이 순서대로 있는 경우
-    const pattern1 = /<tr[^>]*>[\s\S]*?<\/tr>/g
-    for (const m of text.matchAll(pattern1)) {
-      const row = m[0]
-      // 이름: 한글/영문 텍스트 td
-      const nameM = row.match(/<td[^>]*>\s*<a[^>]*>([^<]+)<\/a>\s*<\/td>/) ??
-                    row.match(/<td[^>]*class="[^"]*tleft[^"]*"[^>]*>\s*([^<\s][^<]*?)\s*<\/td>/)
-      // 비율: nn.nn% 형태
-      const rateM = row.match(/([\d]+\.[\d]+)\s*%/)
-      if (nameM && rateM) {
-        const name = nameM[1].trim()
-        const pct = parseFloat(rateM[1])
-        if (name && pct > 0 && !/순위|비중|종목/.test(name)) items.push({ name, pct })
+      const items: CompositionItem[] = []
+
+      // <tr> 단위로 파싱
+      const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/g
+      for (const m of text.matchAll(rowPattern)) {
+        const row = m[1]
+        // 헤더 행 제외
+        if (/<th[\s>]/.test(row)) continue
+
+        // td 내 텍스트 추출 (태그 제거)
+        const tdTexts: string[] = []
+        const tdPattern = /<td[^>]*>([\s\S]*?)<\/td>/g
+        for (const td of row.matchAll(tdPattern)) {
+          const t = td[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
+          if (t) tdTexts.push(t)
+        }
+
+        // 비중: 소수점 있는 숫자 (정수 순위와 구분), % 있어도 없어도 OK
+        const pctCell = tdTexts.find(t => /^\d{1,3}\.\d{1,4}%?$/.test(t))
+        // 이름: 한글 또는 영문 포함, 순수 숫자 아닌 셀
+        const nameCell = tdTexts.find(t => /[가-힣a-zA-Z]/.test(t) && !/^[\d,\s]+$/.test(t))
+
+        if (nameCell && pctCell) {
+          const name = nameCell.trim()
+          const pct = parseFloat(pctCell.replace('%', ''))
+          if (pct > 0 && pct <= 100 && !/순위|비중|종목|보유|비율/.test(name)) {
+            items.push({ name, pct })
+          }
+        }
       }
-    }
 
-    return items.length > 0 ? items.slice(0, 15) : null
-  } catch {
-    return null
+      if (items.length > 0) return items.slice(0, 15)
+    } catch {
+      // 다음 URL 시도
+    }
   }
+  return null
 }
 
 export async function GET(req: NextRequest) {
