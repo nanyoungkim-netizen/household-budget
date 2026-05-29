@@ -261,9 +261,11 @@ interface AppContextType {
   restoreBudgetData: (raw: Partial<AppData>) => void
   // 백업에서 전체 가계부 복원 (모든 가계부 포함)
   restoreAllData: (raw: MultiData) => void
-  // 자동 백업(버전) — 사본 목록 조회 / 특정 시점으로 복구
+  // 자동 백업(버전) — 사본 목록 조회 / 특정 시점으로 복구 / 사본 삭제
   listVersions: () => Promise<AppVersionMeta[]>
   restoreVersion: (versionId: string) => Promise<boolean>
+  deleteVersion: (versionId: string) => Promise<boolean>
+  currentSessionVersionId: string | null  // 현재 작업 중인 사본 id (삭제 불가 표시용)
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -290,9 +292,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const multiDataRef = useRef<MultiData>(INITIAL_MULTI_DATA)
   const sessionTokenRef = useRef<string | null>(null)   // keepalive sync 용 JWT 캐시
   const isExplicitSignOutRef = useRef(false)            // 의도적 로그아웃 여부
-  // 자동 백업(버전) — 연속 저장 묶음 처리용
-  const lastVersionAtRef = useRef<number>(0)            // 직전 사본 생성 시각(ms)
-  const lastVersionIdRef = useRef<string | null>(null)  // 직전 사본 id (묶음 갱신 대상)
+  // 자동 백업(버전) — 세션 단위 사본
+  const sessionVersionIdRef = useRef<string | null>(null)  // 이번 세션의 사본 id (세션 내 덮어쓰기 대상)
+  const lastSnapshotJsonRef = useRef<string | null>(null)  // 직전 사본 내용 (같은 내용이면 중복 생성 방지)
 
   userRef.current = user
   multiDataRef.current = multiData
@@ -307,6 +309,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isSyncingNow, setIsSyncingNow] = useState(false)
   const [isPendingSync, setIsPendingSync] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
+  // 현재 작업 중(이번 세션)인 사본 id — 이 사본은 삭제 불가로 표시하기 위해 UI에 노출
+  const [currentSessionVersionId, setCurrentSessionVersionId] = useState<string | null>(null)
+
+  // 세션 사본 id 설정 (동기 로직용 ref + UI용 state 동시 갱신)
+  function setSessionVersion(id: string | null) {
+    sessionVersionIdRef.current = id
+    setCurrentSessionVersionId(id)
+  }
 
   async function syncToSupabase(userId: string, next: MultiData, options?: { snapshot?: boolean }) {
     if (!supabase) return
@@ -332,8 +342,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   // ── 자동 백업(버전) ───────────────────────────────────────────────────────────
-  const VERSION_RETENTION_DAYS = 7            // 보관 기간: 최근 7일
-  const VERSION_BATCH_WINDOW_MS = 3 * 60_000  // 3분 이내 연속 저장은 직전 사본을 갱신(과도하게 쌓이지 않도록 — 작업 세션당 사본 1개 수준)
+  // 세션 단위 사본: 접속 후 화면을 벗어나기 전까지의 수정은 하나의 사본에 계속 덮어쓰고,
+  // 다시 들어와 수정하면 새 사본을 만든다. 내용이 같으면 새로 만들지 않는다(중복 방지).
+  const VERSION_RETENTION_DAYS = 7  // 보관 기간: 최근 7일
 
   function countTransactions(snapshot: MultiData): number {
     return Object.values(snapshot.budgets ?? {})
@@ -349,33 +360,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore — 정리 실패는 본 기능에 영향 없음 */ }
   }
 
-  // 사본 1개 추가. 직전 사본과 수 초 이내면 그 사본을 갱신(묶음 처리).
-  // forceNew=true 면 항상 새 줄로 추가 (복구 직전 "현재 상태" 보존용)
+  // 사본 저장(세션 단위).
+  //  - 이번 세션 사본이 있으면 → 그 사본을 최신 상태로 덮어씀
+  //  - 없으면(세션 첫 수정) → 새 사본 생성. 단 직전 사본과 내용이 같으면 만들지 않음(중복 방지)
+  //  - forceNew=true → 세션과 무관하게 항상 새 사본 1개 추가 (복구 직전 "현재 상태" 보존용)
   async function createVersionSnapshot(userId: string, snapshot: MultiData, opts?: { forceNew?: boolean }) {
     if (!supabase) return
     try {
-      const txCount = countTransactions(snapshot)
-      const nowMs = Date.now()
-      const withinWindow = !opts?.forceNew
-        && lastVersionIdRef.current != null
-        && (nowMs - lastVersionAtRef.current) < VERSION_BATCH_WINDOW_MS
+      const json = JSON.stringify(snapshot)
+      // 직전 사본과 내용이 완전히 같으면 건너뜀 (같은 사본 중복 방지)
+      if (!opts?.forceNew && json === lastSnapshotJsonRef.current) return
 
-      if (withinWindow) {
-        // 직전 사본 갱신
+      const txCount = countTransactions(snapshot)
+
+      if (!opts?.forceNew && sessionVersionIdRef.current) {
+        // 이번 세션 사본을 최신 상태로 덮어쓰기
         const { error } = await supabase.from('user_data_versions')
           .update({ data: snapshot, tx_count: txCount, created_at: new Date().toISOString() })
-          .eq('id', lastVersionIdRef.current!)
+          .eq('id', sessionVersionIdRef.current)
         if (error) throw error
-        lastVersionAtRef.current = nowMs
+        lastSnapshotJsonRef.current = json
       } else {
-        // 새 사본 추가
+        // 새 사본 생성. 단, 재접속(메모리 초기화) 직후엔 직전 DB 사본과 같을 수 있으니 한 번 더 확인
+        if (!opts?.forceNew) {
+          const { data: latest } = await supabase.from('user_data_versions')
+            .select('id, data')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (latest?.data && JSON.stringify(latest.data) === json) {
+            // 직전 사본과 내용 동일 → 새로 만들지 않음
+            lastSnapshotJsonRef.current = json
+            return
+          }
+        }
         const { data: inserted, error } = await supabase.from('user_data_versions')
           .insert({ user_id: userId, data: snapshot, tx_count: txCount })
           .select('id')
           .single()
         if (error) throw error
-        lastVersionIdRef.current = inserted?.id ?? null
-        lastVersionAtRef.current = nowMs
+        if (!opts?.forceNew) setSessionVersion(inserted?.id ?? null)
+        lastSnapshotJsonRef.current = json
       }
       cleanupOldVersions(userId)
     } catch { /* ignore — 사본 실패는 본 저장에 영향 주지 않음 */ }
@@ -742,22 +768,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // visibilitychange: 탭 숨김(다른 탭 전환, 앱 전환) 시 즉시 정상 동기화
     // keepalive 64KB 한계를 우회 — 탭이 완전히 닫히기 전 여유 있을 때 실행
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== 'hidden') return
       if (!supabase || !userRef.current) return
-      const isDirty = localStorage.getItem(NEEDS_SYNC_KEY) === '1'
-      if (!isDirty) return
-      if (syncTimerRef.current) {
-        clearTimeout(syncTimerRef.current)
-        syncTimerRef.current = null
-      }
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-          const d = JSON.parse(stored) as MultiData
-          // 일반 fetch (keepalive 아님) — 탭 숨김 시점엔 아직 JS 실행 가능
-          syncToSupabase(userRef.current.id, d)
+      if (document.visibilityState === 'hidden') {
+        // 화면을 벗어남 → 마지막 수정분을 이번 세션 사본에 반영(있을 때만)
+        const isDirty = localStorage.getItem(NEEDS_SYNC_KEY) === '1'
+        if (!isDirty) return
+        if (syncTimerRef.current) {
+          clearTimeout(syncTimerRef.current)
+          syncTimerRef.current = null
         }
-      } catch { /* ignore */ }
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY)
+          if (stored) {
+            const d = JSON.parse(stored) as MultiData
+            // 일반 fetch (keepalive 아님) — 탭 숨김 시점엔 아직 JS 실행 가능
+            syncToSupabase(userRef.current.id, d, { snapshot: true })
+          }
+        } catch { /* ignore */ }
+      } else {
+        // 다시 들어옴 → 이번 세션 종료. 이후 수정은 새 사본으로 시작
+        setSessionVersion(null)
+      }
     }
 
     // beforeunload: 미동기화 상태이면 브라우저 기본 확인 다이얼로그 표시
@@ -1098,9 +1129,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // 복구 직전 현재 상태를 사본으로 1개 보존 (항상 새 줄로)
       await createVersionSnapshot(userRef.current.id, multiDataRef.current, { forceNew: true })
-      // 묶음 창을 끊어, 이어지는 복구본 저장이 위 사본을 덮어쓰지 않도록 함
-      lastVersionAtRef.current = 0
-      lastVersionIdRef.current = null
+      // 세션 초기화 → 복구된 상태가 새 사본으로 잡히도록 (기존 세션 사본을 덮어쓰지 않음)
+      setSessionVersion(null)
+      lastSnapshotJsonRef.current = null
 
       // 선택 사본 적용 + 로컬·서버 갱신
       const restored = hydrateMultiData(row.data)
@@ -1111,6 +1142,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 사본 1개 삭제 (가계부 실제 데이터에는 영향 없음 — 복구 지점만 제거)
+  const deleteVersion = useCallback(async (versionId: string): Promise<boolean> => {
+    if (!supabase || !userRef.current) return false
+    try {
+      const { error } = await supabase
+        .from('user_data_versions')
+        .delete()
+        .eq('id', versionId)
+        .eq('user_id', userRef.current.id)
+      if (error) throw error
+      // 현재 세션 사본을 삭제했다면 세션 초기화 → 다음 수정은 새 사본으로
+      if (sessionVersionIdRef.current === versionId) {
+        setSessionVersion(null)
+        lastSnapshotJsonRef.current = null
+      }
+      return true
+    } catch {
+      return false
+    }
   }, [])
 
   if (!hydrated) return null
@@ -1173,6 +1225,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       restoreAllData,
       listVersions,
       restoreVersion,
+      deleteVersion,
+      currentSessionVersionId,
     }}>
       {children}
     </AppContext.Provider>
