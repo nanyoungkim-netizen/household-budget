@@ -59,7 +59,9 @@ async function fetchNaverMobileEtf(code: string): Promise<CompositionItem[] | nu
       const json = await res.json()
 
       // 응답 shape가 다를 수 있어서 여러 key 시도
+      // Naver 실제 응답: { etfComponentSeries: [...] } 또는 { etfComponents: [...] }
       const list: unknown[] =
+        json.etfComponentSeries ??
         json.etfComponents ?? json.components ?? json.holdings ??
         json.stocks ?? json.items ?? json.data ?? []
 

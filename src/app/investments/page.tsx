@@ -1708,8 +1708,11 @@ export default function InvestmentsPage() {
                 {(() => {
                   const totalDayChange = [...holdingsMap.entries()].reduce((sum, [invId, h]) => {
                     const inv = investments.find(i => i.id === invId)
-                    if (!inv?.prevCloseDiff) return sum
-                    return sum + inv.prevCloseDiff * h.holdingQty
+                    if (!inv || inv.prevCloseDiff === undefined || inv.prevCloseDiff === null) return sum
+                    const isForeign = inv.assetType === 'foreign_stock'
+                    const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
+                    if (isForeign && fxRate === 0) return sum  // 환율 없으면 제외
+                    return sum + Math.round(inv.prevCloseDiff * h.holdingQty * fxRate)
                   }, 0)
                   const hasDayChange = investments.some(inv => inv.prevCloseDiff !== undefined)
                   if (!hasDayChange) return null
@@ -1772,8 +1775,11 @@ export default function InvestmentsPage() {
                     .filter(inv => inv.accountId === acc.id)
                     .reduce((sum, inv) => {
                       const h = holdingsMap.get(inv.id)
-                      if (!h || inv.prevCloseDiff === undefined) return sum
-                      return sum + inv.prevCloseDiff * h.holdingQty
+                      if (!h || inv.prevCloseDiff === undefined || inv.prevCloseDiff === null) return sum
+                      const isForeign = inv.assetType === 'foreign_stock'
+                      const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
+                      if (isForeign && fxRate === 0) return sum
+                      return sum + Math.round(inv.prevCloseDiff * h.holdingQty * fxRate)
                     }, 0)
                   const hasDayChange = investments
                     .filter(inv => inv.accountId === acc.id)
@@ -1894,8 +1900,11 @@ export default function InvestmentsPage() {
                         .filter(inv => inv.accountId === acc.id)
                         .reduce((sum, inv) => {
                           const h = holdingsMap.get(inv.id)
-                          if (!h || inv.prevCloseDiff === undefined) return sum
-                          return sum + inv.prevCloseDiff * h.holdingQty
+                          if (!h || inv.prevCloseDiff === undefined || inv.prevCloseDiff === null) return sum
+                          const isForeign = inv.assetType === 'foreign_stock'
+                          const fxRate = isForeign ? (exchangeRates['USD'] ?? 0) : 1
+                          if (isForeign && fxRate === 0) return sum
+                          return sum + Math.round(inv.prevCloseDiff * h.holdingQty * fxRate)
                         }, 0)
                       const hasDayChange = investments
                         .filter(inv => inv.accountId === acc.id)
