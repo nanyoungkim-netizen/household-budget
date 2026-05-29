@@ -3599,7 +3599,11 @@ export default function InvestmentsPage() {
       {/* ── ETF 구성 팝업 ─────────────────────────────────────────────────── */}
       {activeCompositionKey && (() => {
         const { ticker, name } = activeCompositionKey
-        const items = ticker ? compositionCache[ticker] : undefined
+        const rawItems = ticker ? compositionCache[ticker] : undefined
+        // 비중 내림차순 정렬 (noRealPct는 순서 유지)
+        const items = rawItems
+          ? (rawItems[0]?.noRealPct ? rawItems : [...rawItems].sort((a, b) => b.pct - a.pct))
+          : undefined
         const isLoading = ticker ? compositionLoading.has(ticker) : false
         const maxPct = items ? Math.max(...items.map(d => d.pct)) : 1
         return (

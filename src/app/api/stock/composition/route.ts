@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 export interface CompositionItem {
   name: string
   pct: number
-  noRealPct?: boolean   // true → 비중 미공개, 균등 배분한 것
+  shares?: number       // 주식수(계약수) — noRealPct 정렬 기준으로 사용
+  noRealPct?: boolean   // true → 비중 미공개, 주식수 순 정렬
 }
 
 // 소수의 인기 해외 ETF — 정적 fallback
@@ -90,6 +91,15 @@ async function fetchNaverMainPage(code: string): Promise<CompositionItem[] | nul
       const name = nameM[1].trim()
       if (!name) continue
 
+      // 주식수(계약수): ctg, per 이외의 두 번째 <td>
+      const tdMatches = [...row.matchAll(/<td(?![^>]*class="(?:ctg|per)")[^>]*>([\s\S]*?)<\/td>/g)]
+      let shares = 0
+      if (tdMatches[0]) {
+        const sharesText = tdMatches[0][1].replace(/<[^>]+>/g, '').replace(/[^0-9]/g, '').trim()
+        const num = parseInt(sharesText, 10)
+        if (!isNaN(num) && num > 0) shares = num
+      }
+
       // 비중: <td class="per">29.29%</td> 또는 <td class="per">-</td>
       const perM = row.match(/<td[^>]*class="per"[^>]*>([\s\S]*?)<\/td>/)
       let pct = 0
@@ -99,7 +109,7 @@ async function fetchNaverMainPage(code: string): Promise<CompositionItem[] | nul
         if (!isNaN(num) && num > 0) pct = num
       }
 
-      items.push({ name, pct })
+      items.push({ name, pct, shares })
     }
 
     if (items.length === 0) return null
@@ -107,13 +117,12 @@ async function fetchNaverMainPage(code: string): Promise<CompositionItem[] | nul
     const hasRealPct = items.some(i => i.pct > 0)
 
     if (hasRealPct) {
-      // 비중이 있는 종목만 반환
-      return items.filter(i => i.pct > 0).slice(0, 15)
+      // 비중 내림차순 정렬 후 반환
+      return items.filter(i => i.pct > 0).sort((a, b) => b.pct - a.pct).slice(0, 15)
     } else {
-      // 비중 미공개 → 균등 배분으로 표시 (noRealPct 플래그)
-      const n = Math.min(items.length, 15)
-      const eq = parseFloat((100 / n).toFixed(2))
-      return items.slice(0, n).map(i => ({ ...i, pct: eq, noRealPct: true }))
+      // 비중 미공개 → 주식수 내림차순 정렬 (noRealPct 플래그)
+      const sorted = items.sort((a, b) => (b.shares ?? 0) - (a.shares ?? 0)).slice(0, 15)
+      return sorted.map(i => ({ ...i, pct: 0, noRealPct: true }))
     }
   } catch {
     return null
