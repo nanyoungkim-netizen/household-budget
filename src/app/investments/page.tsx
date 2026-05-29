@@ -2104,7 +2104,8 @@ export default function InvestmentsPage() {
 
             {/* 플로팅 드롭다운 */}
             {watchlistResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                <div className="overflow-y-auto max-h-72">
                 {watchlistResults.map((item, i) => {
                   const alreadyAdded = watchlist.some(w => w.ticker === item.ticker && w.assetType === item.assetType)
                   const isEtf = item.assetType === 'etf_fund' || isDomesticEtf(item.name, item.exchange)
@@ -2156,6 +2157,7 @@ export default function InvestmentsPage() {
                     </div>
                   )
                 })}
+                </div>
               </div>
             )}
           </div>
