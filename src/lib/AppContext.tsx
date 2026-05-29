@@ -244,6 +244,7 @@ interface AppContextType {
   forceSyncNow: () => Promise<void>
   lastSyncedAt: string | null
   isSyncingNow: boolean
+  isPendingSync: boolean     // true → localStorage에 미동기 데이터 있음
   syncError: string | null   // 저장 실패 메시지
   // 초기 설정 완료
   completeSetup: (setupData: Partial<AppData>) => void
@@ -291,6 +292,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const NEEDS_SYNC_KEY = 'hb_needs_sync'
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [isSyncingNow, setIsSyncingNow] = useState(false)
+  const [isPendingSync, setIsPendingSync] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
 
   async function syncToSupabase(userId: string, next: MultiData) {
@@ -307,6 +309,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ])
       if (error) throw error
       localStorage.removeItem(NEEDS_SYNC_KEY)  // 성공 시 dirty flag 해제
+      setIsPendingSync(false)
       setLastSyncedAt(new Date().toISOString())
     } catch { /* ignore — dirty flag 유지돼서 다음 로드 시 재시도됨 */ }
   }
@@ -339,6 +342,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error
         // 성공
         localStorage.removeItem(NEEDS_SYNC_KEY)
+        setIsPendingSync(false)
         setLastSyncedAt(new Date().toISOString())
         setSyncError(null)
         setIsSyncingNow(false)
@@ -395,11 +399,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       if (supabase && userRef.current) {
         localStorage.setItem(NEEDS_SYNC_KEY, '1')  // dirty flag 설정
+        setIsPendingSync(true)
       }
     } catch { /* ignore */ }
     if (supabase && userRef.current) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
-      // 500ms → 200ms: 빠른 연속 입력은 묶고, 이탈 전 누락 가능성을 줄임
       syncTimerRef.current = setTimeout(() => {
         if (userRef.current) syncToSupabase(userRef.current.id, next)
       }, 200)
@@ -553,19 +557,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               await syncToSupabase(session.user.id, localMulti)
             }
 
-            const { data: remoteRow } = await supabase
+            const { data: remoteRow, error: remoteErr } = await supabase
               .from('user_data')
               .select('data')
               .eq('user_id', session.user.id)
               .single()
 
             let remoteMulti: MultiData | null = null
+            // PGRST116 = no rows (신규 유저) → 정상, 계속 진행
+            // 그 외 error = 네트워크/서버 오류 → 절대 Supabase 덮어쓰기 금지!
+            const remoteIsNewUser = remoteErr?.code === 'PGRST116'
+            const remoteFetchOk = !remoteErr || remoteIsNewUser
             if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
 
             const winner = mergeMultiData(localMulti, remoteMulti)
             setMultiData(winner)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-            await syncToSupabase(session.user.id, winner)
+            // 원격 조회 실패 시 절대 쓰기 금지 — 구버전 데이터로 덮어쓰기 방지
+            if (remoteFetchOk) {
+              await syncToSupabase(session.user.id, winner)
+            }
           } else {
             if (localMulti) setMultiData(localMulti)
           }
@@ -598,20 +609,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await syncToSupabase(session.user.id, currentLocal)
               }
 
-              const { data: remoteRow } = await supabase!
+              const { data: remoteRow, error: remoteErr2 } = await supabase!
                 .from('user_data')
                 .select('data')
                 .eq('user_id', session.user.id)
                 .single()
 
               let remoteMulti: MultiData | null = null
+              const remoteIsNewUser2 = remoteErr2?.code === 'PGRST116'
+              const remoteFetchOk2 = !remoteErr2 || remoteIsNewUser2
               if (remoteRow?.data) remoteMulti = hydrateMultiData(remoteRow.data)
 
               const winner = mergeMultiData(currentLocal, remoteMulti)
               if (winner) {
                 setMultiData(winner)
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
-                await syncToSupabase(session.user.id, winner)
+                // 원격 조회 실패 시 절대 쓰기 금지
+                if (remoteFetchOk2) {
+                  await syncToSupabase(session.user.id, winner)
+                }
               }
             }
           })
@@ -646,10 +662,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       } catch { /* ignore */ }
     }
+
+    // visibilitychange: 탭 숨김(다른 탭 전환, 앱 전환) 시 즉시 정상 동기화
+    // keepalive 64KB 한계를 우회 — 탭이 완전히 닫히기 전 여유 있을 때 실행
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') return
+      if (!supabase || !userRef.current) return
+      const isDirty = localStorage.getItem(NEEDS_SYNC_KEY) === '1'
+      if (!isDirty) return
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current)
+        syncTimerRef.current = null
+      }
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+          const d = JSON.parse(stored) as MultiData
+          // 일반 fetch (keepalive 아님) — 탭 숨김 시점엔 아직 JS 실행 가능
+          syncToSupabase(userRef.current.id, d)
+        }
+      } catch { /* ignore */ }
+    }
+
+    // beforeunload: 미동기화 상태이면 브라우저 기본 확인 다이얼로그 표시
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (localStorage.getItem(NEEDS_SYNC_KEY) === '1') {
+        e.preventDefault()
+        // 일부 브라우저는 returnValue가 있어야 다이얼로그 표시
+        e.returnValue = ''
+      }
+    }
+
     window.addEventListener('pagehide', handlePageHide)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
       window.removeEventListener('pagehide', handlePageHide)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
       cleanupFn?.()
     }
   }, [])
@@ -986,6 +1037,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       forceSyncNow,
       lastSyncedAt,
       isSyncingNow,
+      isPendingSync,
       syncError,
       completeSetup,
       resetAll,

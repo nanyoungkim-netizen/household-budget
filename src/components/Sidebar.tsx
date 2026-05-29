@@ -259,7 +259,7 @@ function BudgetSwitcher() {
 // ── 사이드바 ─────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const pathname = usePathname()
-  const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow, syncError } = useApp()
+  const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow, isPendingSync, syncError } = useApp()
   const [spinning, setSpinning] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const prevSyncedAtRef = useRef<string | null>(null)
@@ -314,20 +314,23 @@ export default function Sidebar() {
                   syncError ? 'bg-red-50 hover:bg-red-100'
                   : showSuccess ? 'bg-green-50 hover:bg-green-100'
                   : isSyncingNow ? 'bg-blue-100'
+                  : isPendingSync ? 'bg-orange-50 hover:bg-orange-100 animate-pulse'
                   : 'bg-blue-50 hover:bg-blue-100'
                 }`}
               >
                 <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>
-                  {syncError ? '❌' : showSuccess ? '✅' : '☁️'}
+                  {syncError ? '❌' : showSuccess ? '✅' : isPendingSync && !isSyncingNow ? '🟡' : '☁️'}
                 </span>
                 <span className={`text-[10px] font-semibold leading-none whitespace-nowrap ${
                   syncError ? 'text-red-500'
                   : showSuccess ? 'text-green-600'
+                  : isPendingSync && !isSyncingNow ? 'text-orange-500'
                   : 'text-blue-600'
                 }`}>
                   {isSyncingNow ? '저장 중…'
                     : syncError ? '실패·재시도'
                     : showSuccess ? '저장됐어요!'
+                    : isPendingSync ? '저장 안 됨!'
                     : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
                     : '저장'}
                 </span>
@@ -386,20 +389,23 @@ export default function Sidebar() {
               syncError ? 'bg-red-50 hover:bg-red-100'
               : showSuccess ? 'bg-green-50 hover:bg-green-100'
               : isSyncingNow ? 'bg-blue-100'
+              : isPendingSync ? 'bg-orange-50 hover:bg-orange-100 animate-pulse'
               : 'bg-blue-50 hover:bg-blue-100'
             }`}
           >
             <span className={`text-base leading-none ${isSyncingNow ? 'animate-spin' : ''}`}>
-              {syncError ? '❌' : showSuccess ? '✅' : '☁️'}
+              {syncError ? '❌' : showSuccess ? '✅' : isPendingSync && !isSyncingNow ? '🟡' : '☁️'}
             </span>
             <span className={`text-[9px] font-semibold leading-none whitespace-nowrap ${
               syncError ? 'text-red-500'
               : showSuccess ? 'text-green-600'
+              : isPendingSync && !isSyncingNow ? 'text-orange-500'
               : 'text-blue-600'
             }`}>
               {isSyncingNow ? '저장중…'
                 : syncError ? '실패·재시도'
                 : showSuccess ? '저장됐어요!'
+                : isPendingSync ? '저장 안 됨!'
                 : lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
                 : '저장'}
             </span>
