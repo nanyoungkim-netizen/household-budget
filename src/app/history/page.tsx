@@ -1,45 +1,146 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
-import { parseExcelFile, summarizeByMonth, ParseResult, HistoryRecord } from '@/lib/excelParser'
-import { DEFAULT_CATEGORIES } from '@/lib/AppContext'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useApp } from '@/lib/AppContext'
+import { supabase } from '@/lib/supabase'
 
-function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
-function fmtShort(n: number) {
-  if (n >= 100000000) return (n / 100000000).toFixed(1) + '억'
-  if (n >= 10000) return (n / 10000).toFixed(0) + '만'
-  return n.toLocaleString()
+const BUCKET = 'history-files'
+
+interface StoredFile {
+  name: string
+  id: string | null
+  created_at: string | null
+  metadata: { size?: number } | null
 }
 
-type ViewMode = 'monthly' | 'detail' | 'category'
+// 저장 시 붙인 타임스탬프 접두사 제거 → 원래 파일명 표시
+function displayName(name: string) {
+  return name.replace(/^\d+_/, '')
+}
+
+function fmtSize(bytes?: number) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function fmtDate(iso: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${y}.${m}.${day} ${hh}:${mm}`
+}
 
 export default function HistoryPage() {
-  const [result, setResult] = useState<ParseResult | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useApp()
+  const [files, setFiles] = useState<StoredFile[] | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('monthly')
-  const [yearFilter, setYearFilter] = useState<string>('all')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
+  const [error, setError] = useState<string | null>(null)
+  const [busyName, setBusyName] = useState<string | null>(null)     // 다운로드/삭제 진행 중인 파일
+  const [confirmDelete, setConfirmDelete] = useState<StoredFile | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function processFile(file: File) {
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      setError('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다')
+  const loadFiles = useCallback(async () => {
+    if (!user || !supabase) { setFiles([]); return }
+    const { data, error: listErr } = await supabase.storage
+      .from(BUCKET)
+      .list(user.id, { sortBy: { column: 'created_at', order: 'desc' }, limit: 200 })
+    if (listErr) {
+      setError('파일 목록을 불러오지 못했어요. 저장소 설정(버킷)이 되어 있는지 확인해주세요.')
+      setFiles([])
       return
     }
-    setLoading(true)
+    setFiles(((data ?? []) as StoredFile[]).filter(f => f.name !== '.emptyFolderPlaceholder'))
+  }, [user])
+
+  useEffect(() => {
+    if (!user || !supabase) return
+    let cancelled = false
+    supabase.storage
+      .from(BUCKET)
+      .list(user.id, { sortBy: { column: 'created_at', order: 'desc' }, limit: 200 })
+      .then(({ data, error: listErr }) => {
+        if (cancelled) return
+        if (listErr) {
+          setError('파일 목록을 불러오지 못했어요. 저장소 설정(버킷)이 되어 있는지 확인해주세요.')
+          setFiles([])
+          return
+        }
+        setFiles(((data ?? []) as StoredFile[]).filter(f => f.name !== '.emptyFolderPlaceholder'))
+      })
+    return () => { cancelled = true }
+  }, [user])
+
+  async function uploadFile(file: File) {
+    if (!user || !supabase) return
+    setError(null)
+    setUploading(true)
+    try {
+      const path = `${user.id}/${Date.now()}_${file.name}`
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, file, { upsert: false, contentType: file.type || undefined })
+      if (upErr) {
+        setError(`업로드에 실패했어요: ${upErr.message}`)
+        return
+      }
+      await loadFiles()
+    } catch (e) {
+      setError(`업로드 중 오류가 발생했어요: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function downloadFile(f: StoredFile) {
+    if (!user || !supabase) return
+    setBusyName(f.name)
     setError(null)
     try {
-      const parsed = await parseExcelFile(file)
-      setResult(parsed)
-      setSelectedMonth(null)
-    } catch (e) {
-      setError('파일을 읽는 중 오류가 발생했습니다. 엑셀 파일을 확인해주세요.')
-      console.error(e)
+      const { data, error: dlErr } = await supabase.storage
+        .from(BUCKET)
+        .download(`${user.id}/${f.name}`)
+      if (dlErr || !data) {
+        setError('다운로드에 실패했어요. 잠시 후 다시 시도해주세요.')
+        return
+      }
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = displayName(f.name)
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url) }, 100)
     } finally {
-      setLoading(false)
+      setBusyName(null)
+    }
+  }
+
+  async function deleteFile() {
+    if (!user || !supabase || !confirmDelete) return
+    const target = confirmDelete
+    setConfirmDelete(null)
+    setBusyName(target.name)
+    setError(null)
+    try {
+      const { error: rmErr } = await supabase.storage
+        .from(BUCKET)
+        .remove([`${user.id}/${target.name}`])
+      if (rmErr) {
+        setError('삭제에 실패했어요. 잠시 후 다시 시도해주세요.')
+        return
+      }
+      await loadFiles()
+    } finally {
+      setBusyName(null)
     }
   }
 
@@ -47,263 +148,124 @@ export default function HistoryPage() {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
-  }, [])
+    if (file) uploadFile(file)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) processFile(file)
+    if (file) uploadFile(file)
+    e.target.value = ''
   }
 
-  // 필터 적용된 전체 records
-  const filteredRecords = result ? result.allRecords.filter(r => {
-    if (yearFilter !== 'all' && !r.date.startsWith(yearFilter)) return false
-    if (typeFilter !== 'all' && r.type !== typeFilter) return false
-    return true
-  }) : []
-
-  const monthlySummary = summarizeByMonth(filteredRecords)
-  const availableYears = result
-    ? [...new Set(result.allRecords.map(r => r.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a))
-    : []
-
-  // 선택된 월 상세 데이터
-  const selectedData = selectedMonth
-    ? monthlySummary.find(m => m.month === selectedMonth)
-    : null
-
-  // 카테고리별 집계
-  const catSummary = filteredRecords
-    .filter(r => r.type === 'expense')
-    .reduce<Record<string, number>>((acc, r) => {
-      acc[r.categoryId] = (acc[r.categoryId] || 0) + r.amount
-      return acc
-    }, {})
-  const sortedCats = Object.entries(catSummary)
-    .sort(([, a], [, b]) => b - a)
-  const totalCatExpense = sortedCats.reduce((s, [, v]) => s + v, 0)
-
-  const totalIncome = filteredRecords.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0)
-  const totalExpense = filteredRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0)
-
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">이전 가계부</h1>
-        <p className="text-sm text-gray-500 mt-1">기존 엑셀 파일을 업로드해서 과거 데이터를 조회해보세요</p>
+        <p className="text-sm text-gray-500 mt-1">예전 가계부 파일을 보관하고 언제든 다시 내려받을 수 있어요.</p>
       </div>
 
-      {/* 업로드 영역 */}
-      {!result && (
-        <div
-          onDrop={handleDrop}
-          onDragOver={e => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
-            dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
-          }`}
-        >
-          <input ref={inputRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
-          {loading ? (
-            <div>
-              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-              <p className="text-sm text-gray-600">파일을 읽는 중...</p>
-            </div>
-          ) : (
-            <div>
-              <div className="text-5xl mb-4">📂</div>
-              <p className="text-base font-semibold text-gray-700 mb-1">엑셀 파일을 드래그하거나 클릭해서 업로드</p>
-              <p className="text-sm text-gray-400">.xlsx, .xls 파일 지원</p>
-              {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
-            </div>
-          )}
+      {!user ? (
+        <div className="bg-white rounded-2xl shadow-sm p-8 text-center text-sm text-gray-500">
+          로그인하면 파일을 보관하고 다운로드할 수 있어요.
         </div>
+      ) : (
+        <>
+          {/* 업로드 영역 */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onClick={() => !uploading && inputRef.current?.click()}
+            className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all mb-4 ${
+              dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
+            }`}
+          >
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
+            {uploading ? (
+              <div>
+                <div className="w-9 h-9 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-sm text-gray-600">업로드 중...</p>
+              </div>
+            ) : (
+              <div>
+                <div className="text-4xl mb-3">📂</div>
+                <p className="text-base font-semibold text-gray-700 mb-1">파일을 드래그하거나 클릭해서 보관</p>
+                <p className="text-sm text-gray-400">.xlsx, .xls, .csv 파일</p>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-600 mb-4">⚠️ {error}</div>
+          )}
+
+          {/* 보관된 파일 목록 */}
+          <div className="bg-white rounded-2xl shadow-sm p-5">
+            <h2 className="text-base font-bold text-gray-800 mb-3">보관된 파일</h2>
+            {files === null ? (
+              <div className="text-center py-8 text-sm text-gray-400">목록을 불러오는 중…</div>
+            ) : files.length === 0 ? (
+              <div className="text-center py-8 text-sm text-gray-400">
+                <div className="text-3xl mb-2">📭</div>
+                아직 보관된 파일이 없어요. 위에서 파일을 올려보세요.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {files.map(f => (
+                  <div key={f.id ?? f.name} className="flex items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-xl shrink-0">📄</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{displayName(f.name)}</div>
+                        <div className="text-xs text-gray-400">
+                          {fmtDate(f.created_at)}{f.metadata?.size ? ` · ${fmtSize(f.metadata.size)}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => downloadFile(f)}
+                        disabled={busyName === f.name}
+                        className="text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50">
+                        {busyName === f.name ? '처리 중…' : '다운로드'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(f)}
+                        disabled={busyName === f.name}
+                        className="text-xs font-medium text-gray-400 hover:text-red-500 border border-transparent hover:border-red-200 rounded-lg px-2 py-1.5 transition-colors disabled:opacity-50">
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* 결과 */}
-      {result && (
-        <div>
-          {/* 상단 요약 + 다시 업로드 */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-50 rounded-xl px-3 py-1.5 text-xs font-medium text-blue-600">
-                총 {result.totalRecords.toLocaleString()}건 · {result.sheets.length}개 시트
-              </div>
-              <div className="bg-gray-100 rounded-xl px-3 py-1.5 text-xs font-medium text-gray-600">
-                {result.sheets[result.sheets.length - 1]?.year}년 ~ {result.sheets[0]?.year}년
-              </div>
-            </div>
-            <button
-              onClick={() => { setResult(null); setSelectedMonth(null); if (inputRef.current) inputRef.current.value = '' }}
-              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-            >
-              <span>🔄</span> 다시 업로드
-            </button>
-          </div>
-
-          {/* 필터 */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <select value={yearFilter} onChange={e => { setYearFilter(e.target.value); setSelectedMonth(null) }}
-              className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              <option value="all">전체 연도</option>
-              {availableYears.map(y => <option key={y} value={y}>{y}년</option>)}
-            </select>
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as typeof typeFilter)}
-              className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              <option value="all">수입+지출</option>
-              <option value="income">수입만</option>
-              <option value="expense">지출만</option>
-            </select>
-            <div className="flex bg-white rounded-xl p-0.5 border border-gray-200">
-              {([['monthly', '월별'], ['category', '카테고리'], ['detail', '상세']] as const).map(([k, l]) => (
-                <button key={k} onClick={() => setViewMode(k)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === k ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-                  {l}
-                </button>
-              ))}
+      {/* 삭제 확인 창 */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-white rounded-2xl shadow-lg max-w-sm w-full p-5" onClick={e => e.stopPropagation()}>
+            <div className="text-base font-bold text-gray-900 mb-2">이 파일을 삭제할까요?</div>
+            <p className="text-sm text-gray-600 mb-4">
+              <span className="font-semibold">{displayName(confirmDelete.name)}</span> 파일이 영구 삭제됩니다.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                취소
+              </button>
+              <button
+                onClick={deleteFile}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors">
+                삭제
+              </button>
             </div>
           </div>
-
-          {/* 총계 카드 */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="text-xs text-gray-500 mb-1">총 수입</div>
-              <div className="text-base font-bold text-emerald-600">+{fmtShort(totalIncome)}원</div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="text-xs text-gray-500 mb-1">총 지출</div>
-              <div className="text-base font-bold text-red-500">-{fmtShort(totalExpense)}원</div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="text-xs text-gray-500 mb-1">순수입</div>
-              <div className={`text-base font-bold ${totalIncome - totalExpense >= 0 ? 'text-gray-900' : 'text-red-500'}`}>
-                {fmtShort(totalIncome - totalExpense)}원
-              </div>
-            </div>
-          </div>
-
-          {/* 월별 보기 */}
-          {viewMode === 'monthly' && (
-            <div className="space-y-2">
-              {monthlySummary.map(({ month, income, expense, items }) => {
-                const isSelected = selectedMonth === month
-                return (
-                  <div key={month} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <button
-                      onClick={() => setSelectedMonth(isSelected ? null : month)}
-                      className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-gray-900">{month}</span>
-                        <span className="text-xs text-gray-400">{items.length}건</span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        {income > 0 && <span className="text-sm font-medium text-emerald-600">+{fmtShort(income)}</span>}
-                        {expense > 0 && <span className="text-sm font-medium text-red-500">-{fmtShort(expense)}</span>}
-                        <span className={`text-xs transition-transform ${isSelected ? 'rotate-180' : ''}`}>▼</span>
-                      </div>
-                    </button>
-                    {isSelected && selectedData && (
-                      <div className="border-t border-gray-50 px-5 py-3 space-y-2 max-h-64 overflow-y-auto">
-                        {selectedData.items
-                          .sort((a, b) => b.amount - a.amount)
-                          .map((r: HistoryRecord) => {
-                            const cat = DEFAULT_CATEGORIES.find(c => c.id === r.categoryId)
-                            return (
-                              <div key={r.id} className="flex items-center justify-between py-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-base">{cat?.icon || '📦'}</span>
-                                  <div>
-                                    <div className="text-sm text-gray-900">{r.description}</div>
-                                    <div className="text-xs text-gray-400">{cat?.name}</div>
-                                  </div>
-                                </div>
-                                <span className={`text-sm font-medium ${r.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                                  {r.type === 'income' ? '+' : '-'}{fmtKRW(r.amount)}
-                                </span>
-                              </div>
-                            )
-                          })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-              {monthlySummary.length === 0 && (
-                <div className="text-center py-12 text-gray-400">
-                  <div className="text-3xl mb-2">📭</div>
-                  <div className="text-sm">해당 조건의 데이터가 없습니다</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 카테고리별 보기 */}
-          {viewMode === 'category' && (
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-3 text-xs font-semibold text-gray-500">
-                <span>카테고리</span>
-                <span className="text-right">금액</span>
-                <span className="text-right">비율</span>
-              </div>
-              {sortedCats.map(([catId, amount]) => {
-                const cat = DEFAULT_CATEGORIES.find(c => c.id === catId)
-                const pct = totalCatExpense > 0 ? (amount / totalCatExpense * 100) : 0
-                return (
-                  <div key={catId} className="border-b border-gray-50 last:border-0">
-                    <div className="px-4 py-3 grid grid-cols-3 items-center">
-                      <div className="flex items-center gap-2">
-                        <span>{cat?.icon || '📦'}</span>
-                        <span className="text-sm text-gray-700">{cat?.name || catId}</span>
-                      </div>
-                      <div className="text-right text-sm font-semibold text-gray-900">{fmtKRW(amount)}</div>
-                      <div className="text-right text-sm text-gray-500">{pct.toFixed(1)}%</div>
-                    </div>
-                    <div className="px-4 pb-2">
-                      <div className="bg-gray-100 rounded-full h-1">
-                        <div className="h-1 rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* 상세 보기 */}
-          {viewMode === 'detail' && (
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-[5rem_1fr_auto] text-xs font-semibold text-gray-500">
-                <span>날짜</span>
-                <span>내용</span>
-                <span className="text-right">금액</span>
-              </div>
-              <div className="max-h-[600px] overflow-y-auto">
-                {filteredRecords
-                  .sort((a, b) => b.date.localeCompare(a.date))
-                  .slice(0, 500)
-                  .map(r => {
-                    const cat = DEFAULT_CATEGORIES.find(c => c.id === r.categoryId)
-                    return (
-                      <div key={r.id} className="px-4 py-2.5 border-b border-gray-50 last:border-0 grid grid-cols-[5rem_1fr_auto] items-center gap-2 hover:bg-gray-50">
-                        <span className="text-xs text-gray-500">{r.date.slice(0, 7)}</span>
-                        <div className="min-w-0">
-                          <div className="text-sm text-gray-900 truncate">{r.description}</div>
-                          <div className="text-xs text-gray-400">{cat?.icon} {cat?.name}</div>
-                        </div>
-                        <span className={`text-sm font-medium text-right whitespace-nowrap ${r.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {r.type === 'income' ? '+' : '-'}{fmtKRW(r.amount)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                {filteredRecords.length > 500 && (
-                  <div className="text-center py-3 text-xs text-gray-400">최대 500건 표시 중 (전체 {filteredRecords.length}건)</div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
