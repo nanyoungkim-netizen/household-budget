@@ -425,7 +425,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!local) return remote!
     if (!remote) return local
 
-    // 각 가계부별로 lastModified가 더 최신인 쪽 선택
+    // 항상 원격(Supabase) 데이터 우선
     const allIds = new Set([...Object.keys(local.budgets), ...Object.keys(remote.budgets)])
     const mergedBudgets: Record<string, AppData> = {}
     for (const id of allIds) {
@@ -433,9 +433,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const r = remote.budgets[id]
       if (!l) { mergedBudgets[id] = r; continue }
       if (!r) { mergedBudgets[id] = l; continue }
-      const lt = l.lastModified ? new Date(l.lastModified).getTime() : 0
-      const rt = r.lastModified ? new Date(r.lastModified).getTime() : 0
-      mergedBudgets[id] = lt >= rt ? l : r
+      // 원격 우선 — 로컬은 인터넷 없을 때 폴백용
+      mergedBudgets[id] = r
     }
 
     // 가계부 목록은 합집합 (현존하는 id만)
