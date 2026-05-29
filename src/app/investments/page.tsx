@@ -132,11 +132,13 @@ export default function InvestmentsPage() {
   const [compositionPopupPos, setCompositionPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const compositionPopupRef = useRef<HTMLDivElement>(null)
 
-  async function fetchComposition(ticker: string) {
+  async function fetchComposition(ticker: string, invName?: string) {
     if (compositionCache[ticker] || compositionLoading.has(ticker)) return
     setCompositionLoading(prev => new Set(prev).add(ticker))
     try {
-      const res = await fetch(`/api/stock/composition?symbol=${encodeURIComponent(ticker)}`)
+      const params = new URLSearchParams({ symbol: ticker })
+      if (invName) params.set('name', invName)
+      const res = await fetch(`/api/stock/composition?${params}`)
       const json = await res.json()
       if (json.items?.length) {
         setCompositionCache(prev => ({ ...prev, [ticker]: json.items }))
@@ -146,10 +148,10 @@ export default function InvestmentsPage() {
     }
   }
 
-  function openCompositionPopup(e: React.MouseEvent, id: string, ticker: string) {
+  function openCompositionPopup(e: React.MouseEvent, id: string, ticker: string, invName?: string) {
     e.stopPropagation()
     if (activeCompositionId === id) { setActiveCompositionId(null); return }
-    fetchComposition(ticker)
+    fetchComposition(ticker, invName)
     const btn = e.currentTarget as HTMLElement
     const rect = btn.getBoundingClientRect()
     const popupW = 260
@@ -295,12 +297,19 @@ export default function InvestmentsPage() {
         const forItems: { name: string; ticker: string; market?: string; nation?: string }[] =
           (forRes.status === 'fulfilled' ? forRes.value?.items ?? [] : [])
 
+        const ETF_NAME_PREFIXES = ['TIGER', 'KODEX', 'KBSTAR', 'ARIRANG', 'HANARO', 'KOSEF', 'TIMEFOLIO', 'ACE', 'PLUS', 'SOL', 'TREX', 'WOORI', 'KB']
+        function isDomesticEtf(name: string, market?: string): boolean {
+          if (market && /ETF/i.test(market)) return true
+          return ETF_NAME_PREFIXES.some(p => name.toUpperCase().startsWith(p))
+        }
+
         const results: typeof watchlistResults = []
         const seen = new Set<string>()
         domItems.slice(0, 6).forEach(item => {
           if (!item.ticker || seen.has(item.ticker)) return
           seen.add(item.ticker)
-          results.push({ name: item.name, ticker: item.ticker, assetType: 'domestic_stock', currency: 'KRW', exchange: item.market })
+          const assetType: InvestmentAssetType = isDomesticEtf(item.name, item.market) ? 'etf_fund' : 'domestic_stock'
+          results.push({ name: item.name, ticker: item.ticker, assetType, currency: 'KRW', exchange: item.market })
         })
         forItems.slice(0, 6).forEach(item => {
           if (!item.ticker || seen.has(item.ticker)) return
@@ -1377,7 +1386,7 @@ export default function InvestmentsPage() {
                 {inv.name}
                 {inv.assetType === 'etf_fund' && inv.ticker && (
                   <button
-                    onClick={e => openCompositionPopup(e, inv.id, inv.ticker!)}
+                    onClick={e => openCompositionPopup(e, inv.id, inv.ticker!, inv.name)}
                     className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionId === inv.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
                     구성
                   </button>
@@ -2103,7 +2112,7 @@ export default function InvestmentsPage() {
                         {w.name}
                         {w.assetType === 'etf_fund' && w.ticker && (
                           <button
-                            onClick={e => openCompositionPopup(e, w.id, w.ticker!)}
+                            onClick={e => openCompositionPopup(e, w.id, w.ticker!, w.name)}
                             className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionId === w.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
                             구성
                           </button>
