@@ -193,14 +193,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ symbol, name, items: [{ name: '금(Gold)', pct: 100 }], source: 'static' })
   }
 
-  // 국내 ETF — 네이버 금융 HTML 파싱 시도
+  // 국내 ETF — 네이버 금융 ETF 포트폴리오 페이지 파싱 시도
   try {
-    const url = `https://finance.naver.com/item/main.naver?code=${encodeURIComponent(symbol)}`
+    const url = `https://finance.naver.com/fund/etfPortfolioInfo.naver?itemCode=${encodeURIComponent(symbol)}`
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Referer': 'https://finance.naver.com',
-        'Accept-Charset': 'euc-kr',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://finance.naver.com/fund/etfItemInfo.naver?itemCode=' + encodeURIComponent(symbol),
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
       },
       next: { revalidate: 3600 },
     })
@@ -211,17 +212,22 @@ export async function GET(req: NextRequest) {
     const buf = await res.arrayBuffer()
     const text = new TextDecoder('euc-kr').decode(buf)
 
-    // 구성종목 테이블 파싱 (정규식)
-    const rows = [...text.matchAll(/portfRatio[^>]*>([^<]+)<\/td[^>]*>[\s\S]*?<td[^>]*>([^<]+)<\/td/g)]
-    if (rows.length > 0) {
-      const items: CompositionItem[] = rows.map(m => ({
-        name: m[2].trim(),
-        pct: parseFloat(m[1].replace(/,/g, '')) || 0,
-      })).filter(i => i.name && i.pct > 0)
-
-      if (items.length > 0) {
-        return NextResponse.json({ symbol, items, source: 'naver' })
+    // ETF 포트폴리오 테이블: <td class="name">종목명</td> … <td class="rate">비율</td>
+    const items: CompositionItem[] = []
+    const rowRe = /<tr[^>]*>[\s\S]*?<\/tr>/g
+    for (const rowMatch of text.matchAll(rowRe)) {
+      const row = rowMatch[0]
+      const nameM = row.match(/<td[^>]*class="[^"]*name[^"]*"[^>]*>\s*([^<]+)\s*<\/td>/)
+      const rateM = row.match(/<td[^>]*class="[^"]*rate[^"]*"[^>]*>\s*([\d.,]+)\s*%?\s*<\/td>/)
+      if (nameM && rateM) {
+        const name = nameM[1].trim()
+        const pct = parseFloat(rateM[1].replace(/,/g, ''))
+        if (name && pct > 0) items.push({ name, pct })
       }
+    }
+
+    if (items.length > 0) {
+      return NextResponse.json({ symbol, items: items.slice(0, 15), source: 'naver' })
     }
 
     return NextResponse.json({ error: '구성 데이터 없음' }, { status: 200 })

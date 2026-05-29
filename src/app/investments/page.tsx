@@ -134,7 +134,7 @@ export default function InvestmentsPage() {
   type CompositionItem = { name: string; pct: number }
   const [compositionCache, setCompositionCache] = useState<Record<string, CompositionItem[]>>({})
   const [compositionLoading, setCompositionLoading] = useState<Set<string>>(new Set())
-  const [activeCompositionId, setActiveCompositionId] = useState<string | null>(null)
+  const [activeCompositionKey, setActiveCompositionKey] = useState<{ id: string; ticker: string; name: string } | null>(null)
   const [compositionPopupPos, setCompositionPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const compositionPopupRef = useRef<HTMLDivElement>(null)
 
@@ -156,7 +156,7 @@ export default function InvestmentsPage() {
 
   function openCompositionPopup(e: React.MouseEvent, id: string, ticker: string, invName?: string) {
     e.stopPropagation()
-    if (activeCompositionId === id) { setActiveCompositionId(null); return }
+    if (activeCompositionKey?.id === id) { setActiveCompositionKey(null); return }
     fetchComposition(ticker, invName)
     const btn = e.currentTarget as HTMLElement
     const rect = btn.getBoundingClientRect()
@@ -166,7 +166,7 @@ export default function InvestmentsPage() {
     if (left + popupW > window.innerWidth - 8) left = rect.left - popupW - margin
     if (left < 8) left = 8
     setCompositionPopupPos({ top: rect.top, left })
-    setActiveCompositionId(id)
+    setActiveCompositionKey({ id, ticker, name: invName ?? '' })
   }
 
   // ── 관심종목 state ─────────────────────────────────────────────────────────
@@ -1387,7 +1387,7 @@ export default function InvestmentsPage() {
                 {inv.assetType === 'etf_fund' && inv.ticker && (
                   <button
                     onClick={e => openCompositionPopup(e, inv.id, inv.ticker!, inv.name)}
-                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionId === inv.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionKey?.id === inv.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
                     구성
                   </button>
                 )}
@@ -2020,8 +2020,18 @@ export default function InvestmentsPage() {
               <span className="text-gray-400 text-base shrink-0">🔍</span>
               <input
                 value={watchlistQuery}
-                onChange={e => { setWatchlistQuery(e.target.value); triggerWatchlistSearch(e.target.value) }}
-                onKeyDown={e => { if (e.key === 'Escape') { setWatchlistQuery(''); setWatchlistResults([]) } }}
+                onChange={e => {
+                  setWatchlistQuery(e.target.value)
+                  triggerWatchlistSearch(e.target.value)
+                  if (!e.target.value && activeCompositionKey?.id?.startsWith('search_')) setActiveCompositionKey(null)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') {
+                    setWatchlistQuery('')
+                    setWatchlistResults([])
+                    if (activeCompositionKey?.id?.startsWith('search_')) setActiveCompositionKey(null)
+                  }
+                }}
                 placeholder="종목명 또는 티커 검색 (예: 삼성전자, AAPL)"
                 className="flex-1 text-sm focus:outline-none placeholder-gray-400 bg-transparent"
               />
@@ -2029,7 +2039,11 @@ export default function InvestmentsPage() {
                 <div className="text-xs text-gray-400 whitespace-nowrap shrink-0">검색 중…</div>
               )}
               {watchlistQuery && !watchlistSearching && (
-                <button onClick={() => { setWatchlistQuery(''); setWatchlistResults([]) }}
+                <button onClick={() => {
+                  setWatchlistQuery('')
+                  setWatchlistResults([])
+                  if (activeCompositionKey?.id?.startsWith('search_')) setActiveCompositionKey(null)
+                }}
                   className="text-gray-300 hover:text-gray-500 text-lg shrink-0 leading-none">×</button>
               )}
             </div>
@@ -2039,6 +2053,8 @@ export default function InvestmentsPage() {
               <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
                 {watchlistResults.map((item, i) => {
                   const alreadyAdded = watchlist.some(w => w.ticker === item.ticker && w.assetType === item.assetType)
+                  const isEtf = item.assetType === 'etf_fund' || isDomesticEtf(item.name, item.exchange)
+                  const searchId = `search_${item.ticker}`
                   return (
                     <div key={i}
                       className="flex items-center justify-between px-4 py-3 hover:bg-blue-50 border-b border-gray-50 last:border-0 cursor-pointer transition-colors"
@@ -2056,12 +2072,22 @@ export default function InvestmentsPage() {
                         setWatchlist(updated)
                         setWatchlistQuery('')
                         setWatchlistResults([])
+                        if (activeCompositionKey?.id?.startsWith('search_')) setActiveCompositionKey(null)
                         refreshWatchlistPrices(updated)
                       }}>
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-xl shrink-0">{ASSET_TYPE_META[item.assetType].icon}</span>
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold text-gray-800 truncate">{item.name}</div>
+                          <div className="text-sm font-semibold text-gray-800 truncate flex items-center gap-1.5 flex-wrap">
+                            {item.name}
+                            {isEtf && item.ticker && (
+                              <button
+                                onClick={e => openCompositionPopup(e, searchId, item.ticker, item.name)}
+                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors shrink-0 ${activeCompositionKey?.id === searchId ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
+                                구성
+                              </button>
+                            )}
+                          </div>
                           <div className="text-xs text-gray-400 mt-0.5">
                             {item.ticker}
                             {item.exchange ? <span className="ml-1 text-gray-300">· {item.exchange}</span> : null}
@@ -2113,7 +2139,7 @@ export default function InvestmentsPage() {
                         {(w.assetType === 'etf_fund' || isDomesticEtf(w.name, w.exchange)) && w.ticker && (
                           <button
                             onClick={e => openCompositionPopup(e, w.id, w.ticker!, w.name)}
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionId === w.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-colors ${activeCompositionKey?.id === w.id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
                             구성
                           </button>
                         )}
@@ -3517,18 +3543,15 @@ export default function InvestmentsPage() {
       )}
 
       {/* ── ETF 구성 팝업 ─────────────────────────────────────────────────── */}
-      {activeCompositionId && (() => {
-        const inv = investments.find(i => i.id === activeCompositionId)
-        const w = watchlist.find(x => x.id === activeCompositionId)
-        const ticker = inv?.ticker ?? w?.ticker ?? ''
-        const name = inv?.name ?? w?.name ?? ''
+      {activeCompositionKey && (() => {
+        const { ticker, name } = activeCompositionKey
         const items = ticker ? compositionCache[ticker] : undefined
         const isLoading = ticker ? compositionLoading.has(ticker) : false
         const maxPct = items ? Math.max(...items.map(d => d.pct)) : 1
         return (
           <>
             {/* 배경 오버레이 */}
-            <div className="fixed inset-0 z-[199]" onClick={() => setActiveCompositionId(null)} />
+            <div className="fixed inset-0 z-[199]" onClick={() => setActiveCompositionKey(null)} />
             {/* 팝업 카드 */}
             <div
               ref={compositionPopupRef}
@@ -3537,7 +3560,7 @@ export default function InvestmentsPage() {
             >
               <div className="flex items-center justify-between mb-2.5">
                 <div className="text-xs font-bold text-gray-800 truncate pr-2">{name} 구성</div>
-                <button onClick={() => setActiveCompositionId(null)} className="text-gray-300 hover:text-gray-500 text-sm shrink-0">✕</button>
+                <button onClick={() => setActiveCompositionKey(null)} className="text-gray-300 hover:text-gray-500 text-sm shrink-0">✕</button>
               </div>
               {isLoading ? (
                 <div className="text-xs text-gray-400 text-center py-4">불러오는 중…</div>
