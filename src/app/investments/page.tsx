@@ -180,6 +180,7 @@ export default function InvestmentsPage() {
   }
 
   // 스크롤 시 팝업 위치를 버튼 위치에 맞게 실시간 업데이트
+  // + 팝업 외부 클릭 시 닫기 (오버레이 없이 처리)
   useEffect(() => {
     if (!activeCompositionKey) {
       activeButtonRef.current = null
@@ -189,11 +190,21 @@ export default function InvestmentsPage() {
       if (!activeButtonRef.current) return
       setCompositionPopupPos(calcPopupPos(activeButtonRef.current))
     }
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      // 팝업 카드 or 버튼 클릭 → 닫지 않음
+      if (compositionPopupRef.current?.contains(target)) return
+      if (activeButtonRef.current?.contains(target)) return
+      setActiveCompositionKey(null)
+      activeButtonRef.current = null
+    }
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll, { passive: true })
+    document.addEventListener('mousedown', onMouseDown)
     return () => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
+      document.removeEventListener('mousedown', onMouseDown)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompositionKey])
@@ -467,9 +478,14 @@ export default function InvestmentsPage() {
   }, [])
 
   // 관심종목 검색 드롭다운 — 바깥 클릭 시 닫기
+  // compositionPopupRef 클릭은 드롭다운 닫힘에서 제외
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (watchlistDropdownRef.current && !watchlistDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        watchlistDropdownRef.current && !watchlistDropdownRef.current.contains(target) &&
+        !(compositionPopupRef.current && compositionPopupRef.current.contains(target))
+      ) {
         setWatchlistResults([])
       }
     }
@@ -3588,8 +3604,6 @@ export default function InvestmentsPage() {
         const maxPct = items ? Math.max(...items.map(d => d.pct)) : 1
         return (
           <>
-            {/* 배경 오버레이 */}
-            <div className="fixed inset-0 z-[199]" onClick={() => setActiveCompositionKey(null)} />
             {/* 팝업 카드 */}
             <div
               ref={compositionPopupRef}
