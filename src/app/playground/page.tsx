@@ -2,6 +2,11 @@
 
 // ⚠️ 프로토타입(미리보기) 전용 페이지 — 실제 데이터/기능 아님. UI 방향 확인용.
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 function pad(n: number) { return String(n).padStart(2, '0') }
@@ -34,16 +39,36 @@ const ROLE_OPTS: [string, string][] = [
   ['none', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자'],
 ]
 
-// ② 대표 숫자 버킷 (순서 변경 가능)
-const BUCKETS: Record<string, { value: number; color: string; bg: string }> = {
-  '수입': { value: 3200000, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  '지출': { value: 1200000, color: 'text-red-500', bg: 'bg-red-50' },
-  '저축': { value: 500000, color: 'text-blue-600', bg: 'bg-blue-50' },
-  '투자': { value: 300000, color: 'text-purple-600', bg: 'bg-purple-50' },
-  '제외': { value: 250000, color: 'text-gray-500', bg: 'bg-gray-100' },
+// ② 대표 숫자 버킷 (순서 변경 가능) — '지출 상세 분석' 카드 스타일
+const BUCKETS: Record<string, { value: number; bg: string; label: string; val: string }> = {
+  '수입': { value: 3200000, bg: 'bg-emerald-50', label: 'text-emerald-400', val: 'text-emerald-600' },
+  '지출': { value: 1200000, bg: 'bg-red-50',     label: 'text-red-400',     val: 'text-red-500' },
+  '저축': { value: 500000,  bg: 'bg-blue-50',    label: 'text-blue-400',    val: 'text-blue-600' },
+  '투자': { value: 300000,  bg: 'bg-purple-50',  label: 'text-purple-400',  val: 'text-purple-600' },
+  '제외': { value: 250000,  bg: 'bg-gray-100',   label: 'text-gray-400',    val: 'text-gray-500' },
 }
 const DEFAULT_ORDER = ['수입', '지출', '저축', '투자', '제외']
 const ORDER_KEY = 'pg_bucket_order'
+
+// 드래그로 순서 변경되는 카드 (카드 전체가 드래그 핸들)
+function SortableCard({ id }: { id: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const b = BUCKETS[id]
+  const sign = id === '수입' ? '+' : '-'
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}
+      className={`${b.bg} rounded-xl p-3 touch-none select-none cursor-grab active:cursor-grabbing`}>
+      <div className={`text-xs ${b.label} mb-0.5`}>{id}</div>
+      <div className={`text-sm font-bold ${b.val} whitespace-nowrap`}>{sign}{won(b.value)}원</div>
+    </div>
+  )
+}
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
@@ -99,13 +124,19 @@ export default function PlaygroundPage() {
     } catch { /* ignore */ }
     return DEFAULT_ORDER
   })
-  function moveCard(idx: number, dir: number) {
-    const j = idx + dir
-    if (j < 0 || j >= order.length) return
-    const next = [...order]
-    ;[next[idx], next[j]] = [next[j], next[idx]]
-    setOrder(next)
-    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  // 드래그(터치=꾹 눌러서, 마우스=조금 움직이면) 시작
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+  )
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    setOrder(prev => {
+      const next = arrayMove(prev, prev.indexOf(String(active.id)), prev.indexOf(String(over.id)))
+      try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
   }
 
   // ── 거래내역: 카테고리 검색 ──
@@ -192,36 +223,19 @@ export default function PlaygroundPage() {
         </div>
       </Section>
 
-      {/* 2. 거래내역 대표 숫자 — C안(2+3) · 균일 크기 · 순서 변경 */}
-      <Section title="② 거래내역 — 대표 숫자 (C안 · 균일 · 순서 변경)" desc="모든 카드 같은 크기. ‹ ›로 순서 이동 → 저장돼서 다시 들어와도 유지. (실제 화면에선 드래그로 이동)">
-        {(() => {
-          const card = (key: string) => {
-            const b = BUCKETS[key]
-            const idx = order.indexOf(key)
-            return (
-              <div key={key} className={`${b.bg} rounded-xl p-3 text-center`}>
-                <div className="text-xs text-gray-500 mb-0.5">{key}</div>
-                <div className={`text-sm font-bold tabular-nums ${b.color} whitespace-nowrap`}>{won(b.value)}</div>
-                <div className="flex justify-center gap-1 mt-1.5">
-                  <button onClick={() => moveCard(idx, -1)} disabled={idx === 0}
-                    className="w-6 h-6 rounded-md bg-white/70 text-gray-500 text-sm disabled:opacity-30">‹</button>
-                  <button onClick={() => moveCard(idx, 1)} disabled={idx === order.length - 1}
-                    className="w-6 h-6 rounded-md bg-white/70 text-gray-500 text-sm disabled:opacity-30">›</button>
-                </div>
-              </div>
-            )
-          }
-          return (
-            <>
-              <div className="grid grid-cols-2 gap-2 mb-2">{order.slice(0, 2).map(card)}</div>
-              <div className="grid grid-cols-3 gap-2">{order.slice(2).map(card)}</div>
-            </>
-          )
-        })()}
+      {/* 2. 거래내역 대표 숫자 — '지출 상세 분석' 크기 + 드래그 정렬 */}
+      <Section title="② 거래내역 — 대표 숫자 (드래그로 순서 변경)" desc="'지출 상세 분석' 카드 크기. 카드를 꾹 눌러 옆·위아래로 끌어서 순서 변경 → 저장됨(재방문해도 유지)">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={order} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 gap-2">
+              {order.map(id => <SortableCard key={id} id={id} />)}
+            </div>
+          </SortableContext>
+        </DndContext>
         <button
           onClick={() => { setOrder(DEFAULT_ORDER); try { localStorage.removeItem(ORDER_KEY) } catch { /* ignore */ } }}
           className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-2">기본 순서로 되돌리기</button>
-        <div className="text-[11px] text-gray-400 mt-2">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목. 위 2칸·아래 3칸 배치(C안), 카드 크기는 동일.</div>
+        <div className="text-[11px] text-gray-400 mt-2">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목. (PC는 살짝 끌면, 모바일은 꾹 눌렀다 끌면 이동)</div>
       </Section>
 
       {/* 3. 카테고리 역할 — 기존 + 투자 추가 */}
