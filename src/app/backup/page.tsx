@@ -668,7 +668,7 @@ export default function BackupPage() {
         icon:            safeStr(r['아이콘']) || '📦',
         color:           safeStr(r['색상']) || '#CFD8DC',
         parentId:        safeStr(r['부모ID']) || null,
-        role:            safeStr(r['역할']) ? safeStr(r['역할']) as ('card_payment' | 'savings') : undefined,
+        role:            safeStr(r['역할']) ? safeStr(r['역할']) as ('card_payment' | 'savings' | 'investment') : undefined,
         excludeFromReal: safeStr(r['실소비제외']) === 'Y' || undefined,
       })))
     }

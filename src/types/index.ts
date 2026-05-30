@@ -24,7 +24,7 @@ export interface Account {
   accountNumber?: string                 // 계좌번호 (선택)
 }
 
-export type CategoryRole = 'card_payment' | 'savings'
+export type CategoryRole = 'card_payment' | 'savings' | 'investment'
 
 export interface Category {
   id: string
@@ -34,14 +34,14 @@ export interface Category {
   color: string
   parentId?: string | null  // null = 대분류, string = 소분류, undefined = 레거시
   savingId?: string          // 연동된 적금·예금 상품 ID
-  role?: CategoryRole        // 연동 역할: card_payment | savings
+  role?: CategoryRole        // 연동 역할: card_payment | savings | investment
   excludeFromReal?: boolean  // 실소비 제외 (여행통장, 적금 등 user 지정)
 }
 
 export type PaymentMethod = 'account' | 'card'
 
 // PRD 2.1: 거래 소비 유형 (실소비 필터링)
-export type ConsumptionType = 'normal' | 'savings_transfer' | 'card_payment'
+export type ConsumptionType = 'normal' | 'savings_transfer' | 'card_payment' | 'investment'
 
 // 적금/예금 상품 연동 (PRD: 적금예금관리 자동연동)
 export interface SavingLink {

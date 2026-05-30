@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { useApp } from '@/lib/AppContext'
+import { useApp, getConsumptionType } from '@/lib/AppContext'
 import { Transaction } from '@/types'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -82,18 +82,18 @@ export default function StatisticsPage() {
   const catMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories])
 
   // ── 헬퍼: 카드대금 / 저축 판별 ───────────────────────────────────────────
+  // 소비 판별은 getConsumptionType 한 곳에서 (역할 우선순위 일관·중복집계 방지)
   const isCardPayment = useCallback((t: Transaction) =>
-    catMap.get(t.categoryId)?.role === 'card_payment'
-  , [catMap])
+    getConsumptionType(t, categories) === 'card_payment'
+  , [categories])
 
-  const isSaving = useCallback((t: Transaction) => {
-    const cat = catMap.get(t.categoryId)
-    if (!cat) return false
-    if (cat.role === 'savings') return true
-    if (cat.savingId) return true
-    const parent = cat.parentId ? catMap.get(cat.parentId) : null
-    return parent?.role === 'savings'
-  }, [catMap])
+  const isSaving = useCallback((t: Transaction) =>
+    getConsumptionType(t, categories) === 'savings_transfer'
+  , [categories])
+
+  const isInvest = useCallback((t: Transaction) =>
+    getConsumptionType(t, categories) === 'investment'
+  , [categories])
 
   // ── 월별 핵심 지표 ───────────────────────────────────────────────────────
   const getMonthStats = useCallback((m: string) => {
@@ -103,21 +103,22 @@ export default function StatisticsPage() {
     // 카드대금 자동 제외 없음 — 수동 제외(categoryExcludeMonths)만 적용
     const expense   = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
     const savingAmt = txs.filter(t => t.type === 'expense' && isSaving(t)).reduce((s, t) => s + t.amount, 0)
-    // 수동 제외 금액 (저축 제외 후, categoryExcludeMonths 기준)
+    const investAmt = txs.filter(t => t.type === 'expense' && isInvest(t)).reduce((s, t) => s + t.amount, 0)
+    // 수동 제외 금액 (저축·투자 제외 후, categoryExcludeMonths 기준)
     const excludedAmt = txs.filter(t => {
       if (t.type !== 'expense') return false
-      if (isSaving(t)) return false
+      if (isSaving(t) || isInvest(t)) return false
       const cat = catMap.get(t.categoryId)
       if (!cat) return false
       if ((categoryExcludeMonths[cat.id] ?? []).includes(m)) return true
       const parent = cat.parentId ? catMap.get(cat.parentId) : undefined
       return !!parent && (categoryExcludeMonths[parent.id] ?? []).includes(m)
     }).reduce((s, t) => s + t.amount, 0)
-    const realConsumption = Math.max(0, expense - savingAmt - excludedAmt - refund)
+    const realConsumption = Math.max(0, expense - savingAmt - investAmt - excludedAmt - refund)
     const savingRate      = income > 0 ? (savingAmt / income) * 100 : 0
-    const netIncome       = income - realConsumption - savingAmt
-    return { income, expense, savingAmt, excludedAmt, realConsumption, savingRate, netIncome, refund }
-  }, [transactions, isSaving, catMap, categoryExcludeMonths])
+    const netIncome       = income - realConsumption - savingAmt - investAmt
+    return { income, expense, savingAmt, investAmt, excludedAmt, realConsumption, savingRate, netIncome, refund }
+  }, [transactions, isSaving, isInvest, catMap, categoryExcludeMonths])
 
   // ── KPI (이번달·전월) ───────────────────────────────────────────────────
   const thisStats = useMemo(() => getMonthStats(currentMonth), [getMonthStats])
@@ -127,9 +128,10 @@ export default function StatisticsPage() {
   const savingRateDiff  = thisStats.savingRate - lastStats.savingRate
 
   // 이달 지출 구성 비율 (예산탭과 동일: 실소비 / 저축 / 제외항목)
-  const totalOutflow   = thisStats.realConsumption + thisStats.savingAmt + thisStats.excludedAmt
+  const totalOutflow   = thisStats.realConsumption + thisStats.savingAmt + thisStats.investAmt + thisStats.excludedAmt
   const consumptionPct = totalOutflow > 0 ? (thisStats.realConsumption / totalOutflow) * 100 : 0
   const savingPct      = totalOutflow > 0 ? (thisStats.savingAmt / totalOutflow) * 100 : 0
+  const investPct      = totalOutflow > 0 ? (thisStats.investAmt / totalOutflow) * 100 : 0
   const excludedPct    = totalOutflow > 0 ? (thisStats.excludedAmt / totalOutflow) * 100 : 0
 
   // ── 추이 탭: 최근 6개월 ─────────────────────────────────────────────────
@@ -233,7 +235,7 @@ export default function StatisticsPage() {
       const amt     = transactions
         .filter(t => {
           if (t.date !== dateStr || t.type !== 'expense') return false
-          if (isSaving(t)) return false
+          if (isSaving(t) || isInvest(t)) return false
           const cat = catMap.get(t.categoryId)
           if (!cat) return true
           if ((categoryExcludeMonths[cat.id] ?? []).includes(analysisMonth)) return false
@@ -244,7 +246,7 @@ export default function StatisticsPage() {
       cumulative += amt
       return { day: i + 1, 일별: amt, 누적: cumulative }
     })
-  }, [transactions, isSaving, catMap, categoryExcludeMonths, analysisMonth])
+  }, [transactions, isSaving, isInvest, catMap, categoryExcludeMonths, analysisMonth])
 
   const dowData = useMemo(() => {
     const DOW = ['일', '월', '화', '수', '목', '금', '토']
@@ -253,7 +255,7 @@ export default function StatisticsPage() {
     transactions
       .filter(t => {
         if (!t.date.startsWith(analysisMonth) || t.type !== 'expense') return false
-        if (isSaving(t)) return false  // 저축 제외
+        if (isSaving(t) || isInvest(t)) return false  // 저축·투자 제외
         const cat = catMap.get(t.categoryId)
         if (!cat) return true
         if ((categoryExcludeMonths[cat.id] ?? []).includes(analysisMonth)) return false
@@ -266,7 +268,7 @@ export default function StatisticsPage() {
         counts[dow]++
       })
     return DOW.map((label, i) => ({ label, amount: amounts[i], count: counts[i] }))
-  }, [transactions, isSaving, catMap, categoryExcludeMonths, analysisMonth])
+  }, [transactions, isSaving, isInvest, catMap, categoryExcludeMonths, analysisMonth])
 
   const payMethodData = useMemo(() => {
     const card    = transactions.filter(t => t.date.startsWith(analysisMonth) && t.type === 'expense' && t.paymentMethod === 'card'    && !isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
@@ -481,17 +483,22 @@ export default function StatisticsPage() {
           {totalOutflow > 0 && (
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="font-semibold text-sm text-gray-900 mb-1">이달 지출 구성</div>
-              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 저축 · 제외항목으로 분리 (예산탭 기준)</div>
+              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 저축 · 투자 · 제외항목으로 분리 (예산탭 기준)</div>
               {/* 스택 바 */}
               <div className="flex h-5 rounded-full overflow-hidden mb-3">
                 {consumptionPct > 0 && <div style={{ width: `${consumptionPct}%`, backgroundColor: '#FF6B6B' }} />}
                 {savingPct > 0      && <div style={{ width: `${savingPct}%`,      backgroundColor: '#0064FF' }} />}
+                {investPct > 0      && <div style={{ width: `${investPct}%`,      backgroundColor: '#6366F1' }} />}
                 {excludedPct > 0    && <div style={{ width: `${excludedPct}%`,    backgroundColor: '#8B5CF6' }} />}
               </div>
-              <div className={`grid gap-2 ${thisStats.excludedAmt > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <div className={`grid gap-2 ${(() => {
+                const n = 2 + (thisStats.investAmt > 0 ? 1 : 0) + (thisStats.excludedAmt > 0 ? 1 : 0)
+                return n >= 4 ? 'grid-cols-4' : n === 3 ? 'grid-cols-3' : 'grid-cols-2'
+              })()}`}>
                 {[
                   { label: '실소비',   color: '#FF6B6B', value: thisStats.realConsumption, pct: consumptionPct },
                   { label: '저축',     color: '#0064FF', value: thisStats.savingAmt,       pct: savingPct },
+                  ...(thisStats.investAmt > 0   ? [{ label: '투자',     color: '#6366F1', value: thisStats.investAmt,   pct: investPct }]   : []),
                   ...(thisStats.excludedAmt > 0 ? [{ label: '제외항목', color: '#8B5CF6', value: thisStats.excludedAmt, pct: excludedPct }] : []),
                 ].map(item => (
                   <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: item.color + '14' }}>

@@ -1263,14 +1263,17 @@ export function useApp() {
 }
 
 // ── PRD 2.1: 실소비 필터링 헬퍼 ────────────────────────────────────────────────
-export function getConsumptionType(tx: Transaction, categories: Category[]): 'normal' | 'savings_transfer' | 'card_payment' {
+export function getConsumptionType(tx: Transaction, categories: Category[]): ConsumptionType {
   if (tx.consumptionType) return tx.consumptionType
   const cat = categories.find(c => c.id === tx.categoryId)
   if (!cat) return 'normal'
+  // 소분류(자식) 본인 역할이 부모보다 우선
   if (cat.role === 'card_payment') return 'card_payment'
   if (cat.role === 'savings') return 'savings_transfer'
+  if (cat.role === 'investment') return 'investment'
   const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
   if (parent?.role === 'savings') return 'savings_transfer'
+  if (parent?.role === 'investment') return 'investment'
   if (cat.savingId) return 'savings_transfer'
   return 'normal'
 }
@@ -1345,7 +1348,7 @@ export function getRealCategoryExpenses(
     .filter(t => {
       if (!t.date.startsWith(month)) return false
       const ct = getConsumptionType(t, categories)
-      if (ct === 'savings_transfer') return false
+      if (ct === 'savings_transfer' || ct === 'investment') return false
       if (categoryExcludeMonths) {
         const cat = categories.find(c => c.id === t.categoryId)
         if (cat) {

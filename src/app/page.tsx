@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
+import { useApp, getRealCategoryExpenses, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
 import { Transaction } from '@/types'
 
 // 매일 바뀌는 기분전환 코멘트 (날짜 기준 고정 → 같은 날 새로고침해도 안 바뀜)
@@ -244,22 +244,17 @@ export default function Dashboard() {
   // ── 기간 필터링 ───────────────────────────────────────────────────────────
   const prefix    = viewMode === 'day' ? selectedDay : selectedMonth
   const periodTxs = transactions.filter(t => t.date.startsWith(prefix))
-  const isSavingTx = (t: Transaction) => {
-    const cat = categories.find(c => c.id === t.categoryId)
-    if (!cat) return false
-    if (cat.role === 'savings') return true
-    if ((cat as { savingId?: string }).savingId) return true
-    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
-    return parent?.role === 'savings' === true
-  }
   // 카드대금은 자동 제외 없음 — 수동 categoryExcludeMonths 토글 시에만 제외
   const periodTxsForStats = periodTxs
   const stats       = calcStats(periodTxsForStats)
-  // 지출 구성 분리
-  const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && isSavingTx(t)).reduce((s, t) => s + t.amount, 0)
+  // 지출 구성 분리 — 소비 판별은 getConsumptionType 한 곳에서 (역할 우선순위 일관·중복집계 방지)
+  const ctOf = (t: Transaction) => getConsumptionType(t, categories)
+  const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && ctOf(t) === 'savings_transfer').reduce((s, t) => s + t.amount, 0)
+  const investAmt   = periodTxsForStats.filter(t => t.type === 'expense' && ctOf(t) === 'investment').reduce((s, t) => s + t.amount, 0)
   const currentPeriodMonth = (viewMode === 'day' ? selectedDay : selectedMonth).slice(0, 7)
   const isExcludedByMonth = (t: Transaction) => {
-    if (isSavingTx(t)) return false
+    const ct = ctOf(t)
+    if (ct === 'savings_transfer' || ct === 'investment') return false
     const cat = categories.find(c => c.id === t.categoryId)
     if (!cat) return false
     if ((categoryExcludeMonths[cat.id] ?? []).includes(currentPeriodMonth)) return true
@@ -267,7 +262,7 @@ export default function Dashboard() {
     return !!parent && (categoryExcludeMonths[parent.id] ?? []).includes(currentPeriodMonth)
   }
   const excludedAmt = periodTxsForStats.filter(t => t.type === 'expense' && isExcludedByMonth(t)).reduce((s, t) => s + t.amount, 0)
-  const realConsumption = Math.max(0, stats.expense - savingAmt - excludedAmt)
+  const realConsumption = Math.max(0, stats.expense - savingAmt - investAmt - excludedAmt)
   const catExpenses = getRealCategoryExpenses(transactions, categories, viewMode === 'day' ? selectedDay : selectedMonth, categoryExcludeMonths)
 
   // 거래 목록 (최신순, 최대 8개)
@@ -760,24 +755,29 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* 지출 구성: 실소비 / 저축 / 제외항목 */}
-        {(savingAmt > 0 || excludedAmt > 0) && (
-          <div className="mt-3 pt-3 border-t border-white/20">
-            <div className="text-[10px] opacity-60 mb-2">지출 구성</div>
-            <div className={`grid gap-2 ${excludedAmt > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-              {[
-                { label: '실소비',   value: realConsumption, color: 'bg-red-300/30' },
-                { label: '저축',     value: savingAmt,       color: 'bg-blue-300/30' },
-                ...(excludedAmt > 0 ? [{ label: '제외항목', value: excludedAmt, color: 'bg-purple-300/30' }] : []),
-              ].map(item => (
-                <div key={item.label} className={`${item.color} rounded-xl p-2 text-center`}>
-                  <div className="text-[10px] opacity-70 mb-0.5">{item.label}</div>
-                  <div className="text-xs font-bold tabular-nums leading-tight">{fmtShort(item.value)}</div>
-                </div>
-              ))}
+        {/* 지출 구성: 실소비 / 저축 / 투자 / 제외항목 */}
+        {(savingAmt > 0 || investAmt > 0 || excludedAmt > 0) && (() => {
+          const items = [
+            { label: '실소비',   value: realConsumption, color: 'bg-red-300/30' },
+            ...(savingAmt > 0   ? [{ label: '저축',     value: savingAmt,   color: 'bg-blue-300/30' }] : []),
+            ...(investAmt > 0   ? [{ label: '투자',     value: investAmt,   color: 'bg-indigo-300/30' }] : []),
+            ...(excludedAmt > 0 ? [{ label: '제외항목', value: excludedAmt, color: 'bg-purple-300/30' }] : []),
+          ]
+          const cols = items.length >= 4 ? 'grid-cols-4' : items.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
+          return (
+            <div className="mt-3 pt-3 border-t border-white/20">
+              <div className="text-[10px] opacity-60 mb-2">지출 구성</div>
+              <div className={`grid gap-2 ${cols}`}>
+                {items.map(item => (
+                  <div key={item.label} className={`${item.color} rounded-xl p-2 text-center`}>
+                    <div className="text-[10px] opacity-70 mb-0.5">{item.label}</div>
+                    <div className="text-xs font-bold tabular-nums leading-tight">{fmtShort(item.value)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* 오늘 기준 자산 — 계좌잔액/예적금/투자/총잔액 breakdown */}
         <div className="mt-4 pt-3 border-t border-white/20">
@@ -811,29 +811,32 @@ export default function Dashboard() {
 
 
       {/* PRD 2.1: 이달 비소비 항목 별도 카드 */}
-      {viewMode === 'month' && (savingAmt > 0 || excludedAmt > 0) && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-          <div className="text-xs font-semibold text-gray-500 mb-3">이달 비소비 항목 합계</div>
-          <div className={`grid gap-3 ${excludedAmt > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <div className="bg-teal-50 rounded-xl p-3">
-              <div className="text-xs text-teal-600 mb-0.5">적금·예금 이체</div>
-              <div className="text-base font-bold text-teal-700">{fmtKRW(savingAmt)}</div>
-              <div className="text-xs text-teal-400 mt-0.5">저축성 지출 (실소비 제외)</div>
+      {viewMode === 'month' && (savingAmt > 0 || investAmt > 0 || excludedAmt > 0) && (() => {
+        const cards = [
+          ...(savingAmt > 0   ? [{ key: 's', bg: 'bg-teal-50',   t: 'text-teal-600',   v: 'text-teal-700',   sub: 'text-teal-400',   label: '적금·예금 이체', value: savingAmt,   subtitle: '저축성 지출 (실소비 제외)' }] : []),
+          ...(investAmt > 0   ? [{ key: 'i', bg: 'bg-indigo-50', t: 'text-indigo-600', v: 'text-indigo-700', sub: 'text-indigo-400', label: '투자',          value: investAmt,   subtitle: '투자성 지출 (실소비 제외)' }] : []),
+          ...(excludedAmt > 0 ? [{ key: 'e', bg: 'bg-purple-50', t: 'text-purple-600', v: 'text-purple-700', sub: 'text-purple-400', label: '제외 항목',      value: excludedAmt, subtitle: '예산탭에서 제외 설정' }] : []),
+        ]
+        const cols = cards.length >= 3 ? 'grid-cols-3' : cards.length === 2 ? 'grid-cols-2' : 'grid-cols-1'
+        return (
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <div className="text-xs font-semibold text-gray-500 mb-3">이달 비소비 항목 합계</div>
+            <div className={`grid gap-3 ${cols}`}>
+              {cards.map(c => (
+                <div key={c.key} className={`${c.bg} rounded-xl p-3`}>
+                  <div className={`text-xs ${c.t} mb-0.5`}>{c.label}</div>
+                  <div className={`text-base font-bold ${c.v}`}>{fmtKRW(c.value)}</div>
+                  <div className={`text-xs ${c.sub} mt-0.5`}>{c.subtitle}</div>
+                </div>
+              ))}
             </div>
-            {excludedAmt > 0 && (
-              <div className="bg-purple-50 rounded-xl p-3">
-                <div className="text-xs text-purple-600 mb-0.5">제외 항목</div>
-                <div className="text-base font-bold text-purple-700">{fmtKRW(excludedAmt)}</div>
-                <div className="text-xs text-purple-400 mt-0.5">예산탭에서 제외 설정</div>
-              </div>
-            )}
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-xs text-gray-400">이달 실소비</span>
+              <span className="text-sm font-bold text-red-600">{fmtKRW(realConsumption)}</span>
+            </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs text-gray-400">이달 실소비</span>
-            <span className="text-sm font-bold text-red-600">{fmtKRW(realConsumption)}</span>
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
 
       {/* 위젯 편집 바 */}
