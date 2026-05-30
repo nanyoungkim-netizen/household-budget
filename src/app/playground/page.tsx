@@ -6,11 +6,6 @@ import { useState } from 'react'
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 function pad(n: number) { return String(n).padStart(2, '0') }
 function won(n: number) { return n.toLocaleString('ko-KR') }
-function short(n: number) {
-  if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '억'
-  if (n >= 10000) return Math.round(n / 10000) + '만'
-  return n.toLocaleString('ko-KR')
-}
 function lastDay(y: number, m0: number) { return new Date(y, m0 + 1, 0).getDate() }
 function weekRange(ref: Date): [Date, Date] {
   const d = new Date(ref)
@@ -38,6 +33,17 @@ const CATEGORY_SAMPLES = ['수입', '관리비', '적금', '교통비', '통신�
 const ROLE_OPTS: [string, string][] = [
   ['none', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자'],
 ]
+
+// ② 대표 숫자 버킷 (순서 변경 가능)
+const BUCKETS: Record<string, { value: number; color: string; bg: string }> = {
+  '수입': { value: 3200000, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  '지출': { value: 1200000, color: 'text-red-500', bg: 'bg-red-50' },
+  '저축': { value: 500000, color: 'text-blue-600', bg: 'bg-blue-50' },
+  '투자': { value: 300000, color: 'text-purple-600', bg: 'bg-purple-50' },
+  '제외': { value: 250000, color: 'text-gray-500', bg: 'bg-gray-100' },
+}
+const DEFAULT_ORDER = ['수입', '지출', '저축', '투자', '제외']
+const ORDER_KEY = 'pg_bucket_order'
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
@@ -83,6 +89,24 @@ export default function PlaygroundPage() {
   const [roles, setRoles] = useState<Record<string, string>>({
     '식비': 'none', '적금': 'savings', '카드대금': 'card_payment', '주식 매수': 'investment',
   })
+
+  // ── 거래내역: 대표 숫자 카드 순서 (사용자가 바꾸면 저장) ──
+  const [order, setOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_ORDER
+    try {
+      const s = localStorage.getItem(ORDER_KEY)
+      if (s) { const a = JSON.parse(s); if (Array.isArray(a) && a.length === DEFAULT_ORDER.length) return a }
+    } catch { /* ignore */ }
+    return DEFAULT_ORDER
+  })
+  function moveCard(idx: number, dir: number) {
+    const j = idx + dir
+    if (j < 0 || j >= order.length) return
+    const next = [...order]
+    ;[next[idx], next[j]] = [next[j], next[idx]]
+    setOrder(next)
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  }
 
   // ── 거래내역: 카테고리 검색 ──
   const [catQuery, setCatQuery] = useState('')
@@ -168,68 +192,36 @@ export default function PlaygroundPage() {
         </div>
       </Section>
 
-      {/* 2. 거래내역 대표 숫자 — 배열 안 비교 */}
-      <Section title="② 거래내역 — 대표 숫자 배열 (A/B/C 비교)" desc="수입·지출·저축·투자·제외 5개를 줄바꿈 없이 어떻게 보여줄지 골라주세요">
+      {/* 2. 거래내역 대표 숫자 — C안(2+3) · 균일 크기 · 순서 변경 */}
+      <Section title="② 거래내역 — 대표 숫자 (C안 · 균일 · 순서 변경)" desc="모든 카드 같은 크기. ‹ ›로 순서 이동 → 저장돼서 다시 들어와도 유지. (실제 화면에선 드래그로 이동)">
         {(() => {
-          const buckets = [
-            { label: '수입', value: 3200000, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-            { label: '지출', value: 1200000, color: 'text-red-500', bg: 'bg-red-50' },
-            { label: '저축', value: 500000, color: 'text-blue-600', bg: 'bg-blue-50' },
-            { label: '투자', value: 300000, color: 'text-purple-600', bg: 'bg-purple-50' },
-            { label: '제외', value: 250000, color: 'text-gray-500', bg: 'bg-gray-100' },
-          ]
+          const card = (key: string) => {
+            const b = BUCKETS[key]
+            const idx = order.indexOf(key)
+            return (
+              <div key={key} className={`${b.bg} rounded-xl p-3 text-center`}>
+                <div className="text-xs text-gray-500 mb-0.5">{key}</div>
+                <div className={`text-sm font-bold tabular-nums ${b.color} whitespace-nowrap`}>{won(b.value)}</div>
+                <div className="flex justify-center gap-1 mt-1.5">
+                  <button onClick={() => moveCard(idx, -1)} disabled={idx === 0}
+                    className="w-6 h-6 rounded-md bg-white/70 text-gray-500 text-sm disabled:opacity-30">‹</button>
+                  <button onClick={() => moveCard(idx, 1)} disabled={idx === order.length - 1}
+                    className="w-6 h-6 rounded-md bg-white/70 text-gray-500 text-sm disabled:opacity-30">›</button>
+                </div>
+              </div>
+            )
+          }
           return (
-            <div className="space-y-4">
-              {/* A안: 5칸 한 줄 + 만 단위 축약 */}
-              <div>
-                <div className="text-xs font-semibold text-blue-600 mb-1">A안 · 5칸 한 줄 (만 단위 축약)</div>
-                <div className="grid grid-cols-5 gap-1">
-                  {buckets.map(c => (
-                    <div key={c.label} className={`${c.bg} rounded-lg p-2 text-center`}>
-                      <div className="text-[10px] text-gray-500 mb-0.5">{c.label}</div>
-                      <div className={`text-xs font-bold tabular-nums ${c.color} whitespace-nowrap`}>{short(c.value)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* B안: 가로 스크롤 + 정확한 원 단위 */}
-              <div>
-                <div className="text-xs font-semibold text-blue-600 mb-1">B안 · 가로 스크롤 (정확한 금액, 옆으로 밀기)</div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {buckets.map(c => (
-                    <div key={c.label} className={`${c.bg} rounded-lg p-2.5 text-center flex-shrink-0 min-w-[84px]`}>
-                      <div className="text-[10px] text-gray-500 mb-0.5">{c.label}</div>
-                      <div className={`text-sm font-bold tabular-nums ${c.color} whitespace-nowrap`}>{won(c.value)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* C안: 수입·지출 강조 2칸 + 저축·투자·제외 3칸 */}
-              <div>
-                <div className="text-xs font-semibold text-blue-600 mb-1">C안 · 수입·지출 크게 + 저축·투자·제외 작게</div>
-                <div className="grid grid-cols-2 gap-2 mb-1.5">
-                  {buckets.slice(0, 2).map(c => (
-                    <div key={c.label} className={`${c.bg} rounded-xl p-3 text-center`}>
-                      <div className="text-xs text-gray-500 mb-0.5">{c.label}</div>
-                      <div className={`text-base font-bold tabular-nums ${c.color} whitespace-nowrap`}>{won(c.value)}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {buckets.slice(2).map(c => (
-                    <div key={c.label} className={`${c.bg} rounded-lg p-2 text-center`}>
-                      <div className="text-[10px] text-gray-500 mb-0.5">{c.label}</div>
-                      <div className={`text-xs font-bold tabular-nums ${c.color} whitespace-nowrap`}>{won(c.value)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-2 mb-2">{order.slice(0, 2).map(card)}</div>
+              <div className="grid grid-cols-3 gap-2">{order.slice(2).map(card)}</div>
+            </>
           )
         })()}
-        <div className="text-[11px] text-gray-400 mt-3">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목</div>
+        <button
+          onClick={() => { setOrder(DEFAULT_ORDER); try { localStorage.removeItem(ORDER_KEY) } catch { /* ignore */ } }}
+          className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-2">기본 순서로 되돌리기</button>
+        <div className="text-[11px] text-gray-400 mt-2">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목. 위 2칸·아래 3칸 배치(C안), 카드 크기는 동일.</div>
       </Section>
 
       {/* 3. 카테고리 역할 — 기존 + 투자 추가 */}
