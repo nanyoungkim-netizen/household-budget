@@ -27,10 +27,12 @@ const COMMENTS = [
   '스스로를 칭찬해주는 하루 되길 🤍',
 ]
 
-const CATEGORY_SAMPLES = ['식비', '교통비', '통신비', '쇼핑·미용', '여행', '적금', '주식 매수', '카드대금', '구독료', '생활비', '보험료', '자기계발']
+const CATEGORY_SAMPLES = ['수입', '관리비', '적금', '교통비', '통신비', '보험료', '식비', '기타지출', '여행통장', '쇼핑·미용', '구독료', '자기계발']
 
-type Nature = '소비' | '저축' | '투자' | '이체'
-const NATURES: Nature[] = ['소비', '저축', '투자', '이체']
+// 기존 '기초설정 → 카테고리'의 역할 옵션(없음/적금·예금/카드대금) + 💹 투자 추가
+const ROLE_OPTS: [string, string][] = [
+  ['none', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자'],
+]
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
@@ -72,9 +74,9 @@ export default function PlaygroundPage() {
   // ── 코멘트 ──
   const [commentIdx, setCommentIdx] = useState(0)
 
-  // ── 거래내역: 카테고리 성격 ──
-  const [natures, setNatures] = useState<Record<string, Nature>>({
-    '식비': '소비', '적금': '저축', '주식 매수': '투자', '카드대금': '이체',
+  // ── 거래내역: 카테고리 역할(성격) ──
+  const [roles, setRoles] = useState<Record<string, string>>({
+    '식비': 'none', '적금': 'savings', '카드대금': 'card_payment', '주식 매수': 'investment',
   })
 
   // ── 거래내역: 카테고리 검색 ──
@@ -105,7 +107,7 @@ export default function PlaygroundPage() {
       </div>
 
       {/* 1. 대시보드 요약 카드 */}
-      <Section title="① 대시보드 — 인사 코멘트 + 요약 카드" desc="안녕하세요 제거 → 매일 바뀌는 코멘트 / 일·주·월 + 지출 강조">
+      <Section title="① 대시보드 — 인사 코멘트 + 요약 카드" desc="실제 적용: 맨 위 '안녕하세요' 자리를 코멘트로 교체 + 이 카드만 교체. 아래 자산별·총잔액은 그대로 유지!">
         {/* 코멘트 */}
         <div className="bg-white rounded-2xl p-4 mb-3 flex items-center justify-between gap-3">
           <div className="text-base font-bold text-gray-900">{COMMENTS[commentIdx]}</div>
@@ -159,42 +161,44 @@ export default function PlaygroundPage() {
       </Section>
 
       {/* 2. 거래내역 대표 숫자 */}
-      <Section title="② 거래내역 — 대표 숫자 4갈래" desc="지출(소비)에서 저축·투자·이체 제외 → 따로 표시">
-        <div className="grid grid-cols-2 gap-2">
+      <Section title="② 거래내역 — 대표 숫자 (가로 배열)" desc="지출(소비) + 저축 + 투자 + 제외 = 총 나간 돈. 가로로 나란히">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {[
             { label: '수입', value: 3200000, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-            { label: '지출 (소비)', value: 1200000, color: 'text-red-500', bg: 'bg-red-50' },
+            { label: '지출', value: 1200000, color: 'text-red-500', bg: 'bg-red-50' },
             { label: '저축', value: 500000, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: '투자', value: 300000, color: 'text-purple-600', bg: 'bg-purple-50' },
+            { label: '제외', value: 250000, color: 'text-gray-500', bg: 'bg-gray-100' },
           ].map(c => (
-            <div key={c.label} className={`${c.bg} rounded-xl p-3 text-center`}>
+            <div key={c.label} className={`${c.bg} rounded-xl p-3 text-center flex-1 min-w-[68px]`}>
               <div className="text-xs text-gray-500 mb-1">{c.label}</div>
-              <div className={`text-lg font-bold tabular-nums ${c.color}`}>{won(c.value)}</div>
+              <div className={`text-sm font-bold tabular-nums ${c.color}`}>{won(c.value)}</div>
             </div>
           ))}
         </div>
-        <div className="text-[11px] text-gray-400 mt-2">※ &apos;지출&apos;은 실제 소비만 — 저축·투자·이체는 빠짐</div>
+        <div className="text-[11px] text-gray-400 mt-2">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목 (지출엔 안 더해지지만 실제로 나간 돈이라 따로 표시)</div>
       </Section>
 
-      {/* 3. 카테고리 성격 토글 */}
-      <Section title="③ 카테고리 '성격' 토글" desc="이름과 무관하게 카테고리마다 소비/저축/투자/이체 지정 (기본은 똑똑하게)">
+      {/* 3. 카테고리 역할 — 기존 + 투자 추가 */}
+      <Section title="③ 카테고리 역할 — 기존 그대로 + 💹 투자만 추가" desc="새 화면 아님! '기초설정 → 카테고리'의 역할(없음/적금·예금/카드대금)에 투자 옵션만 더함">
         <div className="space-y-2">
-          {['식비', '적금', '주식 매수', '카드대금'].map(cat => (
+          {['식비', '적금', '카드대금', '주식 매수'].map(cat => (
             <div key={cat} className="bg-white rounded-xl p-2.5 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-gray-700">{cat}</span>
-              <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
-                {NATURES.map(n => (
-                  <button key={n} onClick={() => setNatures(s => ({ ...s, [cat]: n }))}
+              <span className="text-sm font-medium text-gray-700 flex-shrink-0">{cat}</span>
+              <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 flex-wrap justify-end">
+                {ROLE_OPTS.map(([val, label]) => (
+                  <button key={val} onClick={() => setRoles(s => ({ ...s, [cat]: val }))}
                     className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${
-                      (natures[cat] ?? '소비') === n ? 'bg-blue-600 text-white' : 'text-gray-400'
+                      (roles[cat] ?? 'none') === val ? 'bg-blue-600 text-white' : 'text-gray-400'
                     }`}>
-                    {n}
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
           ))}
         </div>
+        <div className="text-[11px] text-gray-400 mt-2">※ &apos;투자&apos; 역할인 카테고리는 ②의 투자 버킷으로 집계돼요</div>
       </Section>
 
       {/* 4. 카테고리 검색 */}
