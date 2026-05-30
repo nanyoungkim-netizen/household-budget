@@ -139,8 +139,8 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState('all')
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo, setFilterDateTo] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState(() => monthToRange(currentMonth)[0])
+  const [filterDateTo, setFilterDateTo] = useState(() => monthToRange(currentMonth)[1])
   const [quickDateKey, setQuickDateKey] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [catParentFilter, setCatParentFilter] = useState('')
@@ -256,8 +256,9 @@ export default function TransactionsPage() {
   }
 
   function resetAllFilters() {
-    setFilterDateFrom('')
-    setFilterDateTo('')
+    const [df, dt] = monthToRange(currentMonth)
+    setFilterDateFrom(df)
+    setFilterDateTo(dt)
     setQuickDateKey('')
     setMonth(currentMonth)
     setFilterCategories([])
@@ -277,8 +278,11 @@ export default function TransactionsPage() {
   }
 
   // 활성 필터 수
+  // 기본값(당월 1일~오늘)은 '필터 적용'으로 세지 않음
+  const [defFrom, defTo] = monthToRange(currentMonth)
+  const isDefaultDateRange = month === currentMonth && !quickDateKey && filterDateFrom === defFrom && filterDateTo === defTo
   const activeFilterCount = [
-    filterDateFrom || filterDateTo || quickDateKey ? 1 : 0,
+    (!isDefaultDateRange && (filterDateFrom || filterDateTo || quickDateKey)) ? 1 : 0,
     filterType !== 'all' ? 1 : 0,
     filterCategories.length > 0 ? 1 : 0,
     (paymentTab === 'all' && filterAccount !== 'all') || (paymentTab === 'account' && filterAccount !== 'all') ? 1 : 0,
@@ -882,24 +886,43 @@ export default function TransactionsPage() {
               <input value={catFilterSearch} onChange={e => setCatFilterSearch(e.target.value)}
                 placeholder="카테고리 검색…"
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              {catFilterSearch.trim() && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {leafCats.filter(c => c.name.includes(catFilterSearch.trim())).slice(0, 30).map(cat => {
-                    const isSelected = filterCategories.includes(cat.id)
-                    return (
-                      <button key={cat.id}
-                        onClick={() => { setCatParentFilter(cat.parentId ?? ''); setFilterCategories([cat.id]); setCatFilterSearch('') }}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex-shrink-0 ${isSelected ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
-                        style={isSelected ? { backgroundColor: cat.color || '#4B5563' } : {}}>
-                        {cat.icon} {cat.name}
-                      </button>
-                    )
-                  })}
-                  {leafCats.filter(c => c.name.includes(catFilterSearch.trim())).length === 0 && (
-                    <span className="text-xs text-gray-400 py-1">검색 결과가 없어요</span>
-                  )}
-                </div>
-              )}
+              {catFilterSearch.trim() && (() => {
+                const q = catFilterSearch.trim()
+                const parentHits = parentCats.filter(p => p.name.includes(q)).slice(0, 10)
+                const leafHits = leafCats.filter(c => c.name.includes(q)).slice(0, 30)
+                if (parentHits.length === 0 && leafHits.length === 0) {
+                  return <div className="mt-2"><span className="text-xs text-gray-400 py-1">검색 결과가 없어요</span></div>
+                }
+                return (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {/* 대분류 결과 */}
+                    {parentHits.map(p => {
+                      const isActive = catParentFilter === p.id && filterCategories.length === 0
+                      return (
+                        <button key={p.id}
+                          onClick={() => { setCatParentFilter(p.id); setFilterCategories([]); setCatFilterSearch('') }}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex-shrink-0 ${isActive ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                          style={isActive ? { backgroundColor: p.color || '#4B5563' } : {}}>
+                          {p.icon} {p.name} <span className="opacity-60">(대)</span>
+                        </button>
+                      )
+                    })}
+                    {/* 소분류 결과 (대분류 맥락 표시) */}
+                    {leafHits.map(cat => {
+                      const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
+                      const isSelected = filterCategories.includes(cat.id)
+                      return (
+                        <button key={cat.id}
+                          onClick={() => { setCatParentFilter(cat.parentId ?? ''); setFilterCategories([cat.id]); setCatFilterSearch('') }}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex-shrink-0 ${isSelected ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                          style={isSelected ? { backgroundColor: cat.color || '#4B5563' } : {}}>
+                          {parent && <span className="opacity-50">{parent.name} › </span>}{cat.icon} {cat.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )
