@@ -26,6 +26,20 @@ function dailyComment(): string {
   return DAILY_COMMENTS[dayOfYear % DAILY_COMMENTS.length]
 }
 
+// 새 기능 안내 (게시일~until 까지 모든 사용자에게 표시, 그 후 자동으로 사라짐 / 닫으면 끝)
+const FEATURE_ANNOUNCE = {
+  id: 'whatsnew-2026-05-30',
+  until: '2026-06-04',   // 게시 후 5일
+  title: '🎉 새 기능 업데이트!',
+  items: [
+    '대시보드 주별 보기 추가 (일 / 주 / 월)',
+    '거래내역 날짜 필터 개선 + 카테고리 검색',
+    "카테고리 '투자' 역할 — 적금처럼 따로 집계",
+    '자동 백업·복구 (사본 보관·되돌리기)',
+    '이전 가계부 파일 보관함, 매일 바뀌는 코멘트 ☀️',
+  ],
+}
+
 // PRD: 위젯 순서 커스터마이징
 type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions' | 'memo'
 const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions', 'memo']
@@ -568,6 +582,22 @@ export default function Dashboard() {
           + 거래 추가
         </Link>
       </div>
+
+      {/* ── 새 기능 안내 (게시 후 5일간, 닫으면 사라짐) ──────────────────────── */}
+      {todayStr <= FEATURE_ANNOUNCE.until && !dismissedIds.has(FEATURE_ANNOUNCE.id) && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4 mb-4 relative">
+          <button onClick={() => dismissNotif(FEATURE_ANNOUNCE.id)}
+            className="absolute top-3 right-3 text-gray-300 hover:text-gray-500 text-sm">✕</button>
+          <div className="text-sm font-bold text-blue-700 mb-1.5">{FEATURE_ANNOUNCE.title}</div>
+          <ul className="space-y-0.5">
+            {FEATURE_ANNOUNCE.items.map((it, i) => (
+              <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
+                <span className="text-blue-400 mt-0.5">•</span><span>{it}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── 통합 알림 배너 (연회비 + 적금 만기) ─────────────────────────────── */}
       {(activeNotifs.length > 0 || dismissedNotifs.length > 0) && (

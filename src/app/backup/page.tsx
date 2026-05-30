@@ -91,7 +91,7 @@ export default function BackupPage() {
     setInvestments, setInvestmentTrades, setInvestmentAccounts, setInvestmentDividends,
     setInvestmentCashDeposits, setInvestmentAccountTypes, setPortfolioPlans, setWatchlist,
     restoreBudgetData, restoreAllData,
-    user, listVersions, restoreVersion, deleteVersion, currentSessionVersionId,
+    user, listVersions, restoreVersion, deleteVersion, deleteVersions, currentSessionVersionId,
   } = useApp()
   const {
     transactions, accounts, cards, budgets, savings, goals,
@@ -126,6 +126,10 @@ export default function BackupPage() {
   const [versionRestoreStatus, setVersionRestoreStatus] = useState<'idle' | 'restoring' | 'success' | 'error'>('idle')
   const [confirmDeleteVersion, setConfirmDeleteVersion] = useState<AppVersionMeta | null>(null)
   const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'error'>('idle')
+  // 일괄 삭제
+  const [selectedVersionIds, setSelectedVersionIds] = useState<string[]>([])
+  const [bulkConfirm, setBulkConfirm] = useState<null | 'all' | 'selected'>(null)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const loadVersions = useCallback(async () => {
     setVersions(await listVersions())
@@ -157,6 +161,27 @@ export default function BackupPage() {
     setConfirmDeleteVersion(null)
     if (ok) {
       setDeleteStatus('idle')
+      await loadVersions()
+    } else {
+      setDeleteStatus('error')
+    }
+  }
+
+  // 삭제 가능한 사본 id (작업 중 사본 제외)
+  const deletableIds = (versions ?? []).filter(v => v.id !== currentSessionVersionId).map(v => v.id)
+  function toggleSelect(id: string) {
+    setSelectedVersionIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  async function handleBulkDelete() {
+    if (!bulkConfirm) return
+    const ids = bulkConfirm === 'all' ? deletableIds : selectedVersionIds
+    if (ids.length === 0) { setBulkConfirm(null); return }
+    setBulkDeleting(true)
+    const ok = await deleteVersions(ids)
+    setBulkDeleting(false)
+    setBulkConfirm(null)
+    if (ok) {
+      setSelectedVersionIds([])
       await loadVersions()
     } else {
       setDeleteStatus('error')
@@ -1142,19 +1167,45 @@ export default function BackupPage() {
             아직 보관된 사본이 없어요. 데이터를 저장하면 자동으로 사본이 쌓입니다.
           </div>
         ) : (
+          <>
+          {/* 일괄 삭제 툴바 */}
+          <div className="flex items-center gap-2 mb-2 text-xs">
+            <button
+              onClick={() => setSelectedVersionIds(selectedVersionIds.length === deletableIds.length && deletableIds.length > 0 ? [] : deletableIds)}
+              disabled={deletableIds.length === 0}
+              className="text-gray-500 hover:text-gray-700 disabled:opacity-40">
+              {selectedVersionIds.length === deletableIds.length && deletableIds.length > 0 ? '선택 해제' : '전체 선택'}
+            </button>
+            <div className="flex-1" />
+            {selectedVersionIds.length > 0 && (
+              <button onClick={() => setBulkConfirm('selected')} className="font-medium text-red-500 hover:text-red-700">
+                선택 삭제 ({selectedVersionIds.length})
+              </button>
+            )}
+            <button onClick={() => setBulkConfirm('all')} disabled={deletableIds.length === 0}
+              className="font-medium text-gray-400 hover:text-red-500 disabled:opacity-40">전체 삭제</button>
+          </div>
           <div className="space-y-2">
             {(versions ?? []).map((v, idx) => (
               <div key={v.id} className="flex items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2.5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-800">{fmtVersionTime(v.createdAt)}</span>
-                    {idx === 0 && (
-                      <span className="text-[11px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">가장 최근</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {v.id === currentSessionVersionId ? (
+                    <span className="w-4 flex-shrink-0" />
+                  ) : (
+                    <input type="checkbox" checked={selectedVersionIds.includes(v.id)} onChange={() => toggleSelect(v.id)}
+                      className="w-4 h-4 flex-shrink-0 accent-red-500 cursor-pointer" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-800">{fmtVersionTime(v.createdAt)}</span>
+                      {idx === 0 && (
+                        <span className="text-[11px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">가장 최근</span>
+                      )}
+                    </div>
+                    {v.txCount != null && (
+                      <div className="text-xs text-gray-400 mt-0.5">거래 {v.txCount.toLocaleString('ko-KR')}건</div>
                     )}
                   </div>
-                  {v.txCount != null && (
-                    <div className="text-xs text-gray-400 mt-0.5">거래 {v.txCount.toLocaleString('ko-KR')}건</div>
-                  )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
@@ -1175,6 +1226,7 @@ export default function BackupPage() {
               </div>
             ))}
           </div>
+          </>
         )}
 
         {user && (
@@ -1252,6 +1304,32 @@ export default function BackupPage() {
                 disabled={deleteStatus === 'deleting'}
                 className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50">
                 {deleteStatus === 'deleting' ? '삭제 중…' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 삭제 확인 창 */}
+      {bulkConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !bulkDeleting && setBulkConfirm(null)}>
+          <div className="bg-white rounded-2xl shadow-lg max-w-sm w-full p-5" onClick={e => e.stopPropagation()}>
+            <div className="text-base font-bold text-gray-900 mb-2">
+              {bulkConfirm === 'all' ? '사본을 전체 삭제할까요?' : `선택한 ${selectedVersionIds.length}개를 삭제할까요?`}
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              {bulkConfirm === 'all'
+                ? `작업 중 사본을 뺀 ${deletableIds.length}개가 영구 삭제됩니다.`
+                : '선택한 사본이 영구 삭제됩니다.'} 가계부 데이터에는 영향이 없어요.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setBulkConfirm(null)} disabled={bulkDeleting}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+                취소
+              </button>
+              <button onClick={handleBulkDelete} disabled={bulkDeleting}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50">
+                {bulkDeleting ? '삭제 중…' : '삭제'}
               </button>
             </div>
           </div>
