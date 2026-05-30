@@ -990,7 +990,7 @@ export default function TransactionsPage() {
             <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${realConsumptionFilter ? 'translate-x-4' : 'translate-x-0'}`} />
           </button>
           <span className="text-sm text-gray-700 font-medium">실소비만 보기</span>
-          {realConsumptionFilter && <span className="text-xs text-blue-500">저축이체·카드대금 제외</span>}
+          {realConsumptionFilter && <span className="text-xs text-blue-500">저축이체·카드대금·투자 제외</span>}
         </div>
         {/* 월 이동 화살표 + 월 선택 (선택 시 자동으로 기간 설정) */}
         <div className="flex items-center border border-gray-200 rounded-lg">
@@ -1175,6 +1175,9 @@ export default function TransactionsPage() {
                         )}
                         {consumptionType === 'savings_transfer' && (
                           <span className="text-xs bg-teal-100 text-teal-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">저축이체</span>
+                        )}
+                        {consumptionType === 'investment' && (
+                          <span className="text-xs bg-indigo-100 text-indigo-600 font-medium px-1.5 py-0.5 rounded-md flex-shrink-0">투자</span>
                         )}
                         {consumptionType === 'card_payment' && (() => {
                           const paidCard = usedCard ?? (t.cardId ? cards.find(c => c.id === t.cardId) : null)
@@ -1595,22 +1598,22 @@ export default function TransactionsPage() {
                   {formType === 'expense' && (
                     <div className="border border-gray-200 rounded-xl p-3">
                       <label className="text-xs font-semibold text-gray-600 block mb-2">거래 유형</label>
-                      <div className="flex gap-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
                         {([
                           ['normal',            '일반 지출'],
                           ['savings_transfer',  '적금·예금 이체'],
                           ['card_payment',      '카드대금 결제'],
+                          ['investment',        '투자'],
                         ] as const).map(([val, label]) => (
                           <button
                             key={val}
                             type="button"
                             onClick={() => setForm(f => ({ ...f, consumptionType: f.consumptionType === val ? undefined : val }))}
-                            className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                            className={`px-2 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                               form.consumptionType === val
-                                ? val === 'savings_transfer'
-                                  ? 'bg-teal-500 text-white border-teal-500'
-                                  : val === 'card_payment'
-                                  ? 'bg-gray-500 text-white border-gray-500'
+                                ? val === 'savings_transfer' ? 'bg-teal-500 text-white border-teal-500'
+                                  : val === 'card_payment' ? 'bg-gray-500 text-white border-gray-500'
+                                  : val === 'investment' ? 'bg-indigo-500 text-white border-indigo-500'
                                   : 'bg-blue-600 text-white border-blue-600'
                                 : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
                             }`}
