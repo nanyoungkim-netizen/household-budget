@@ -444,7 +444,8 @@ export default function TransactionsPage() {
       cardId: t.cardId || cards[0]?.id || '',
       installmentMonths: '1',
       billingMonth: t.billingMonth || '',
-      consumptionType: t.consumptionType,
+      // 'normal'(일반)은 기본값이라 '미선택(자동)'으로 표시 → 카테고리 역할로 자동 감지
+      consumptionType: t.consumptionType === 'normal' ? undefined : t.consumptionType,
     })
     setSavingLinks((t.savingLinks || []).map(l => ({ savingId: l.savingId, amount: fmtInput(String(l.amount)) })))
     setSavingSearch('')
