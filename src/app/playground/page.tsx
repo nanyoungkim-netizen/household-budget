@@ -136,27 +136,30 @@ export default function PlaygroundPage() {
           </button>
         </div>
 
-        {/* 요약 카드 — 지출 강조 */}
+        {/* 요약 카드 — 기존 스타일 그대로, 일별에서 순수입만 제외 */}
         <div className="bg-blue-600 rounded-2xl p-5 text-white">
           <div className="text-xs opacity-70 mb-3">{dashLabel} 현황</div>
-          {/* 지출을 가장 크게 */}
-          <div className="bg-white/10 rounded-xl p-4 mb-2 text-center">
-            <div className="text-xs opacity-70 mb-1">지출</div>
-            <div className="text-3xl font-bold tabular-nums">-{won(sample.expense)}</div>
-          </div>
-          <div className={`grid ${view === 'day' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
-            <div className="bg-white/10 rounded-xl p-3 text-center">
+          <div className={`grid gap-2 ${view === 'day' ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            <div className="bg-white/10 rounded-xl p-3">
               <div className="text-xs opacity-70 mb-1">수입</div>
               <div className="text-base font-bold tabular-nums">+{won(sample.income)}</div>
             </div>
+            <div className="bg-white/10 rounded-xl p-3">
+              <div className="text-xs opacity-70 mb-1">지출</div>
+              <div className="text-base font-bold tabular-nums">-{won(sample.expense)}</div>
+            </div>
             {view !== 'day' && (
-              <div className={`rounded-xl p-3 text-center ${sample.net >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
+              <div className={`rounded-xl p-3 ${sample.net >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
                 <div className="text-xs opacity-70 mb-1">순수입</div>
                 <div className="text-base font-bold tabular-nums">{sample.net >= 0 ? '+' : ''}{won(sample.net)}</div>
               </div>
             )}
           </div>
-          {view === 'day' && <div className="text-[11px] opacity-60 mt-2 text-center">일별은 수입·지출만 (순수입 제외)</div>}
+          {view === 'day' && <div className="text-[11px] opacity-60 mt-2">일별은 순수입 빼고 수입·지출만</div>}
+        </div>
+        {/* 실제 화면엔 이 아래에 기존 자산별 금액·총잔액이 그대로 유지돼요 */}
+        <div className="mt-2 border-2 border-dashed border-gray-200 rounded-xl p-3 text-center text-[11px] text-gray-400">
+          ↓ 실제 대시보드엔 여기 아래로 기존 <b>자산별 금액·총잔액</b>이 그대로 있어요 (안 건드림)
         </div>
       </Section>
 
