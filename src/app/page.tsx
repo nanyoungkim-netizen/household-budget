@@ -6,6 +6,26 @@ import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance } from '@/lib/AppContext'
 import { Transaction } from '@/types'
 
+// 매일 바뀌는 기분전환 코멘트 (날짜 기준 고정 → 같은 날 새로고침해도 안 바뀜)
+const DAILY_COMMENTS = [
+  '오늘도 좋은 하루 되세요 ☀️',
+  '잘하고 있어요, 그거 알죠? 💪',
+  '작은 기록이 큰 변화를 만들어요 🌱',
+  '오늘의 나, 충분히 멋져요 ✨',
+  '한 걸음씩이면 충분해요 🐢',
+  '좋은 일이 생길 것 같은 날이에요 🍀',
+  '천천히, 그러나 꾸준히 🌟',
+  '스스로를 칭찬해주는 하루 되길 🤍',
+  '오늘도 알뜰하게, 멋지게 💕',
+  '당신의 하루를 응원해요 📣',
+]
+function dailyComment(): string {
+  const d = new Date()
+  const start = new Date(d.getFullYear(), 0, 0)
+  const dayOfYear = Math.floor((d.getTime() - start.getTime()) / 86400000)
+  return DAILY_COMMENTS[dayOfYear % DAILY_COMMENTS.length]
+}
+
 // PRD: 위젯 순서 커스터마이징
 type WidgetId = 'cash_accounts' | 'investment_accounts' | 'card_payment' | 'savings_summary' | 'budget' | 'goals' | 'transactions' | 'memo'
 const DEFAULT_WIDGET_ORDER: WidgetId[] = ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions', 'memo']
@@ -71,6 +91,7 @@ export default function Dashboard() {
   const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, investmentAccounts, investmentCashDeposits, investmentDividends, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
 
   type ViewMode = 'day' | 'month'
+  const [greeting] = useState(dailyComment)   // 매일 바뀌는 코멘트 (마운트 시 1회 계산)
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
   const [selectedDay, setSelectedDay] = useState(todayStr)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
@@ -524,7 +545,7 @@ export default function Dashboard() {
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">안녕하세요 👋</h1>
+          <h1 className="text-xl font-bold text-gray-900">{greeting}</h1>
           {lastModified && (
             <p className="text-xs text-gray-400 mt-0.5">마지막 수정 {fmtDate(lastModified)}</p>
           )}
@@ -709,7 +730,7 @@ export default function Dashboard() {
       <div className="bg-blue-600 rounded-2xl p-5 mb-4 text-white">
         <div className="text-xs font-medium opacity-70 mb-3">{periodLabel} 현황</div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${viewMode === 'day' ? 'grid-cols-2' : 'grid-cols-3'}`}>
           <div className="bg-white/10 rounded-xl p-3">
             <div className="text-xs opacity-70 mb-1">수입</div>
             <div className="text-base font-bold tabular-nums leading-tight">
@@ -728,12 +749,15 @@ export default function Dashboard() {
               <div className="text-xs opacity-60 mt-0.5">↩ {fmtShort(stats.refund)}</div>
             )}
           </div>
-          <div className={`rounded-xl p-3 ${stats.balance >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
-            <div className="text-xs opacity-70 mb-1">순수입</div>
-            <div className="text-base font-bold tabular-nums leading-tight">
-              {stats.balance >= 0 ? '+' : ''}{fmtShort(stats.balance)}
+          {/* 순수입은 월별에서만 표시 (일별은 수입·지출만) */}
+          {viewMode !== 'day' && (
+            <div className={`rounded-xl p-3 ${stats.balance >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
+              <div className="text-xs opacity-70 mb-1">순수입</div>
+              <div className="text-base font-bold tabular-nums leading-tight">
+                {stats.balance >= 0 ? '+' : ''}{fmtShort(stats.balance)}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* 지출 구성: 실소비 / 저축 / 제외항목 */}
