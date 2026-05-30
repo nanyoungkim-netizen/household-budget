@@ -6,6 +6,11 @@ import { useState } from 'react'
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 function pad(n: number) { return String(n).padStart(2, '0') }
 function won(n: number) { return n.toLocaleString('ko-KR') }
+function short(n: number) {
+  if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '억'
+  if (n >= 10000) return Math.round(n / 10000) + '만'
+  return n.toLocaleString('ko-KR')
+}
 function lastDay(y: number, m0: number) { return new Date(y, m0 + 1, 0).getDate() }
 function weekRange(ref: Date): [Date, Date] {
   const d = new Date(ref)
@@ -163,23 +168,68 @@ export default function PlaygroundPage() {
         </div>
       </Section>
 
-      {/* 2. 거래내역 대표 숫자 */}
-      <Section title="② 거래내역 — 대표 숫자 (가로 배열)" desc="지출(소비) + 저축 + 투자 + 제외 = 총 나간 돈. 가로로 나란히">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {[
+      {/* 2. 거래내역 대표 숫자 — 배열 안 비교 */}
+      <Section title="② 거래내역 — 대표 숫자 배열 (A/B/C 비교)" desc="수입·지출·저축·투자·제외 5개를 줄바꿈 없이 어떻게 보여줄지 골라주세요">
+        {(() => {
+          const buckets = [
             { label: '수입', value: 3200000, color: 'text-emerald-600', bg: 'bg-emerald-50' },
             { label: '지출', value: 1200000, color: 'text-red-500', bg: 'bg-red-50' },
             { label: '저축', value: 500000, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: '투자', value: 300000, color: 'text-purple-600', bg: 'bg-purple-50' },
             { label: '제외', value: 250000, color: 'text-gray-500', bg: 'bg-gray-100' },
-          ].map(c => (
-            <div key={c.label} className={`${c.bg} rounded-xl p-3 text-center flex-1 min-w-[68px]`}>
-              <div className="text-xs text-gray-500 mb-1">{c.label}</div>
-              <div className={`text-sm font-bold tabular-nums ${c.color}`}>{won(c.value)}</div>
+          ]
+          return (
+            <div className="space-y-4">
+              {/* A안: 5칸 한 줄 + 만 단위 축약 */}
+              <div>
+                <div className="text-xs font-semibold text-blue-600 mb-1">A안 · 5칸 한 줄 (만 단위 축약)</div>
+                <div className="grid grid-cols-5 gap-1">
+                  {buckets.map(c => (
+                    <div key={c.label} className={`${c.bg} rounded-lg p-2 text-center`}>
+                      <div className="text-[10px] text-gray-500 mb-0.5">{c.label}</div>
+                      <div className={`text-xs font-bold tabular-nums ${c.color} whitespace-nowrap`}>{short(c.value)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* B안: 가로 스크롤 + 정확한 원 단위 */}
+              <div>
+                <div className="text-xs font-semibold text-blue-600 mb-1">B안 · 가로 스크롤 (정확한 금액, 옆으로 밀기)</div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {buckets.map(c => (
+                    <div key={c.label} className={`${c.bg} rounded-lg p-2.5 text-center flex-shrink-0 min-w-[84px]`}>
+                      <div className="text-[10px] text-gray-500 mb-0.5">{c.label}</div>
+                      <div className={`text-sm font-bold tabular-nums ${c.color} whitespace-nowrap`}>{won(c.value)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* C안: 수입·지출 강조 2칸 + 저축·투자·제외 3칸 */}
+              <div>
+                <div className="text-xs font-semibold text-blue-600 mb-1">C안 · 수입·지출 크게 + 저축·투자·제외 작게</div>
+                <div className="grid grid-cols-2 gap-2 mb-1.5">
+                  {buckets.slice(0, 2).map(c => (
+                    <div key={c.label} className={`${c.bg} rounded-xl p-3 text-center`}>
+                      <div className="text-xs text-gray-500 mb-0.5">{c.label}</div>
+                      <div className={`text-base font-bold tabular-nums ${c.color} whitespace-nowrap`}>{won(c.value)}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {buckets.slice(2).map(c => (
+                    <div key={c.label} className={`${c.bg} rounded-lg p-2 text-center`}>
+                      <div className="text-[10px] text-gray-500 mb-0.5">{c.label}</div>
+                      <div className={`text-xs font-bold tabular-nums ${c.color} whitespace-nowrap`}>{won(c.value)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
-        <div className="text-[11px] text-gray-400 mt-2">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목 (지출엔 안 더해지지만 실제로 나간 돈이라 따로 표시)</div>
+          )
+        })()}
+        <div className="text-[11px] text-gray-400 mt-3">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목</div>
       </Section>
 
       {/* 3. 카테고리 역할 — 기존 + 투자 추가 */}
