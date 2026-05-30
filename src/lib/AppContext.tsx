@@ -272,6 +272,7 @@ interface AppContextType {
   listVersions: () => Promise<AppVersionMeta[]>
   restoreVersion: (versionId: string) => Promise<boolean>
   deleteVersion: (versionId: string) => Promise<boolean>
+  deleteVersions: (versionIds: string[]) => Promise<boolean>
   currentSessionVersionId: string | null  // 현재 작업 중인 사본 id (삭제 불가 표시용)
 }
 
@@ -1188,6 +1189,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // 사본 여러 개 일괄 삭제 (선택 삭제 / 전체 삭제)
+  const deleteVersions = useCallback(async (versionIds: string[]): Promise<boolean> => {
+    if (!supabase || !userRef.current || versionIds.length === 0) return false
+    try {
+      const { error } = await supabase
+        .from('user_data_versions')
+        .delete()
+        .in('id', versionIds)
+        .eq('user_id', userRef.current.id)
+      if (error) throw error
+      if (sessionVersionIdRef.current && versionIds.includes(sessionVersionIdRef.current)) {
+        setSessionVersion(null)
+        lastSnapshotJsonRef.current = null
+      }
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   if (!hydrated) return null
 
   return (
@@ -1249,6 +1270,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       listVersions,
       restoreVersion,
       deleteVersion,
+      deleteVersions,
       currentSessionVersionId,
     }}>
       {children}
