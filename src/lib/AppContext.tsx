@@ -1264,7 +1264,9 @@ export function useApp() {
 
 // ── PRD 2.1: 실소비 필터링 헬퍼 ────────────────────────────────────────────────
 export function getConsumptionType(tx: Transaction, categories: Category[]): ConsumptionType {
-  if (tx.consumptionType) return tx.consumptionType
+  // 명시적으로 지정한 유형이 있으면 우선. 단 'normal'(일반 지출)은 기본값이라
+  // 카테고리 역할에 양보 → 카테고리 역할을 바꾸면 기존 거래도 자동으로 따라옴
+  if (tx.consumptionType && tx.consumptionType !== 'normal') return tx.consumptionType
   const cat = categories.find(c => c.id === tx.categoryId)
   if (!cat) return 'normal'
   // 소분류(자식) 본인 역할이 부모보다 우선
