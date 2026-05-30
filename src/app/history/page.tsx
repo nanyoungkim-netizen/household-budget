@@ -13,8 +13,26 @@ interface StoredFile {
   metadata: { size?: number } | null
 }
 
-// 저장 시 붙인 타임스탬프 접두사 제거 → 원래 파일명 표시
-function displayName(name: string) {
+// 원래 파일명(한글·공백·특수문자 포함)을 스토리지 키에 쓸 수 있도록 ASCII(base64url)로 인코딩
+function encodeName(name: string): string {
+  const bytes = new TextEncoder().encode(name)
+  let bin = ''
+  bytes.forEach(b => { bin += String.fromCharCode(b) })
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+function decodeName(seg: string): string {
+  try {
+    const b64 = seg.replace(/-/g, '+').replace(/_/g, '/')
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch { return seg }
+}
+
+// 스토리지 키 → 표시용 원래 파일명
+//   새 방식: {타임스탬프}.{base64url}  /  옛 방식 호환: {타임스탬프}_{원본명}
+function displayName(name: string): string {
+  const m = name.match(/^\d+\.(.+)$/)
+  if (m) return decodeName(m[1])
   return name.replace(/^\d+_/, '')
 }
 
@@ -83,7 +101,8 @@ export default function HistoryPage() {
     setError(null)
     setUploading(true)
     try {
-      const path = `${user.id}/${Date.now()}_${file.name}`
+      // 스토리지 키엔 ASCII만 허용 → 원본 파일명은 base64url로 인코딩해 보관 (표시는 displayName으로 복원)
+      const path = `${user.id}/${Date.now()}.${encodeName(file.name)}`
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { upsert: false, contentType: file.type || undefined })
