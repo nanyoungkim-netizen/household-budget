@@ -323,23 +323,24 @@ export default function TransactionsPage() {
   const refundAmt  = filtered.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0)
   const expense   = Math.max(0, expenseRaw - refundAmt)
   const transfer  = filtered.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
-  // FR-010: 적금·카드대금·사용자제외 분리 계산
-  const savingExpense  = filtered.filter(t => t.type === 'expense' && isSavingCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
-  const cardPayExpense = filtered.filter(t => t.type === 'expense' && isCardPaymentCat(t.categoryId)).reduce((s, t) => s + t.amount, 0)
+  // FR-010: 적금·카드대금·투자·사용자제외 분리 계산 (소비 판별은 getConsumptionType 한 곳에서 — 역할 우선순위 일관·중복집계 방지)
+  const savingExpense  = filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'savings_transfer').reduce((s, t) => s + t.amount, 0)
+  const cardPayExpense = filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'card_payment').reduce((s, t) => s + t.amount, 0)
+  const investExpense  = filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'investment').reduce((s, t) => s + t.amount, 0)
   const cardPayByCard  = cards.map(card => ({
     ...card,
-    amount: filtered.filter(t => t.type === 'expense' && isCardPaymentCat(t.categoryId) && t.cardId === card.id).reduce((s, t) => s + t.amount, 0),
+    amount: filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'card_payment' && t.cardId === card.id).reduce((s, t) => s + t.amount, 0),
   }))
   const excludedExpense = filtered.filter(t => {
     if (t.type !== 'expense') return false
-    if (isSavingCat(t.categoryId) || isCardPaymentCat(t.categoryId)) return false
+    if (getConsumptionType(t, categories) !== 'normal') return false
     const cat = categories.find(c => c.id === t.categoryId)
     if (!cat) return false
     if ((categoryExcludeMonths[cat.id] ?? []).includes(month)) return true
     const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null
     return !!parent && (categoryExcludeMonths[parent.id] ?? []).includes(month)
   }).reduce((s, t) => s + t.amount, 0)
-  const realExpense    = Math.max(0, expense - savingExpense - cardPayExpense - excludedExpense)
+  const realExpense    = Math.max(0, expense - savingExpense - cardPayExpense - investExpense - excludedExpense)
 
   // 카드 탭: 당월 결제 vs 할부 이월 분석
   // 할부 이월 판별: installmentCurrent > 1 이거나 설명에 "(2/3)" "(3/12)" 같은 패턴
@@ -1047,11 +1048,15 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* FR-010: 지출 상세 분석 (적금·카드대금·제외항목 분리) */}
-      {(savingExpense > 0 || cardPayExpense > 0 || excludedExpense > 0) && (
+      {/* FR-010: 지출 상세 분석 (적금·카드대금·투자·제외항목 분리) */}
+      {(savingExpense > 0 || cardPayExpense > 0 || investExpense > 0 || excludedExpense > 0) && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
           <div className="text-xs font-semibold text-gray-500 mb-3">지출 상세 분석</div>
-          <div className={`grid gap-2 ${excludedExpense > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          <div className={`grid gap-2 ${
+            (investExpense > 0 && excludedExpense > 0) ? 'grid-cols-5'
+            : (investExpense > 0 || excludedExpense > 0) ? 'grid-cols-4'
+            : 'grid-cols-3'
+          }`}>
             <div className="bg-red-50 rounded-xl p-3">
               <div className="text-xs text-red-400 mb-0.5">실소비</div>
               <div className="text-sm font-bold text-red-500">-{fmtKRW(realExpense)}</div>
@@ -1064,6 +1069,12 @@ export default function TransactionsPage() {
               <div className="text-xs text-blue-400 mb-0.5">적금</div>
               <div className="text-sm font-bold text-blue-600">-{fmtKRW(savingExpense)}</div>
             </div>
+            {investExpense > 0 && (
+              <div className="bg-indigo-50 rounded-xl p-3">
+                <div className="text-xs text-indigo-400 mb-0.5">투자</div>
+                <div className="text-sm font-bold text-indigo-600">-{fmtKRW(investExpense)}</div>
+              </div>
+            )}
             {excludedExpense > 0 && (
               <div className="bg-purple-50 rounded-xl p-3">
                 <div className="text-xs text-purple-400 mb-0.5">제외항목</div>

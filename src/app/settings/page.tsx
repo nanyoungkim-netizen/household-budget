@@ -1032,7 +1032,7 @@ export default function SettingsPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1.5">카테고리 역할 <span className="text-gray-300">(거래 등록 시 자동 연동)</span></label>
                 <div className="flex gap-1.5">
-                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금']] as const).map(([val, label]) => (
+                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자']] as const).map(([val, label]) => (
                     <button key={val} type="button"
                       onClick={() => setNewCat(f => ({ ...f, role: val }))}
                       className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${newCat.role === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
@@ -1111,7 +1111,7 @@ export default function SettingsPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1.5">카테고리 역할 <span className="text-gray-300">(이 대분류의 소분류에도 적용)</span></label>
                 <div className="flex gap-1.5">
-                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금']] as const).map(([val, label]) => (
+                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자']] as const).map(([val, label]) => (
                     <button key={val} type="button"
                       onClick={() => setNewParent(f => ({ ...f, role: val }))}
                       className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${newParent.role === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
@@ -1198,7 +1198,7 @@ export default function SettingsPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1.5">카테고리 역할</label>
                 <div className="flex gap-1.5">
-                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금']] as const).map(([val, label]) => (
+                  {([['', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자']] as const).map(([val, label]) => (
                     <button key={val} type="button"
                       onClick={() => setEditCatForm(f => ({ ...f, role: val }))}
                       className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${editCatForm.role === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
