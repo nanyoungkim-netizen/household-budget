@@ -2,10 +2,31 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useApp, MultiData, AppVersionMeta } from '@/lib/AppContext'
+import { supabase } from '@/lib/supabase'
 import { ConsumptionType, InvestmentSubType } from '@/types'
 import * as XLSX from 'xlsx'
 
 const BACKUP_VERSION = '3.1'
+const HISTORY_BUCKET = 'history-files'  // 이전 가계부 업로드 파일 보관소
+
+// Blob ↔ base64 (백업에 업로드 파일을 함께 담기 위함)
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => {
+      const res = String(r.result)
+      resolve(res.includes(',') ? res.slice(res.indexOf(',') + 1) : res)
+    }
+    r.onerror = reject
+    r.readAsDataURL(blob)
+  })
+}
+function base64ToBlob(b64: string): Blob {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new Blob([bytes])
+}
 
 // 시트명
 const S = {
@@ -33,6 +54,8 @@ const S = {
   PORTFOLIO_PLANS:    '포트폴리오',
   WATCHLIST:          '관심종목',
   META:               '메타정보',
+  // 이전 가계부 업로드 파일 (base64로 함께 보관 → 새 계정 이전 시 함께 이동)
+  HISTORY_FILES:      '__history_files__',
 }
 
 function fmtDate() {
@@ -79,6 +102,8 @@ export default function BackupPage() {
 
   const [lastBackupDate, setLastBackupDate] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [importStatus, setImportStatus] = useState<'idle' | 'preview' | 'error' | 'success'>('idle')
   const [importError, setImportError] = useState('')
   const [importPreview, setImportPreview] = useState<{
@@ -139,8 +164,9 @@ export default function BackupPage() {
   }
 
   // ── 내보내기 ──────────────────────────────────────────────────────────────────
-  function handleExport() {
+  async function handleExport() {
     setExportError(null)
+    setExporting(true)
     try {
     const wb = XLSX.utils.book_new()
     const today = fmtDate()
@@ -383,6 +409,30 @@ export default function BackupPage() {
       { 항목: '관심종목수',     값: (watchlist ?? []).length },
     ]), S.META)
 
+    // ★ 이전 가계부 업로드 파일도 백업에 포함 (새 계정으로 이전해도 함께 이동)
+    //    각 파일을 base64로 변환 → 청크로 나눠 시트에 저장
+    if (supabase && user) {
+      try {
+        const { data: fileList } = await supabase.storage
+          .from(HISTORY_BUCKET)
+          .list(user.id, { limit: 500, sortBy: { column: 'created_at', order: 'asc' } })
+        const fileObjs = (fileList ?? []).filter(f => f.name !== '.emptyFolderPlaceholder')
+        const fileRows: { name: string; part: number; total: number; b64: string }[] = []
+        for (const fo of fileObjs) {
+          const { data: blob } = await supabase.storage.from(HISTORY_BUCKET).download(`${user.id}/${fo.name}`)
+          if (!blob) continue
+          const b64 = await blobToBase64(blob)
+          const total = Math.max(1, Math.ceil(b64.length / CHUNK))
+          for (let i = 0; i < total; i++) {
+            fileRows.push({ name: fo.name, part: i + 1, total, b64: b64.slice(i * CHUNK, (i + 1) * CHUNK) })
+          }
+        }
+        if (fileRows.length > 0) {
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fileRows), S.HISTORY_FILES)
+        }
+      } catch { /* 업로드 파일 포함 실패해도 본 백업은 계속 진행 */ }
+    }
+
     // Blob 방식 다운로드
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     const blob = new Blob([wbout], { type: 'application/octet-stream' })
@@ -402,6 +452,8 @@ export default function BackupPage() {
   } catch (e) {
     console.error('백업 실패:', e)
     setExportError(`백업 파일 생성 실패: ${e instanceof Error ? e.message : String(e)}`)
+  } finally {
+    setExporting(false)
   }
   }
 
@@ -517,8 +569,31 @@ export default function BackupPage() {
   }
 
   // ── 복구 실행 ──────────────────────────────────────────────────────────────────
-  function handleRestore() {
+  // 백업에 담긴 이전 가계부 업로드 파일을 현재 계정 Storage로 복원
+  async function restoreHistoryFiles(wb: ReturnType<typeof XLSX.read>) {
+    if (!supabase || !user) return
+    if (!wb.SheetNames.includes(S.HISTORY_FILES)) return
+    try {
+      const fileRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[S.HISTORY_FILES])
+      // 파일명별로 청크 합치기
+      const byName = new Map<string, { part: number; b64: string }[]>()
+      for (const r of fileRows) {
+        const nm = safeStr(r['name'])
+        if (!nm) continue
+        if (!byName.has(nm)) byName.set(nm, [])
+        byName.get(nm)!.push({ part: safeNum(r['part']), b64: safeStr(r['b64']) })
+      }
+      for (const [nm, parts] of byName) {
+        parts.sort((a, b) => a.part - b.part)
+        const blob = base64ToBlob(parts.map(p => p.b64).join(''))
+        await supabase.storage.from(HISTORY_BUCKET).upload(`${user.id}/${nm}`, blob, { upsert: true })
+      }
+    } catch { /* 파일 복원 실패해도 본 데이터 복구는 완료 처리 */ }
+  }
+
+  async function handleRestore() {
     if (!pendingWb) return
+    setRestoring(true)
     const wb = pendingWb
     const rows = <T,>(sheet: string) =>
       wb.SheetNames.includes(sheet)
@@ -542,6 +617,8 @@ export default function BackupPage() {
             // v3.0: AppData 단일 가계부 구조
             restoreBudgetData(parsed)
           }
+          await restoreHistoryFiles(wb)   // 업로드 파일도 함께 복원
+          setRestoring(false)
           setImportStatus('success')
           setPendingWb(null)
           setImportPreview(null)
@@ -862,6 +939,8 @@ export default function BackupPage() {
       })))
     }
 
+    await restoreHistoryFiles(wb)   // 업로드 파일도 함께 복원
+    setRestoring(false)
     setImportStatus('success')
     setPendingWb(null)
     setImportPreview(null)
@@ -921,9 +1000,10 @@ export default function BackupPage() {
         )}
         <button
           onClick={handleExport}
-          className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+          disabled={exporting}
+          className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
           <span>⬇️</span>
-          <span>가계부_백업_{fmtDate()}.xlsx 다운로드</span>
+          <span>{exporting ? '백업 파일 만드는 중…' : `가계부_백업_${fmtDate()}.xlsx 다운로드`}</span>
         </button>
         {exportError && (
           <div className="mt-2 bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-600">
@@ -1015,13 +1095,15 @@ export default function BackupPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setImportStatus('idle'); setImportPreview(null); setPendingWb(null); setImportError('') }}
-                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                disabled={restoring}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60">
                 취소
               </button>
               <button
                 onClick={handleRestore}
-                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors">
-                복구하기
+                disabled={restoring}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-60">
+                {restoring ? '복구 중…' : '복구하기'}
               </button>
             </div>
           </div>
