@@ -75,6 +75,23 @@ function monthLabel(m: string) {
   const [y, mo] = m.split('-').map(Number)
   return `${y}년 ${mo}월`
 }
+// 주(월~일) 범위 / 라벨 / 월 마지막 날
+function weekRange(d: string): [string, string] {
+  const base = new Date(d + 'T00:00:00')
+  const dow = (base.getDay() + 6) % 7   // 월요일=0
+  const mon = new Date(base); mon.setDate(base.getDate() - dow)
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+  const fmt = (x: Date) => `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`
+  return [fmt(mon), fmt(sun)]
+}
+function weekLabel(start: string, end: string) {
+  const s = new Date(start + 'T00:00:00'); const e = new Date(end + 'T00:00:00')
+  return `${s.getMonth()+1}.${s.getDate()} ~ ${e.getMonth()+1}.${e.getDate()}`
+}
+function monthEnd(m: string) {
+  const [y, mo] = m.split('-').map(Number)
+  return `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2,'0')}`
+}
 
 // ── 통계 계산 (일/월 공통) ────────────────────────────────────────────────────
 function calcStats(txs: Transaction[]) {
@@ -90,7 +107,7 @@ export default function Dashboard() {
   const router = useRouter()
   const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, investmentAccounts, investmentCashDeposits, investmentDividends, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
 
-  type ViewMode = 'day' | 'month'
+  type ViewMode = 'day' | 'week' | 'month'
   const [greeting] = useState(dailyComment)   // 매일 바뀌는 코멘트 (마운트 시 1회 계산)
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
   const [selectedDay, setSelectedDay] = useState(todayStr)
@@ -241,9 +258,12 @@ export default function Dashboard() {
     )
   }
 
-  // ── 기간 필터링 ───────────────────────────────────────────────────────────
-  const prefix    = viewMode === 'day' ? selectedDay : selectedMonth
-  const periodTxs = transactions.filter(t => t.date.startsWith(prefix))
+  // ── 기간 필터링 (일/주/월 공통 범위) ──────────────────────────────────────
+  const [weekStart, weekEnd] = weekRange(selectedDay)
+  const isThisWeek  = todayStr >= weekStart && todayStr <= weekEnd
+  const periodStart = viewMode === 'day' ? selectedDay : viewMode === 'week' ? weekStart : `${selectedMonth}-01`
+  const periodEnd   = viewMode === 'day' ? selectedDay : viewMode === 'week' ? weekEnd   : monthEnd(selectedMonth)
+  const periodTxs   = transactions.filter(t => t.date >= periodStart && t.date <= periodEnd)
   // 카드대금은 자동 제외 없음 — 수동 categoryExcludeMonths 토글 시에만 제외
   const periodTxsForStats = periodTxs
   const stats       = calcStats(periodTxsForStats)
@@ -251,7 +271,7 @@ export default function Dashboard() {
   const ctOf = (t: Transaction) => getConsumptionType(t, categories)
   const savingAmt   = periodTxsForStats.filter(t => t.type === 'expense' && ctOf(t) === 'savings_transfer').reduce((s, t) => s + t.amount, 0)
   const investAmt   = periodTxsForStats.filter(t => t.type === 'expense' && ctOf(t) === 'investment').reduce((s, t) => s + t.amount, 0)
-  const currentPeriodMonth = (viewMode === 'day' ? selectedDay : selectedMonth).slice(0, 7)
+  const currentPeriodMonth = viewMode === 'month' ? selectedMonth : selectedDay.slice(0, 7)
   const isExcludedByMonth = (t: Transaction) => {
     const ct = ctOf(t)
     if (ct === 'savings_transfer' || ct === 'investment') return false
@@ -273,15 +293,13 @@ export default function Dashboard() {
   // FR-015: 날짜 선택 시 해당 날짜 기준 잔액 계산
   // 오늘(현재월)이면 전체 거래 반영, 과거 날짜면 해당 날짜까지의 거래만 반영
   const isHistoricalDay   = viewMode === 'day'   && !isToday
+  const isHistoricalWeek  = viewMode === 'week'  && !isThisWeek
   const isHistoricalMonth = viewMode === 'month' && !isThisMonth
+  const isHistorical = isHistoricalDay || isHistoricalWeek || isHistoricalMonth
 
-  // 계좌별 잔액 계산용 거래 필터
-  const txsForBalance = (isHistoricalDay || isHistoricalMonth)
-    ? transactions.filter(t => {
-        if (isHistoricalDay)   return t.date <= selectedDay
-        if (isHistoricalMonth) return t.date.slice(0,7) <= selectedMonth
-        return true
-      })
+  // 계좌별 잔액 계산용 거래 필터 (과거 기간이면 기간 종료일까지)
+  const txsForBalance = isHistorical
+    ? transactions.filter(t => t.date <= periodEnd)
     : transactions
 
   const accountBalances = accounts.map(a => ({
@@ -291,17 +309,15 @@ export default function Dashboard() {
   const totalBalance = accountBalances.reduce((s, a) => s + a.computed, 0)
 
   // 전일/전월 대비 계산
-  const prevPeriodEnd = viewMode === 'day' ? addDays(selectedDay, -1) : addMonths(selectedMonth, -1)
-  const txsForPrevBalance = viewMode === 'day'
-    ? transactions.filter(t => t.date <= prevPeriodEnd)
-    : transactions.filter(t => t.date.slice(0, 7) <= prevPeriodEnd)
+  const prevPeriodEnd = addDays(periodStart, -1)
+  const txsForPrevBalance = transactions.filter(t => t.date <= prevPeriodEnd)
   const prevAccountBalances = accounts.map(a => ({
     id: a.id,
     computed: computeAccountBalance(a.id, a.balance, txsForPrevBalance),
   }))
 
   // 예산 — 월 기준
-  const budgetMonth  = viewMode === 'day' ? selectedDay.slice(0, 7) : selectedMonth
+  const budgetMonth  = viewMode === 'month' ? selectedMonth : selectedDay.slice(0, 7)
   const totalBudget  = budgets.filter(b => b.month === budgetMonth).reduce((s, b) => s + b.amount, 0)
   // 실소비 예산: savings/card_payment/제외 카테고리 제외 (예산탭 totalBudgetReal 기준과 동일)
   const totalBudgetReal = budgets
@@ -531,8 +547,10 @@ export default function Dashboard() {
   const dismissedNotifs = allNotifications.filter(n =>  dismissedIds.has(n.id))
 
   // ── 라벨 ─────────────────────────────────────────────────────────────────
-  const periodLabel = viewMode === 'day' ? dayLabel(selectedDay) : monthLabel(selectedMonth)
-  const isNow       = viewMode === 'day' ? isToday : isThisMonth
+  const periodLabel = viewMode === 'day' ? dayLabel(selectedDay)
+    : viewMode === 'week' ? weekLabel(weekStart, weekEnd)
+    : monthLabel(selectedMonth)
+  const isNow       = viewMode === 'day' ? isToday : viewMode === 'week' ? isThisWeek : isThisMonth
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -667,12 +685,12 @@ export default function Dashboard() {
       <div className="bg-white rounded-2xl shadow-sm p-3 mb-4 flex items-center gap-3">
         {/* 토글 */}
         <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
-          {(['day','month'] as ViewMode[]).map(m => (
+          {(['day','week','month'] as ViewMode[]).map(m => (
             <button key={m} onClick={() => setViewMode(m)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 viewMode === m ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
               }`}>
-              {m === 'day' ? '일별' : '월별'}
+              {m === 'day' ? '일별' : m === 'week' ? '주별' : '월별'}
             </button>
           ))}
         </div>
@@ -680,9 +698,9 @@ export default function Dashboard() {
         {/* 네비게이터 */}
         <div className="flex items-center gap-1 flex-1 justify-center">
           <button
-            onClick={() => viewMode === 'day'
-              ? setSelectedDay(addDays(selectedDay, -1))
-              : setSelectedMonth(addMonths(selectedMonth, -1))
+            onClick={() => viewMode === 'month'
+              ? setSelectedMonth(addMonths(selectedMonth, -1))
+              : setSelectedDay(addDays(selectedDay, viewMode === 'week' ? -7 : -1))
             }
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-lg transition-colors">
             ‹
@@ -693,6 +711,8 @@ export default function Dashboard() {
               <input type="date" min="1900-01-01" value={selectedDay} max={todayStr}
                 onChange={e => setSelectedDay(e.target.value)}
                 className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent text-center cursor-pointer" />
+            ) : viewMode === 'week' ? (
+              <span className="text-sm font-semibold text-gray-800 whitespace-nowrap">{weekLabel(weekStart, weekEnd)}</span>
             ) : (
               <input type="month" min="1900-01" value={selectedMonth} max={currentMonth}
                 onChange={e => setSelectedMonth(e.target.value)}
@@ -701,9 +721,9 @@ export default function Dashboard() {
           </div>
 
           <button
-            onClick={() => viewMode === 'day'
-              ? setSelectedDay(addDays(selectedDay, 1))
-              : setSelectedMonth(addMonths(selectedMonth, 1))
+            onClick={() => viewMode === 'month'
+              ? setSelectedMonth(addMonths(selectedMonth, 1))
+              : setSelectedDay(addDays(selectedDay, viewMode === 'week' ? 7 : 1))
             }
             disabled={isNow}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed">
@@ -714,9 +734,9 @@ export default function Dashboard() {
         {/* 오늘/이번달로 */}
         {!isNow && (
           <button
-            onClick={() => viewMode === 'day' ? setSelectedDay(todayStr) : setSelectedMonth(currentMonth)}
+            onClick={() => viewMode === 'month' ? setSelectedMonth(currentMonth) : setSelectedDay(todayStr)}
             className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1.5 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap flex-shrink-0">
-            {viewMode === 'day' ? '오늘' : '이번달'}
+            {viewMode === 'day' ? '오늘' : viewMode === 'week' ? '이번주' : '이번달'}
           </button>
         )}
       </div>
@@ -784,6 +804,8 @@ export default function Dashboard() {
           <div className="text-[10px] opacity-60 mb-2 uppercase tracking-wide">
             {isHistoricalDay
               ? `${selectedDay} 기준 자산`
+              : isHistoricalWeek
+              ? `${weekLabel(weekStart, weekEnd)} 기준 자산`
               : isHistoricalMonth
               ? `${selectedMonth} 기준 자산`
               : '오늘 기준 자산'}
@@ -898,7 +920,7 @@ export default function Dashboard() {
                             <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>
                             {diff !== 0 && (
                               <div className={`text-xs mt-1 font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                                {viewMode === 'day' ? '전일 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+                                {viewMode === 'day' ? '전일 대비' : viewMode === 'week' ? '전주 대비' : '전월 대비'} {diff >= 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
                               </div>
                             )}
                           </div>
