@@ -15,6 +15,23 @@ function fmtInput(s: string): string { const n = parseAmt(s); return n === 0 ? '
 
 const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
+
+// 날짜 필터: 월 이동/자동 기간 헬퍼
+function pad2(n: number) { return String(n).padStart(2, '0') }
+function todayYMD() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
+function addMonthStr(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, (m - 1) + delta, 1)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
+}
+// 선택한 월 → [시작일, 종료일]. 이번 달이면 1일~오늘, 지난 달이면 1일~말일
+function monthToRange(ym: string): [string, string] {
+  const from = `${ym}-01`
+  if (ym === currentMonth) return [from, todayYMD()]
+  const [y, m] = ym.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return [from, `${ym}-${pad2(last)}`]
+}
 type PaymentTab = 'all' | 'account' | 'card'
 type TxFormType = 'expense' | 'income' | 'transfer' | 'refund'
 
@@ -127,6 +144,7 @@ export default function TransactionsPage() {
   const [quickDateKey, setQuickDateKey] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [catParentFilter, setCatParentFilter] = useState('')
+  const [catFilterSearch, setCatFilterSearch] = useState('')
   const [fromBudgetLabel, setFromBudgetLabel] = useState('')
   const [accountChipSearch, setAccountChipSearch] = useState('')
   const [cardChipSearch, setCardChipSearch] = useState('')
@@ -227,6 +245,16 @@ export default function TransactionsPage() {
     if (newMonth) setMonth(newMonth)
   }
 
+  // 월 선택(화살표/월 입력) → 월 변경 + 자동 기간 설정(이번달 1일~오늘 / 지난달 1일~말일)
+  function selectMonth(ym: string) {
+    if (!ym) return
+    setMonth(ym)
+    const [from, to] = monthToRange(ym)
+    setFilterDateFrom(from)
+    setFilterDateTo(to)
+    setQuickDateKey('')
+  }
+
   function resetAllFilters() {
     setFilterDateFrom('')
     setFilterDateTo('')
@@ -234,6 +262,7 @@ export default function TransactionsPage() {
     setMonth(currentMonth)
     setFilterCategories([])
     setCatParentFilter('')
+    setCatFilterSearch('')
     setFilterType('all')
     setFilterAccount('all')
     setFilterCard('all')
@@ -847,6 +876,30 @@ export default function TransactionsPage() {
                 </div>
               </div>
             )}
+            {/* 카테고리 검색 — 위 칩에서 빠르게 찾아 선택 */}
+            <div className="border-t border-gray-100 p-2">
+              <input value={catFilterSearch} onChange={e => setCatFilterSearch(e.target.value)}
+                placeholder="카테고리 검색…"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {catFilterSearch.trim() && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {leafCats.filter(c => c.name.includes(catFilterSearch.trim())).slice(0, 30).map(cat => {
+                    const isSelected = filterCategories.includes(cat.id)
+                    return (
+                      <button key={cat.id}
+                        onClick={() => { setCatParentFilter(cat.parentId ?? ''); setFilterCategories([cat.id]); setCatFilterSearch('') }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex-shrink-0 ${isSelected ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                        style={isSelected ? { backgroundColor: cat.color || '#4B5563' } : {}}>
+                        {cat.icon} {cat.name}
+                      </button>
+                    )
+                  })}
+                  {leafCats.filter(c => c.name.includes(catFilterSearch.trim())).length === 0 && (
+                    <span className="text-xs text-gray-400 py-1">검색 결과가 없어요</span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )
       })()}
@@ -915,8 +968,15 @@ export default function TransactionsPage() {
           <span className="text-sm text-gray-700 font-medium">실소비만 보기</span>
           {realConsumptionFilter && <span className="text-xs text-blue-500">저축이체·카드대금 제외</span>}
         </div>
-        <input type="month" min="1900-01" max="2099-12" value={month} onChange={e => setMonth(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {/* 월 이동 화살표 + 월 선택 (선택 시 자동으로 기간 설정) */}
+        <div className="flex items-center border border-gray-200 rounded-lg">
+          <button type="button" onClick={() => selectMonth(addMonthStr(month, -1))}
+            className="w-7 h-8 flex items-center justify-center text-gray-500 hover:text-blue-600 text-lg">‹</button>
+          <input type="month" min="1900-01" max="2099-12" value={month} onChange={e => selectMonth(e.target.value)}
+            className="text-sm border-none outline-none bg-transparent text-center cursor-pointer w-[112px]" />
+          <button type="button" onClick={() => selectMonth(addMonthStr(month, 1))} disabled={month >= currentMonth}
+            className="w-7 h-8 flex items-center justify-center text-gray-500 hover:text-blue-600 text-lg disabled:opacity-25 disabled:cursor-not-allowed">›</button>
+        </div>
         <input type="date" min="1900-01-01" max="2099-12-31" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <span className="text-gray-400 text-sm self-center">~</span>
