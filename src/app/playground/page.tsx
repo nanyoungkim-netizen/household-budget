@@ -56,6 +56,10 @@ function DeltaChip({ value, prev, good }: { value: number; prev: number; good: '
 }
 
 const manTick = (v: number | string) => `${Math.round(Number(v) / 10000)}만`
+// 툴팁 컴팩트 스타일 (안 잘리게)
+const tipContent = { fontSize: 11, padding: '6px 9px', borderRadius: 8, lineHeight: 1.35 }
+const tipItem = { padding: 0, margin: 0 }
+const tipLabel = { fontSize: 11, fontWeight: 700, marginBottom: 2 }
 
 export default function PlaygroundPage() {
   const [detail, setDetail] = useState(false)
@@ -136,7 +140,7 @@ export default function PlaygroundPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={manTick} width={34} />
-                <Tooltip formatter={(v) => `${won(Number(v))}원`} />
+                <Tooltip formatter={(v) => `${won(Number(v))}원`} contentStyle={tipContent} itemStyle={tipItem} labelStyle={tipLabel} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="실소비" stackId="out" fill="#FF6B6B" />
                 <Bar dataKey="카드대금" stackId="out" fill="#F5A623" />
@@ -155,7 +159,7 @@ export default function PlaygroundPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} width={28} />
-                <Tooltip formatter={(v) => `${v}%`} />
+                <Tooltip formatter={(v) => `${v}%`} contentStyle={tipContent} itemStyle={tipItem} labelStyle={tipLabel} />
                 <Area dataKey="저축률" stroke="#0064FF" fill="#0064FF" fillOpacity={0.15} />
               </AreaChart>
             </ResponsiveContainer>
@@ -168,7 +172,7 @@ export default function PlaygroundPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={manTick} width={34} />
-                <Tooltip formatter={(v) => `${won(Number(v))}원`} />
+                <Tooltip formatter={(v) => `${won(Number(v))}원`} contentStyle={tipContent} itemStyle={tipItem} labelStyle={tipLabel} />
                 <Bar dataKey="소비" fill="#FF8E53" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
