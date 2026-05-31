@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan, WatchlistItem } from '@/types'
+import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan, WatchlistItem, NotificationLogItem } from '@/types'
 import { supabase } from './supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -105,6 +105,7 @@ interface AppData {
   budgetCarriedMonths: string[]
   dashboardMemo: string
   dismissedNotificationIds: string[]
+  notificationLog: NotificationLogItem[]
   investmentExchangeRates: Record<string, number>
   watchlist: WatchlistItem[]
   lastModified: string | null
@@ -138,6 +139,7 @@ const INITIAL_DATA: AppData = {
   budgetCarriedMonths: [],
   dashboardMemo: '',
   dismissedNotificationIds: [],
+  notificationLog: [],
   investmentExchangeRates: {},
   watchlist: [],
   lastModified: null,
@@ -251,6 +253,7 @@ interface AppContextType {
   setDashboardMemo: (memo: string) => void
   // 계정별 알림 dismiss
   setDismissedNotificationIds: (ids: string[]) => void
+  setNotificationLog: (log: NotificationLogItem[]) => void
   // 투자 환율 캐시
   setInvestmentExchangeRates: (rates: Record<string, number>) => void
   setWatchlist: (items: WatchlistItem[]) => void
@@ -615,6 +618,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       budgetCarriedMonths: raw.budgetCarriedMonths ?? [],
       dashboardMemo: raw.dashboardMemo ?? '',
       dismissedNotificationIds: raw.dismissedNotificationIds ?? [],
+      notificationLog: raw.notificationLog ?? [],
       investmentExchangeRates: raw.investmentExchangeRates ?? {},
       dashboardWidgetOrder: (() => {
         const stored = raw.dashboardWidgetOrder ?? null
@@ -1057,6 +1061,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, dismissedNotificationIds, lastModified: now() }))
   }, [update])
 
+  // 알림 로그는 메타성 데이터 → lastModified 안 건드림(동기화 충돌 영향 최소화)
+  const setNotificationLog = useCallback((notificationLog: NotificationLogItem[]) => {
+    update(d => ({ ...d, notificationLog }))
+  }, [update])
+
   const setInvestmentExchangeRates = useCallback((investmentExchangeRates: Record<string, number>) => {
     update(d => ({ ...d, investmentExchangeRates }))
   }, [update])
@@ -1256,6 +1265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setBudgetCarriedMonths,
       setDashboardMemo,
       setDismissedNotificationIds,
+      setNotificationLog,
       setInvestmentExchangeRates,
       setWatchlist,
       forceSyncNow,

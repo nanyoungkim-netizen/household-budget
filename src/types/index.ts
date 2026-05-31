@@ -43,6 +43,15 @@ export type PaymentMethod = 'account' | 'card'
 // PRD 2.1: 거래 소비 유형 (실소비 필터링)
 export type ConsumptionType = 'normal' | 'savings_transfer' | 'card_payment' | 'investment'
 
+// 알림 내역(로그) — 유효기간이 지나도 남고, 사용자가 완전 삭제하기 전까지 누적
+export interface NotificationLogItem {
+  id: string
+  type: string          // annual_fee | savings_maturity | announcement ...
+  title: string
+  subtitle: string
+  createdAt: string      // 처음 기록된 시각(ISO)
+}
+
 // 적금/예금 상품 연동 (PRD: 적금예금관리 자동연동)
 export interface SavingLink {
   savingId: string

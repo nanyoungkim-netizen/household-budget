@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
-import { Transaction } from '@/types'
+import { Transaction, NotificationLogItem } from '@/types'
 
 // 매일 바뀌는 기분전환 코멘트 (날짜 기준 고정 → 같은 날 새로고침해도 안 바뀜)
 const DAILY_COMMENTS = [
@@ -117,9 +117,9 @@ function calcStats(txs: Transaction[]) {
 }
 
 export default function Dashboard() {
-  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo, setDismissedNotificationIds, setInvestmentExchangeRates } = useApp()
+  const { data, categories, setDashboardWidgetOrder, setInvestments, setDashboardMemo, setDismissedNotificationIds, setNotificationLog, setInvestmentExchangeRates } = useApp()
   const router = useRouter()
-  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, investmentAccounts, investmentCashDeposits, investmentDividends, cardBillings, dashboardMemo, dismissedNotificationIds, investmentExchangeRates } = data
+  const { accounts, transactions, goals, budgets, savings, cards, lastModified, isSetupComplete, categoryExcludeMonths, investments, investmentTrades, investmentAccounts, investmentCashDeposits, investmentDividends, cardBillings, dashboardMemo, dismissedNotificationIds, notificationLog, investmentExchangeRates } = data
 
   type ViewMode = 'day' | 'week' | 'month'
   const [greeting] = useState(dailyComment)   // 매일 바뀌는 코멘트 (마운트 시 1회 계산)
@@ -249,9 +249,6 @@ export default function Dashboard() {
     setDismissedNotificationIds([...dismissedNotificationIds, id])
   }, [dismissedNotificationIds, setDismissedNotificationIds])
 
-  const restoreNotif = useCallback((id: string) => {
-    setDismissedNotificationIds(dismissedNotificationIds.filter(x => x !== id))
-  }, [dismissedNotificationIds, setDismissedNotificationIds])
 
   const isToday      = selectedDay === todayStr
   const isThisMonth  = selectedMonth === currentMonth
@@ -559,6 +556,28 @@ export default function Dashboard() {
 
   const activeNotifs    = allNotifications.filter(n => !dismissedIds.has(n.id))
 
+  // 알림 내역(영구 로그) — 열 때 현재 알림을 누적 기록. 만료돼도 남고, 완전 삭제 전까지 유지
+  function openNotifHistory() {
+    const nowIso = new Date().toISOString()
+    const current: NotificationLogItem[] = allNotifications.map(n => ({
+      id: n.id, type: n.type, title: n.title, subtitle: n.subtitle, createdAt: nowIso,
+    }))
+    if (todayStr <= FEATURE_ANNOUNCE.until) {
+      current.push({ id: FEATURE_ANNOUNCE.id, type: 'announcement', title: FEATURE_ANNOUNCE.title, subtitle: FEATURE_ANNOUNCE.items.join(' · '), createdAt: nowIso })
+    }
+    const logged = new Set(notificationLog.map(n => n.id))
+    const additions = current.filter(a => !logged.has(a.id))
+    if (additions.length > 0) setNotificationLog([...notificationLog, ...additions])
+    setShowNotifHistory(true)
+  }
+  function deleteLogItem(id: string) {
+    setNotificationLog(notificationLog.filter(n => n.id !== id))
+  }
+  function clearNotifLog() {
+    setNotificationLog([])
+  }
+  const sortedLog = [...notificationLog].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
   // ── 라벨 ─────────────────────────────────────────────────────────────────
   const periodLabel = viewMode === 'day' ? dayLabel(selectedDay)
     : viewMode === 'week' ? weekLabel(weekStart, weekEnd)
@@ -636,7 +655,7 @@ export default function Dashboard() {
           {/* 알림 내역 버튼 */}
           <div className="flex justify-end">
             <button
-              onClick={() => setShowNotifHistory(true)}
+              onClick={openNotifHistory}
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1 px-2 rounded-lg hover:bg-gray-100">
               🔔 알림 내역
               {activeNotifs.length > 0 && (
@@ -661,49 +680,36 @@ export default function Dashboard() {
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto">
-              {allNotifications.length === 0 ? (
+              {sortedLog.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <div className="text-3xl mb-2">🔕</div>
-                  <p className="text-sm">알림이 없어요</p>
+                  <p className="text-sm">알림 내역이 없어요</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-50">
-                  {allNotifications.map(n => {
-                    const isDismissed = dismissedIds.has(n.id)
-                    const icon = n.type === 'annual_fee' ? '💳' : '🏦'
-                    const urgencyLabel = n.daysUntil <= 7 ? 'text-red-500' : n.daysUntil <= 14 ? 'text-amber-500' : 'text-blue-500'
+                  {sortedLog.map(n => {
+                    const icon = n.type === 'announcement' ? '🎉' : n.type === 'annual_fee' ? '💳' : '🏦'
                     return (
-                      <div key={n.id} className={`flex items-start gap-3 px-5 py-4 ${isDismissed ? 'opacity-40' : ''}`}>
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-gray-100">
-                          {icon}
-                        </div>
+                      <div key={n.id} className="flex items-start gap-3 px-5 py-4">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-gray-100">{icon}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-semibold text-gray-800">{n.title}</span>
-                            {isDismissed && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">닫음</span>}
-                          </div>
+                          <div className="text-sm font-semibold text-gray-800">{n.title}</div>
                           <div className="text-xs text-gray-500 mt-0.5">{n.subtitle}</div>
-                          <div className={`text-xs font-semibold mt-1 ${urgencyLabel}`}>D-{n.daysUntil}</div>
+                          <div className="text-[11px] text-gray-300 mt-1">{fmtDate(n.createdAt)}</div>
                         </div>
-                        {isDismissed ? (
-                          <button
-                            onClick={() => restoreNotif(n.id)}
-                            className="text-xs text-blue-500 hover:text-blue-700 font-medium flex-shrink-0 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
-                            복원
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => dismissNotif(n.id)}
-                            className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
-                            닫기
-                          </button>
-                        )}
+                        <button onClick={() => deleteLogItem(n.id)}
+                          className="text-xs text-gray-300 hover:text-red-500 flex-shrink-0 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">삭제</button>
                       </div>
                     )
                   })}
                 </div>
               )}
             </div>
+            {sortedLog.length > 0 && (
+              <div className="px-5 py-3 border-t border-gray-100 text-right">
+                <button onClick={clearNotifLog} className="text-xs text-gray-400 hover:text-red-500">전체 삭제</button>
+              </div>
+            )}
           </div>
         </div>
       )}
