@@ -3,7 +3,7 @@
 // ⚠️ 프로토타입 — '통계 탭 개편안' 미리보기. 실제 데이터 아님(샘플).
 import { useState } from 'react'
 import {
-  BarChart, Bar, AreaChart, Area,
+  BarChart, Bar, AreaChart, Area, ComposedChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 
@@ -33,12 +33,12 @@ const INSIGHTS = [
 ]
 
 const TREND = [
-  { label: '12월', 수입: 2900000, 실소비: 1350000, 저축: 300000, 저축률: 10 },
-  { label: '1월',  수입: 3100000, 실소비: 1280000, 저축: 350000, 저축률: 11 },
-  { label: '2월',  수입: 3050000, 실소비: 1400000, 저축: 380000, 저축률: 12 },
-  { label: '3월',  수입: 3000000, 실소비: 1250000, 저축: 400000, 저축률: 13 },
-  { label: '4월',  수입: 3050000, 실소비: 1304000, 저축: 417000, 저축률: 14 },
-  { label: '5월',  수입: 3200000, 실소비: 1200000, 저축: 500000, 저축률: 16 },
+  { label: '12월', 수입: 2900000, 실소비: 1350000, 카드대금: 1650000, 저축: 300000, 투자: 100000, 제외: 60000, 저축률: 10 },
+  { label: '1월',  수입: 3100000, 실소비: 1280000, 카드대금: 1700000, 저축: 350000, 투자: 120000, 제외: 40000, 저축률: 11 },
+  { label: '2월',  수입: 3050000, 실소비: 1400000, 카드대금: 1620000, 저축: 380000, 투자: 150000, 제외: 90000, 저축률: 12 },
+  { label: '3월',  수입: 3000000, 실소비: 1250000, 카드대금: 1550000, 저축: 400000, 투자: 200000, 제외: 50000, 저축률: 13 },
+  { label: '4월',  수입: 3050000, 실소비: 1304000, 카드대금: 1795000, 저축: 417000, 투자: 150000, 제외: 70000, 저축률: 14 },
+  { label: '5월',  수입: 3200000, 실소비: 1200000, 카드대금: 1580000, 저축: 500000, 투자: 300000, 제외: 50000, 저축률: 16 },
 ]
 const DOW = [
   { label: '월', 소비: 180000 }, { label: '화', 소비: 120000 }, { label: '수', 소비: 150000 },
@@ -129,18 +129,22 @@ export default function PlaygroundPage() {
       {detail && (
         <div className="space-y-3 mt-2">
           <div className="bg-white rounded-2xl shadow-sm p-4">
-            <div className="text-sm font-bold text-gray-800 mb-3">최근 6개월 수입 · 실소비 · 저축</div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={TREND} barGap={2} barCategoryGap="28%">
+            <div className="text-sm font-bold text-gray-800 mb-0.5">최근 6개월 나간 돈 구성</div>
+            <div className="text-[11px] text-gray-400 mb-3">막대 = 나간 돈(실소비·카드대금·저축·투자·제외), 선 = 수입</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={TREND} barCategoryGap="28%">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={manTick} width={34} />
                 <Tooltip formatter={(v) => `${won(Number(v))}원`} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="수입" fill="#10B981" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="실소비" fill="#FF6B6B" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="저축" fill="#0064FF" radius={[3, 3, 0, 0]} />
-              </BarChart>
+                <Bar dataKey="실소비" stackId="out" fill="#FF6B6B" />
+                <Bar dataKey="카드대금" stackId="out" fill="#F5A623" />
+                <Bar dataKey="저축" stackId="out" fill="#0064FF" />
+                <Bar dataKey="투자" stackId="out" fill="#6366F1" />
+                <Bar dataKey="제외" stackId="out" fill="#8B5CF6" radius={[3, 3, 0, 0]} />
+                <Line dataKey="수입" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
