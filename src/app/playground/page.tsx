@@ -1,311 +1,126 @@
 'use client'
 
-// ⚠️ 프로토타입(미리보기) 전용 페이지 — 실제 데이터/기능 아님. UI 방향 확인용.
+// ⚠️ 프로토타입 — '통계 탭 개편안' 미리보기. 실제 데이터 아님(샘플).
 import { useState } from 'react'
-import type { CSSProperties } from 'react'
-import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
-import type { DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
-// ── 헬퍼 ──────────────────────────────────────────────────────────────────────
-function pad(n: number) { return String(n).padStart(2, '0') }
 function won(n: number) { return n.toLocaleString('ko-KR') }
-function lastDay(y: number, m0: number) { return new Date(y, m0 + 1, 0).getDate() }
-function weekRange(ref: Date): [Date, Date] {
-  const d = new Date(ref)
-  const dow = (d.getDay() + 6) % 7 // 월요일=0
-  const mon = new Date(d); mon.setDate(d.getDate() - dow)
-  const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
-  return [mon, sun]
-}
 
-// 순수 기분전환 코멘트 풀
-const COMMENTS = [
-  '오늘도 좋은 하루 되세요 ☀️',
-  '잘하고 있어요, 그거 알죠? 💪',
-  '작은 기록이 큰 변화를 만들어요 🌱',
-  '오늘의 나, 충분히 멋져요 ✨',
-  '한 걸음씩이면 충분해요 🐢',
-  '좋은 일이 생길 것 같은 날이에요 🍀',
-  '천천히, 그러나 꾸준히 🌟',
-  '스스로를 칭찬해주는 하루 되길 🤍',
+// 비교 행 (good = 좋은 방향)
+type Row = { label: string; value: number; prev: number; good: 'up' | 'down'; strong?: boolean }
+const ROWS: Row[] = [
+  { label: '수입',     value: 3200000, prev: 3050000, good: 'up' },
+  { label: '실소비',   value: 1200000, prev: 1304000, good: 'down', strong: true },
+  { label: '카드대금', value: 1580000, prev: 1795000, good: 'down', strong: true },
+  { label: '저축',     value: 500000,  prev: 417000,  good: 'up' },
+  { label: '투자',     value: 300000,  prev: 150000,  good: 'up' },
 ]
 
-const CATEGORY_SAMPLES = ['수입', '관리비', '적금', '교통비', '통신비', '보험료', '식비', '기타지출', '여행통장', '쇼핑·미용', '구독료', '자기계발']
-
-// 기존 '기초설정 → 카테고리'의 역할 옵션(없음/적금·예금/카드대금) + 💹 투자 추가
-const ROLE_OPTS: [string, string][] = [
-  ['none', '없음'], ['savings', '💰 적금·예금'], ['card_payment', '💳 카드대금'], ['investment', '💹 투자'],
+const TOP_CATS = [
+  { name: '식비',      icon: '🍽️', value: 420000, prev: 380000 },
+  { name: '쇼핑·미용', icon: '🛍️', value: 280000, prev: 350000 },
+  { name: '교통비',    icon: '🚌', value: 95000,  prev: 88000 },
+  { name: '술·음료',   icon: '🍺', value: 80000,  prev: 120000 },
+  { name: '여행',      icon: '✈️', value: 60000,  prev: 0 },
 ]
 
-// ② 대표 숫자 버킷 (순서 변경 가능) — '지출 상세 분석' 카드 스타일
-const BUCKETS: Record<string, { value: number; bg: string; label: string; val: string }> = {
-  '수입': { value: 3200000, bg: 'bg-emerald-50', label: 'text-emerald-400', val: 'text-emerald-600' },
-  '지출': { value: 1200000, bg: 'bg-red-50',     label: 'text-red-400',     val: 'text-red-500' },
-  '저축': { value: 500000,  bg: 'bg-blue-50',    label: 'text-blue-400',    val: 'text-blue-600' },
-  '투자': { value: 300000,  bg: 'bg-purple-50',  label: 'text-purple-400',  val: 'text-purple-600' },
-  '제외': { value: 250000,  bg: 'bg-gray-100',   label: 'text-gray-400',    val: 'text-gray-500' },
-}
-const DEFAULT_ORDER = ['수입', '지출', '저축', '투자', '제외']
-const ORDER_KEY = 'pg_bucket_order'
+const INSIGHTS = [
+  '💳 카드값이 지난달보다 12% 줄었어요 👏',
+  '📈 투자를 지난달보다 2배 했어요',
+  '🔮 이 페이스면 이번 달 실소비 약 155만원 예상돼요',
+]
 
-// 드래그로 순서 변경되는 카드 (카드 전체가 드래그 핸들)
-function SortableCard({ id }: { id: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const b = BUCKETS[id]
-  const sign = id === '수입' ? '+' : '-'
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-    zIndex: isDragging ? 10 : undefined,
+// 전월 대비 칩
+function DeltaChip({ value, prev, good }: { value: number; prev: number; good: 'up' | 'down' }) {
+  if (prev === 0) {
+    return <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-600">NEW</span>
   }
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}
-      className={`${b.bg} rounded-xl p-3 touch-none select-none cursor-grab active:cursor-grabbing`}>
-      <div className={`text-xs ${b.label} mb-0.5`}>{id}</div>
-      <div className={`text-sm font-bold ${b.val} whitespace-nowrap`}>{sign}{won(b.value)}원</div>
-    </div>
-  )
-}
-
-function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-gray-50 rounded-2xl p-4 mb-5">
-      <div className="text-sm font-bold text-gray-800">{title}</div>
-      <div className="text-xs text-gray-400 mb-3">{desc}</div>
-      {children}
-    </div>
-  )
+  if (value === prev) {
+    return <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-400">— 0%</span>
+  }
+  const isUp = value > prev
+  const pct = Math.round(Math.abs((value - prev) / prev) * 100)
+  const isGood = (good === 'up' && isUp) || (good === 'down' && !isUp)
+  const cls = isGood ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+  return <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${cls}`}>{isUp ? '▲' : '▼'} {pct}%</span>
 }
 
 export default function PlaygroundPage() {
-  const today = new Date()
-
-  // ── 대시보드: 일/주/월 + 네비게이터 ──
-  const [view, setView] = useState<'day' | 'week' | 'month'>('day')
-  const [dashRef, setDashRef] = useState<Date>(new Date(today))
-
-  function moveDash(dir: number) {
-    const d = new Date(dashRef)
-    if (view === 'day') d.setDate(d.getDate() + dir)
-    else if (view === 'week') d.setDate(d.getDate() + dir * 7)
-    else d.setMonth(d.getMonth() + dir)
-    setDashRef(d)
-  }
-  const dashLabel = (() => {
-    if (view === 'day') return `${dashRef.getFullYear()}.${pad(dashRef.getMonth() + 1)}.${pad(dashRef.getDate())}`
-    if (view === 'week') { const [m, s] = weekRange(dashRef); return `${m.getMonth() + 1}.${m.getDate()} ~ ${s.getMonth() + 1}.${s.getDate()}` }
-    return `${dashRef.getFullYear()}.${pad(dashRef.getMonth() + 1)}`
-  })()
-
-  // 샘플 숫자
-  const sample = view === 'day'
-    ? { income: 0, expense: 32000, net: -32000 }
-    : view === 'week'
-      ? { income: 0, expense: 214000, net: -214000 }
-      : { income: 3200000, expense: 1840000, net: 1360000 }
-
-  // ── 코멘트 ──
-  const [commentIdx, setCommentIdx] = useState(0)
-
-  // ── 거래내역: 카테고리 역할(성격) ──
-  const [roles, setRoles] = useState<Record<string, string>>({
-    '식비': 'none', '적금': 'savings', '카드대금': 'card_payment', '주식 매수': 'investment',
-  })
-
-  // ── 거래내역: 대표 숫자 카드 순서 (사용자가 바꾸면 저장) ──
-  const [order, setOrder] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return DEFAULT_ORDER
-    try {
-      const s = localStorage.getItem(ORDER_KEY)
-      if (s) { const a = JSON.parse(s); if (Array.isArray(a) && a.length === DEFAULT_ORDER.length) return a }
-    } catch { /* ignore */ }
-    return DEFAULT_ORDER
-  })
-  // 드래그(터치=꾹 눌러서, 마우스=조금 움직이면) 시작
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
-  )
-  function onDragEnd(e: DragEndEvent) {
-    const { active, over } = e
-    if (!over || active.id === over.id) return
-    setOrder(prev => {
-      const next = arrayMove(prev, prev.indexOf(String(active.id)), prev.indexOf(String(over.id)))
-      try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* ignore */ }
-      return next
-    })
-  }
-
-  // ── 거래내역: 카테고리 검색 ──
-  const [catQuery, setCatQuery] = useState('')
-  const filteredCats = CATEGORY_SAMPLES.filter(c => c.includes(catQuery.trim()))
-
-  // ── 거래내역: 날짜 필터 ──
-  const [fMonth, setFMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
-  function autoRange(monthDate: Date): [string, string] {
-    const y = monthDate.getFullYear(), m0 = monthDate.getMonth()
-    const isThisMonth = y === today.getFullYear() && m0 === today.getMonth()
-    const from = `${y}-${pad(m0 + 1)}-01`
-    const to = isThisMonth ? `${y}-${pad(m0 + 1)}-${pad(today.getDate())}` : `${y}-${pad(m0 + 1)}-${pad(lastDay(y, m0))}`
-    return [from, to]
-  }
-  const [range, setRange] = useState<[string, string]>(() => autoRange(new Date(today.getFullYear(), today.getMonth(), 1)))
-  function moveMonth(dir: number) {
-    const d = new Date(fMonth); d.setMonth(d.getMonth() + dir)
-    setFMonth(d); setRange(autoRange(d))
-  }
+  const [detail, setDetail] = useState(false)
+  const topMax = Math.max(...TOP_CATS.map(c => c.value))
 
   return (
     <div className="p-4 md:p-6 max-w-xl mx-auto">
-      <div className="mb-5">
-        <div className="inline-block text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-lg mb-2">🧪 프로토타입 · 실제 데이터 아님</div>
-        <h1 className="text-xl font-bold text-gray-900">UI 미리보기</h1>
-        <p className="text-sm text-gray-500 mt-1">눌러보고 마음에 드는 방향을 골라주세요. 여기서 OK 나면 실제 화면에 반영할게요.</p>
+      <div className="inline-block text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-lg mb-2">🧪 프로토타입 · 통계 개편안 · 샘플 데이터</div>
+      <h1 className="text-xl font-bold text-gray-900">통계 미리보기</h1>
+      <p className="text-sm text-gray-500 mt-1 mb-4">문득 궁금할 때 3초 만에 답을 주는 방향. (차트는 &lsquo;자세히&rsquo;로)</p>
+
+      {/* 기간 */}
+      <div className="flex items-center justify-center gap-2 mb-3 text-sm">
+        <span className="font-bold text-gray-800">2026년 5월</span>
+        <span className="text-xs text-gray-400">vs 지난달(4월)</span>
       </div>
 
-      {/* 1. 대시보드 요약 카드 */}
-      <Section title="① 대시보드 — 인사 코멘트 + 요약 카드" desc="실제 적용: 맨 위 '안녕하세요' 자리를 코멘트로 교체 + 이 카드만 교체. 아래 자산별·총잔액은 그대로 유지!">
-        {/* 코멘트 */}
-        <div className="bg-white rounded-2xl p-4 mb-3 flex items-center justify-between gap-3">
-          <div className="text-base font-bold text-gray-900">{COMMENTS[commentIdx]}</div>
-          <button onClick={() => setCommentIdx(i => (i + 1) % COMMENTS.length)}
-            className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0">🎲 다른 코멘트</button>
-        </div>
-
-        {/* 일/주/월 토글 + 네비 */}
-        <div className="bg-white rounded-2xl p-3 mb-3 flex items-center gap-2">
-          <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
-            {(['day', 'week', 'month'] as const).map(m => (
-              <button key={m} onClick={() => setView(m)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${view === m ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
-                {m === 'day' ? '일별' : m === 'week' ? '주별' : '월별'}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 flex-1 justify-center">
-            <button onClick={() => moveDash(-1)} className="w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-500 text-lg">‹</button>
-            <span className="text-sm font-semibold text-gray-800 min-w-[110px] text-center">{dashLabel}</span>
-            <button onClick={() => moveDash(1)} className="w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-500 text-lg">›</button>
-          </div>
-          <button onClick={() => setDashRef(new Date(today))}
-            className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1.5 flex-shrink-0">
-            {view === 'day' ? '오늘' : view === 'week' ? '이번주' : '이번달'}
-          </button>
-        </div>
-
-        {/* 요약 카드 — 기존 스타일 그대로, 일별에서 순수입만 제외 */}
-        <div className="bg-blue-600 rounded-2xl p-5 text-white">
-          <div className="text-xs opacity-70 mb-3">{dashLabel} 현황</div>
-          <div className={`grid gap-2 ${view === 'day' ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            <div className="bg-white/10 rounded-xl p-3">
-              <div className="text-xs opacity-70 mb-1">수입</div>
-              <div className="text-base font-bold tabular-nums">+{won(sample.income)}</div>
-            </div>
-            <div className="bg-white/10 rounded-xl p-3">
-              <div className="text-xs opacity-70 mb-1">지출</div>
-              <div className="text-base font-bold tabular-nums">-{won(sample.expense)}</div>
-            </div>
-            {view !== 'day' && (
-              <div className={`rounded-xl p-3 ${sample.net >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
-                <div className="text-xs opacity-70 mb-1">순수입</div>
-                <div className="text-base font-bold tabular-nums">{sample.net >= 0 ? '+' : ''}{won(sample.net)}</div>
-              </div>
-            )}
-          </div>
-          {view === 'day' && <div className="text-[11px] opacity-60 mt-2">일별은 순수입 빼고 수입·지출만</div>}
-        </div>
-        {/* 실제 화면엔 이 아래에 기존 자산별 금액·총잔액이 그대로 유지돼요 */}
-        <div className="mt-2 border-2 border-dashed border-gray-200 rounded-xl p-3 text-center text-[11px] text-gray-400">
-          ↓ 실제 대시보드엔 여기 아래로 기존 <b>자산별 금액·총잔액</b>이 그대로 있어요 (안 건드림)
-        </div>
-      </Section>
-
-      {/* 2. 거래내역 대표 숫자 — '지출 상세 분석' 크기 + 드래그 정렬 */}
-      <Section title="② 거래내역 — 대표 숫자 (드래그로 순서 변경)" desc="'지출 상세 분석' 카드 크기. 카드를 꾹 눌러 옆·위아래로 끌어서 순서 변경 → 저장됨(재방문해도 유지)">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={order} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-2 gap-2">
-              {order.map(id => <SortableCard key={id} id={id} />)}
-            </div>
-          </SortableContext>
-        </DndContext>
-        <button
-          onClick={() => { setOrder(DEFAULT_ORDER); try { localStorage.removeItem(ORDER_KEY) } catch { /* ignore */ } }}
-          className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-2">기본 순서로 되돌리기</button>
-        <div className="text-[11px] text-gray-400 mt-2">※ &apos;제외&apos; = 카드대금·여행통장 등 예산에서 빼둔 항목. (PC는 살짝 끌면, 모바일은 꾹 눌렀다 끌면 이동)</div>
-      </Section>
-
-      {/* 3. 카테고리 역할 — 기존 + 투자 추가 */}
-      <Section title="③ 카테고리 역할 — 기존 그대로 + 💹 투자만 추가" desc="새 화면 아님! '기초설정 → 카테고리'의 역할(없음/적금·예금/카드대금)에 투자 옵션만 더함">
-        <div className="space-y-2">
-          {['식비', '적금', '카드대금', '주식 매수'].map(cat => (
-            <div key={cat} className="bg-white rounded-xl p-2.5 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-gray-700 flex-shrink-0">{cat}</span>
-              <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 flex-wrap justify-end">
-                {ROLE_OPTS.map(([val, label]) => (
-                  <button key={val} onClick={() => setRoles(s => ({ ...s, [cat]: val }))}
-                    className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${
-                      (roles[cat] ?? 'none') === val ? 'bg-blue-600 text-white' : 'text-gray-400'
-                    }`}>
-                    {label}
-                  </button>
-                ))}
+      {/* ① 이번 달 한눈에 */}
+      <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
+        <div className="text-sm font-bold text-gray-800 mb-3">이번 달 한눈에</div>
+        <div className="space-y-2.5">
+          {ROWS.map(r => (
+            <div key={r.label} className="flex items-center justify-between">
+              <span className={`text-gray-700 ${r.strong ? 'text-sm font-semibold' : 'text-sm'}`}>{r.label}</span>
+              <div className="flex items-center gap-2">
+                <span className={`tabular-nums text-gray-900 ${r.strong ? 'text-base font-bold' : 'text-sm font-semibold'}`}>{won(r.value)}원</span>
+                <DeltaChip value={r.value} prev={r.prev} good={r.good} />
               </div>
             </div>
           ))}
         </div>
-        <div className="text-[11px] text-gray-400 mt-2">※ &apos;투자&apos; 역할인 카테고리는 ②의 투자 버킷으로 집계돼요</div>
-      </Section>
+      </div>
 
-      {/* 4. 카테고리 검색 */}
-      <Section title="④ 거래내역 — 카테고리 검색칸" desc="기존 필터는 그대로, 그 아래에 검색칸 추가 → 빠르게 찾아 선택">
-        <input
-          value={catQuery}
-          onChange={e => setCatQuery(e.target.value)}
-          placeholder="카테고리 검색…"
-          className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {filteredCats.map(c => (
-            <span key={c} className="text-xs bg-white border border-gray-200 rounded-full px-3 py-1.5 text-gray-600">{c}</span>
+      {/* ② 인사이트 */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 mb-4">
+        <div className="text-xs font-semibold text-blue-600 mb-2">한 줄 인사이트</div>
+        <ul className="space-y-1.5">
+          {INSIGHTS.map((t, i) => (
+            <li key={i} className="text-sm text-gray-700">{t}</li>
           ))}
-          {filteredCats.length === 0 && <span className="text-xs text-gray-400 py-1.5">검색 결과가 없어요</span>}
-        </div>
-      </Section>
+        </ul>
+      </div>
 
-      {/* 5. 날짜 필터 */}
-      <Section title="⑤ 거래내역 — 날짜 필터" desc="월 화살표 이동 → 자동 기간(이번 달은 1일~오늘, 지난 달은 1일~말일) + 직접 수정 가능">
-        <div className="bg-white rounded-2xl p-3">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <button onClick={() => moveMonth(-1)} className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 text-lg">‹</button>
-            <span className="text-sm font-bold text-gray-800 min-w-[90px] text-center">{fMonth.getFullYear()}.{pad(fMonth.getMonth() + 1)}</span>
-            <button onClick={() => moveMonth(1)} className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 text-lg">›</button>
-          </div>
-          <div className="flex gap-1.5 justify-center mb-3">
-            {[
-              { label: '이번 달', fn: () => { const d = new Date(today.getFullYear(), today.getMonth(), 1); setFMonth(d); setRange(autoRange(d)) } },
-              { label: '지난 달', fn: () => { const d = new Date(today.getFullYear(), today.getMonth() - 1, 1); setFMonth(d); setRange(autoRange(d)) } },
-            ].map(p => (
-              <button key={p.label} onClick={p.fn}
-                className="text-xs bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 text-gray-600">{p.label}</button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 justify-center">
-            <input type="date" value={range[0]} onChange={e => setRange([e.target.value, range[1]])}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5" />
-            <span className="text-gray-400">~</span>
-            <input type="date" value={range[1]} onChange={e => setRange([range[0], e.target.value])}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5" />
-          </div>
-          <div className="text-[11px] text-gray-400 text-center mt-2">선택 기간: {range[0]} ~ {range[1]}</div>
+      {/* ③ 어디에 많이 썼나 */}
+      <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
+        <div className="text-sm font-bold text-gray-800 mb-3">어디에 많이 썼나 <span className="text-xs text-gray-400 font-normal">(실소비 TOP 5)</span></div>
+        <div className="space-y-3">
+          {TOP_CATS.map(c => (
+            <div key={c.name}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-gray-700">{c.icon} {c.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold tabular-nums text-gray-900">{won(c.value)}원</span>
+                  <DeltaChip value={c.value} prev={c.prev} good="down" />
+                </div>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full">
+                <div className="h-1.5 rounded-full bg-red-300" style={{ width: `${(c.value / topMax) * 100}%` }} />
+              </div>
+            </div>
+          ))}
         </div>
-      </Section>
+      </div>
 
-      <div className="text-center text-xs text-gray-400 py-4">
-        마음에 드는 것 / 바꾸고 싶은 것 알려주세요. 확정되면 실제 화면에 반영할게요 😊
+      {/* 자세히 보기 (접힘) */}
+      <button onClick={() => setDetail(d => !d)}
+        className="w-full bg-white rounded-2xl shadow-sm p-4 text-sm font-medium text-gray-600 flex items-center justify-center gap-2">
+        📊 자세히 보기 (월별 추이·요일별·카드별 차트) {detail ? '▲' : '▼'}
+      </button>
+      {detail && (
+        <div className="bg-white rounded-2xl shadow-sm p-5 mt-2 text-center text-xs text-gray-400 border-2 border-dashed border-gray-200">
+          여기에 기존 차트들(6개월 추이, 저축률, 요일별, 결제수단별 등)이 들어가요.<br />
+          보고 싶은 사람만 펼쳐 보는 보조 영역으로.
+        </div>
+      )}
+
+      <div className="text-center text-xs text-gray-400 py-5">
+        이 방향 괜찮은지 / 빼거나 더할 것 알려주세요 😊
       </div>
     </div>
   )
