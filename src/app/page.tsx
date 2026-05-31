@@ -558,7 +558,6 @@ export default function Dashboard() {
   }, [cards, savings])
 
   const activeNotifs    = allNotifications.filter(n => !dismissedIds.has(n.id))
-  const dismissedNotifs = allNotifications.filter(n =>  dismissedIds.has(n.id))
 
   // ── 라벨 ─────────────────────────────────────────────────────────────────
   const periodLabel = viewMode === 'day' ? dayLabel(selectedDay)
@@ -599,9 +598,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── 통합 알림 배너 (연회비 + 적금 만기) ─────────────────────────────── */}
-      {(activeNotifs.length > 0 || dismissedNotifs.length > 0) && (
-        <div className="mb-4">
+      {/* ── 통합 알림 배너 (연회비 + 적금 만기) + 알림 내역 버튼(항상 표시) ──── */}
+      <div className="mb-4">
           {/* 활성 알림 */}
           {activeNotifs.length > 0 && (
             <div className="space-y-2 mb-2">
@@ -648,8 +646,7 @@ export default function Dashboard() {
               )}
             </button>
           </div>
-        </div>
-      )}
+      </div>
 
       {/* ── 알림 내역 모달 ────────────────────────────────────────────────────── */}
       {showNotifHistory && (
