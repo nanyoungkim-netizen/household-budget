@@ -342,8 +342,9 @@ export default function StatisticsPage() {
         out.push(`🔮 이 페이스면 이번 달 실소비 약 ${fmtShort(Math.round(selStats.realConsumption / day * dim))}원 예상돼요`)
       }
     }
-    const srDiff = selStats.savingRate - prevSelStats.savingRate
-    if (Math.abs(srDiff) >= 2) out.push(`${srDiff > 0 ? '🌱 저축률이 올랐어요' : '💡 저축률이 지난달보다 낮아요'} (${srDiff > 0 ? '+' : ''}${srDiff.toFixed(0)}%p)`)
+    // 저축은 '금액' 기준 (저축률은 수입 변동에 휘둘려서 오해를 줌)
+    const sv = pct(selStats.savingAmt, prevSelStats.savingAmt)
+    if (sv !== null && Math.abs(sv) >= 5) out.push(`${sv > 0 ? `🌱 저축을 지난달보다 ${sv}% 더 했어요` : `💡 저축이 지난달보다 ${Math.abs(sv)}% 줄었어요`}`)
     return out.slice(0, 3)
   }, [selStats, prevSelStats, statMonth])
 
