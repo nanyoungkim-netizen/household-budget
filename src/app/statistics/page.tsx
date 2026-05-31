@@ -104,32 +104,34 @@ export default function StatisticsPage() {
     const expense   = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
     const savingAmt = txs.filter(t => t.type === 'expense' && isSaving(t)).reduce((s, t) => s + t.amount, 0)
     const investAmt = txs.filter(t => t.type === 'expense' && isInvest(t)).reduce((s, t) => s + t.amount, 0)
-    // 수동 제외 금액 (저축·투자 제외 후, categoryExcludeMonths 기준)
+    const cardPayAmt = txs.filter(t => t.type === 'expense' && isCardPayment(t)).reduce((s, t) => s + t.amount, 0)
+    // 수동 제외 금액 (저축·투자·카드대금 제외 후, categoryExcludeMonths 기준)
     const excludedAmt = txs.filter(t => {
       if (t.type !== 'expense') return false
-      if (isSaving(t) || isInvest(t)) return false
+      if (isSaving(t) || isInvest(t) || isCardPayment(t)) return false
       const cat = catMap.get(t.categoryId)
       if (!cat) return false
       if ((categoryExcludeMonths[cat.id] ?? []).includes(m)) return true
       const parent = cat.parentId ? catMap.get(cat.parentId) : undefined
       return !!parent && (categoryExcludeMonths[parent.id] ?? []).includes(m)
     }).reduce((s, t) => s + t.amount, 0)
-    const realConsumption = Math.max(0, expense - savingAmt - investAmt - excludedAmt - refund)
+    // 실소비 = 전체 지출에서 저축·투자·카드대금·제외 모두 뺀 '실제 소비'
+    const realConsumption = Math.max(0, expense - savingAmt - investAmt - cardPayAmt - excludedAmt - refund)
     const savingRate      = income > 0 ? (savingAmt / income) * 100 : 0
     const netIncome       = income - realConsumption - savingAmt - investAmt
-    return { income, expense, savingAmt, investAmt, excludedAmt, realConsumption, savingRate, netIncome, refund }
-  }, [transactions, isSaving, isInvest, catMap, categoryExcludeMonths])
+    return { income, expense, savingAmt, investAmt, cardPayAmt, excludedAmt, realConsumption, savingRate, netIncome, refund }
+  }, [transactions, isSaving, isInvest, isCardPayment, catMap, categoryExcludeMonths])
 
   // ── KPI (이번달·전월) ───────────────────────────────────────────────────
   const thisStats = useMemo(() => getMonthStats(currentMonth), [getMonthStats])
-  const lastStats = useMemo(() => getMonthStats(addMonths(currentMonth, -1)), [getMonthStats])
+  // 요약 섹션: 기간 네비(statMonth) 기준 이번 달 vs 지난달
+  const selStats     = useMemo(() => getMonthStats(statMonth), [getMonthStats, statMonth])
+  const prevSelStats = useMemo(() => getMonthStats(addMonths(statMonth, -1)), [getMonthStats, statMonth])
 
-  const consumptionDiff = thisStats.realConsumption - lastStats.realConsumption
-  const savingRateDiff  = thisStats.savingRate - lastStats.savingRate
-
-  // 이달 지출 구성 비율 (예산탭과 동일: 실소비 / 저축 / 제외항목)
-  const totalOutflow   = thisStats.realConsumption + thisStats.savingAmt + thisStats.investAmt + thisStats.excludedAmt
+  // 이달 지출 구성 비율 (실소비 / 카드대금 / 저축 / 투자 / 제외)
+  const totalOutflow   = thisStats.realConsumption + thisStats.cardPayAmt + thisStats.savingAmt + thisStats.investAmt + thisStats.excludedAmt
   const consumptionPct = totalOutflow > 0 ? (thisStats.realConsumption / totalOutflow) * 100 : 0
+  const cardPct        = totalOutflow > 0 ? (thisStats.cardPayAmt / totalOutflow) * 100 : 0
   const savingPct      = totalOutflow > 0 ? (thisStats.savingAmt / totalOutflow) * 100 : 0
   const investPct      = totalOutflow > 0 ? (thisStats.investAmt / totalOutflow) * 100 : 0
   const excludedPct    = totalOutflow > 0 ? (thisStats.excludedAmt / totalOutflow) * 100 : 0
@@ -141,7 +143,8 @@ export default function StatisticsPage() {
     const mo = parseInt(m.split('-')[1])
     return {
       label: `${mo}월`, 수입: s.income, 실소비: s.realConsumption,
-      저축: s.savingAmt, 제외항목: s.excludedAmt, 순수입: s.netIncome,
+      카드대금: s.cardPayAmt, 저축: s.savingAmt, 투자: s.investAmt,
+      제외: s.excludedAmt, 제외항목: s.excludedAmt, 순수입: s.netIncome,
       저축률: Math.round(s.savingRate),
     }
   }), [getMonthStats])
@@ -305,6 +308,45 @@ export default function StatisticsPage() {
 
   const hasData = transactions.length > 0
 
+  // ── 요약 섹션 ① 이번 달 한눈에 (vs 지난달) ──
+  const summaryRows: { label: string; value: number; prev: number; good: 'up' | 'down' }[] = [
+    { label: '수입',     value: selStats.income,          prev: prevSelStats.income,          good: 'up' },
+    { label: '실소비',   value: selStats.realConsumption,  prev: prevSelStats.realConsumption,  good: 'down' },
+    { label: '카드대금', value: selStats.cardPayAmt,       prev: prevSelStats.cardPayAmt,       good: 'down' },
+    { label: '저축',     value: selStats.savingAmt,        prev: prevSelStats.savingAmt,        good: 'up' },
+    { label: '투자',     value: selStats.investAmt,        prev: prevSelStats.investAmt,        good: 'up' },
+    ...((selStats.excludedAmt > 0 || prevSelStats.excludedAmt > 0)
+      ? [{ label: '제외', value: selStats.excludedAmt, prev: prevSelStats.excludedAmt, good: 'down' as const }] : []),
+  ]
+
+  // ── 요약 섹션 ② 한 줄 인사이트 (실데이터 기반 자동 생성) ──
+  const insights = useMemo(() => {
+    const out: string[] = []
+    const pct = (a: number, b: number) => b === 0 ? null : Math.round(((a - b) / b) * 100)
+    const cp = pct(selStats.cardPayAmt, prevSelStats.cardPayAmt)
+    if (cp !== null && cp !== 0) out.push(`💳 카드값이 지난달보다 ${Math.abs(cp)}% ${cp < 0 ? '줄었어요 👏' : '늘었어요'}`)
+    if (selStats.investAmt > 0) {
+      if (prevSelStats.investAmt === 0) out.push('📈 이번 달 새로 투자를 시작했어요')
+      else {
+        const ratio = selStats.investAmt / prevSelStats.investAmt
+        if (ratio >= 2) out.push(`📈 투자를 지난달보다 ${Math.round(ratio)}배 했어요`)
+        else if (ratio >= 1.3) out.push(`📈 투자를 지난달보다 ${Math.round((ratio - 1) * 100)}% 더 했어요`)
+        else if (ratio < 0.7) out.push('📉 이번 달 투자가 지난달보다 줄었어요')
+      }
+    }
+    if (statMonth === currentMonth) {
+      const today = new Date()
+      const day = today.getDate()
+      const dim = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+      if (day >= 3 && day < dim && selStats.realConsumption > 0) {
+        out.push(`🔮 이 페이스면 이번 달 실소비 약 ${fmtShort(Math.round(selStats.realConsumption / day * dim))}원 예상돼요`)
+      }
+    }
+    const srDiff = selStats.savingRate - prevSelStats.savingRate
+    if (Math.abs(srDiff) >= 2) out.push(`${srDiff > 0 ? '🌱 저축률이 올랐어요' : '💡 저축률이 지난달보다 낮아요'} (${srDiff > 0 ? '+' : ''}${srDiff.toFixed(0)}%p)`)
+    return out.slice(0, 3)
+  }, [selStats, prevSelStats, statMonth])
+
   // ── 탭 바 ────────────────────────────────────────────────────────────────
   const TABS: [Tab, string][] = [['trend','📈 추이'], ['category','🗂️ 카테고리'], ['spending','💳 지출분석'], ['annual','📅 연간']]
 
@@ -406,54 +448,77 @@ export default function StatisticsPage() {
         )}
       </div>
 
-      {/* KPI 카드 4개 */}
+      {/* ① 이번 달 한눈에 (vs 지난달) — 모든 줄 같은 서식, 이번달·지난달 둘 다 */}
       {hasData && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          {[
-            {
-              label: '이달 실소비',
-              value: fmtShort(thisStats.realConsumption) + '원',
-              sub: consumptionDiff === 0 ? '전월과 동일'
-                : `전월 대비 ${consumptionDiff > 0 ? '+' : ''}${fmtShort(consumptionDiff)}원`,
-              subOk: consumptionDiff <= 0,
-              icon: '💸', bg: 'bg-red-50',
-            },
-            {
-              label: '이달 수입',
-              value: fmtShort(thisStats.income) + '원',
-              sub: lastStats.income > 0
-                ? `전월 대비 ${thisStats.income >= lastStats.income ? '+' : ''}${fmtShort(thisStats.income - lastStats.income)}원`
-                : '',
-              subOk: thisStats.income >= lastStats.income,
-              icon: '💰', bg: 'bg-emerald-50',
-            },
-            {
-              label: '이달 저축',
-              value: fmtShort(thisStats.savingAmt) + '원',
-              sub: thisStats.income > 0 ? `저축률 ${thisStats.savingRate.toFixed(1)}%` : '',
-              subOk: true,
-              icon: '🏦', bg: 'bg-blue-50',
-            },
-            {
-              label: '저축률',
-              value: `${thisStats.savingRate.toFixed(1)}%`,
-              sub: savingRateDiff === 0 ? '전월과 동일'
-                : `전월 대비 ${savingRateDiff > 0 ? '+' : ''}${savingRateDiff.toFixed(1)}%p`,
-              subOk: savingRateDiff >= 0,
-              icon: '📊', bg: 'bg-violet-50',
-            },
-          ].map(kpi => (
-            <div key={kpi.label} className={`${kpi.bg} rounded-2xl p-4`}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span>{kpi.icon}</span>
-                <span className="text-xs text-gray-500">{kpi.label}</span>
-              </div>
-              <div className="text-lg font-bold text-gray-900 tabular-nums leading-tight">{kpi.value}</div>
-              {kpi.sub && (
-                <div className={`text-xs mt-1 ${kpi.subOk ? 'text-emerald-500' : 'text-red-400'}`}>{kpi.sub}</div>
-              )}
-            </div>
-          ))}
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
+          <div className="text-sm font-bold text-gray-800 mb-3">{periodLabel} 한눈에 <span className="text-xs text-gray-400 font-normal">vs 지난달</span></div>
+          <div className="divide-y divide-gray-50">
+            {summaryRows.map(r => {
+              const isUp = r.value > r.prev
+              const same = r.value === r.prev
+              const isGood = (r.good === 'up' && isUp) || (r.good === 'down' && !isUp)
+              const pct = r.prev === 0 ? null : Math.round(Math.abs((r.value - r.prev) / r.prev) * 100)
+              return (
+                <div key={r.label} className="flex items-center justify-between py-2.5">
+                  <span className="text-sm text-gray-700">{r.label}</span>
+                  <div className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-sm font-semibold tabular-nums text-gray-900">{fmtKRW(r.value)}</span>
+                      {r.prev === 0 && r.value > 0
+                        ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-600">NEW</span>
+                        : same
+                        ? <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-400">— 0%</span>
+                        : <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${isGood ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{isUp ? '▲' : '▼'} {pct}%</span>}
+                    </div>
+                    <div className="text-[11px] text-gray-400 tabular-nums mt-0.5">지난달 {fmtKRW(r.prev)}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ② 한 줄 인사이트 */}
+      {hasData && insights.length > 0 && (
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 mb-4">
+          <div className="text-xs font-semibold text-blue-600 mb-2">한 줄 인사이트</div>
+          <ul className="space-y-1.5">
+            {insights.map((t, i) => <li key={i} className="text-sm text-gray-700">{t}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* ③ 어디에 많이 썼나 (TOP 5) */}
+      {hasData && top5cats.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-5">
+          <div className="text-sm font-bold text-gray-800 mb-3">어디에 많이 썼나 <span className="text-xs text-gray-400 font-normal">(TOP 5)</span></div>
+          <div className="space-y-3">
+            {top5cats.map(c => {
+              const prev = prevCatMap.get(c.id) ?? 0
+              const isUp = c.value > prev
+              const same = c.value === prev
+              const pct = prev === 0 ? null : Math.round(Math.abs((c.value - prev) / prev) * 100)
+              return (
+                <div key={c.id}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-gray-700">{c.icon} {c.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold tabular-nums text-gray-900">{fmtKRW(c.value)}</span>
+                      {prev === 0
+                        ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-600">NEW</span>
+                        : same
+                        ? <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-400">—</span>
+                        : <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${!isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{isUp ? '▲' : '▼'} {pct}%</span>}
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full">
+                    <div className="h-1.5 rounded-full" style={{ width: `${totalCatAmt > 0 ? (c.value / top5cats[0].value) * 100 : 0}%`, backgroundColor: c.color || '#FF6B6B' }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -483,23 +548,25 @@ export default function StatisticsPage() {
           {totalOutflow > 0 && (
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="font-semibold text-sm text-gray-900 mb-1">이달 지출 구성</div>
-              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 저축 · 투자 · 제외항목으로 분리 (예산탭 기준)</div>
+              <div className="text-xs text-gray-400 mb-3">총 지출액을 실소비 · 카드대금 · 저축 · 투자 · 제외로 분리</div>
               {/* 스택 바 */}
               <div className="flex h-5 rounded-full overflow-hidden mb-3">
                 {consumptionPct > 0 && <div style={{ width: `${consumptionPct}%`, backgroundColor: '#FF6B6B' }} />}
+                {cardPct > 0        && <div style={{ width: `${cardPct}%`,        backgroundColor: '#F5A623' }} />}
                 {savingPct > 0      && <div style={{ width: `${savingPct}%`,      backgroundColor: '#0064FF' }} />}
                 {investPct > 0      && <div style={{ width: `${investPct}%`,      backgroundColor: '#6366F1' }} />}
                 {excludedPct > 0    && <div style={{ width: `${excludedPct}%`,    backgroundColor: '#8B5CF6' }} />}
               </div>
               <div className={`grid gap-2 ${(() => {
-                const n = 2 + (thisStats.investAmt > 0 ? 1 : 0) + (thisStats.excludedAmt > 0 ? 1 : 0)
+                const n = 1 + (thisStats.cardPayAmt > 0 ? 1 : 0) + (thisStats.savingAmt > 0 ? 1 : 0) + (thisStats.investAmt > 0 ? 1 : 0) + (thisStats.excludedAmt > 0 ? 1 : 0)
                 return n >= 4 ? 'grid-cols-4' : n === 3 ? 'grid-cols-3' : 'grid-cols-2'
               })()}`}>
                 {[
                   { label: '실소비',   color: '#FF6B6B', value: thisStats.realConsumption, pct: consumptionPct },
-                  { label: '저축',     color: '#0064FF', value: thisStats.savingAmt,       pct: savingPct },
+                  ...(thisStats.cardPayAmt > 0  ? [{ label: '카드대금', color: '#F5A623', value: thisStats.cardPayAmt,  pct: cardPct }]     : []),
+                  ...(thisStats.savingAmt > 0   ? [{ label: '저축',     color: '#0064FF', value: thisStats.savingAmt,   pct: savingPct }]   : []),
                   ...(thisStats.investAmt > 0   ? [{ label: '투자',     color: '#6366F1', value: thisStats.investAmt,   pct: investPct }]   : []),
-                  ...(thisStats.excludedAmt > 0 ? [{ label: '제외항목', color: '#8B5CF6', value: thisStats.excludedAmt, pct: excludedPct }] : []),
+                  ...(thisStats.excludedAmt > 0 ? [{ label: '제외',     color: '#8B5CF6', value: thisStats.excludedAmt, pct: excludedPct }] : []),
                 ].map(item => (
                   <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: item.color + '14' }}>
                     <div className="flex items-center gap-1.5 mb-1">
@@ -514,22 +581,24 @@ export default function StatisticsPage() {
             </div>
           )}
 
-          {/* 수입/실소비/저축/제외항목 */}
+          {/* 나간 돈 구성(스택) + 수입(선) */}
           <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="font-semibold text-sm text-gray-900 mb-0.5">최근 6개월 수입 · 실소비 · 저축</div>
-            <div className="text-xs text-gray-400 mb-4">예산탭 제외항목은 별도 표시 · 실소비 기준 예산탭과 동일</div>
+            <div className="font-semibold text-sm text-gray-900 mb-0.5">최근 6개월 나간 돈 구성</div>
+            <div className="text-xs text-gray-400 mb-4">막대 = 실소비·카드대금·저축·투자·제외 / 선 = 수입</div>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={trendData} barGap={2} barCategoryGap="28%">
+              <ComposedChart data={trendData} barCategoryGap="28%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<KRWTooltip />} />
                 <Legend />
-                <Bar dataKey="수입"    fill="#00B493" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="실소비"  fill="#FF6B6B" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="저축"    fill="#0064FF" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="제외항목" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Bar dataKey="실소비"   stackId="out" fill="#FF6B6B" />
+                <Bar dataKey="카드대금" stackId="out" fill="#F5A623" />
+                <Bar dataKey="저축"     stackId="out" fill="#0064FF" />
+                <Bar dataKey="투자"     stackId="out" fill="#6366F1" />
+                <Bar dataKey="제외"     stackId="out" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                <Line dataKey="수입" stroke="#00B493" strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
