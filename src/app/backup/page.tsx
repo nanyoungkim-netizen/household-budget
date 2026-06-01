@@ -82,6 +82,251 @@ function fmtVersionTime(iso: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hh}:${mm}`
 }
 
+// 가계부 1개분(AppData)의 "사람이 읽는" 시트들을 워크북에 추가
+// sn(base): 시트 이름 생성기 — 가계부가 여러 개면 이름 뒤에 가계부명을 붙여 유일하게 만듦
+function appendBudgetSheets(
+  wb: XLSX.WorkBook,
+  bd: MultiData['budgets'][string],
+  sn: (base: string) => string,
+) {
+  const accounts = bd.accounts ?? []
+  const cards = bd.cards ?? []
+  const categories = bd.categories ?? []
+  const budgets = bd.budgets ?? []
+  const savings = bd.savings ?? []
+  const savingPayments = bd.savingPayments ?? []
+  const goals = bd.goals ?? []
+  const goalPayments = bd.goalPayments ?? []
+  const transactions = bd.transactions ?? []
+  const installments = bd.installments ?? []
+  const cardBillings = bd.cardBillings ?? []
+  const mappingRules = bd.mappingRules ?? []
+  const investmentAccounts = bd.investmentAccounts ?? []
+  const investmentAccountTypes = bd.investmentAccountTypes ?? []
+  const investments = bd.investments ?? []
+  const investmentTrades = bd.investmentTrades ?? []
+  const investmentDividends = bd.investmentDividends ?? []
+  const investmentCashDeposits = bd.investmentCashDeposits ?? []
+  const portfolioPlans = bd.portfolioPlans ?? []
+  const watchlist = bd.watchlist ?? []
+
+  // 1. 계좌
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    accounts.map(a => ({
+      계좌ID: a.id, 계좌명: a.name, 은행: a.bank, 잔액: a.balance,
+      색상: a.color, 자산유형: a.assetType ?? 'cash',
+      투자세부유형: a.investmentSubType ?? '', 메모: a.memo ?? '', 계좌번호: a.accountNumber ?? '',
+    }))
+  ), sn(S.ACCOUNTS))
+
+  // 2. 카드
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    cards.map(c => ({
+      카드ID: c.id, 카드명: c.name, 은행: c.bank, 결제일: c.billingDate,
+      색상: c.color, 연회비금액: c.annualFeeAmount ?? '', 연회비납부일: c.annualFeeDate ?? '',
+    }))
+  ), sn(S.CARDS))
+
+  // 3. 카테고리
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    categories.map(cat => ({
+      카테고리ID: cat.id, 카테고리명: cat.name,
+      유형: cat.type, 아이콘: cat.icon, 색상: cat.color,
+      부모ID: cat.parentId ?? '', 역할: cat.role ?? '',
+      실소비제외: cat.excludeFromReal ? 'Y' : '',
+    }))
+  ), sn(S.CATEGORIES))
+
+  // 4. 예산설정
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    budgets.map(b => ({
+      예산ID: b.id, 카테고리ID: b.categoryId,
+      카테고리명: categories.find(c => c.id === b.categoryId)?.name ?? '',
+      연도월: b.month, 예산금액: b.amount,
+    }))
+  ), sn(S.BUDGETS))
+
+  // 5. 적금·예금
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    savings.map(s => ({
+      상품ID: s.id, 상품명: s.name, 은행: s.bank, 종류: s.type,
+      월납입액: s.monthlyAmount, 현재납입금: s.currentAmount,
+      목표금액: s.targetAmount ?? '', 만기예상금: s.expectedAmount,
+      연이율: s.interestRate, 이자유형: s.interestType ?? 'simple',
+      과세유형: s.taxType ?? 'general', 시작일: s.startDate,
+      만기일: s.maturityDate, 상태: s.status ?? 'active',
+      납입주기: s.paymentCycle ?? '', 납입일: s.paymentDay ?? '',
+      납입요일: s.paymentWeekday ?? '', 회차납입금: s.paymentAmount ?? '',
+      주말제외: s.skipWeekends ? 'Y' : '', 계좌번호: s.accountNumber ?? '',
+      실제수령이자: s.actualInterest ?? '', 메모: s.memo ?? '',
+    }))
+  ), sn(S.SAVINGS))
+
+  // 6. 적금 납입이력
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    savingPayments.map(p => ({
+      납입ID: p.id, 상품ID: p.savingId, 납입일: p.date, 납입금액: p.amount, 메모: p.note ?? '',
+    }))
+  ), sn(S.SAVING_PAYMENTS))
+
+  // 7. 재무목표
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    goals.map(g => ({
+      목표ID: g.id, 목표명: g.name, 목표금액: g.targetAmount,
+      현재금액: g.currentAmount, 마감일: g.deadline, 색상: g.color,
+      카테고리: g.goalCategory ?? '', 목표월: g.targetDate ?? '', 시작월: g.startDate ?? '',
+    }))
+  ), sn(S.GOALS))
+
+  // 8. 재무목표 납입이력
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    goalPayments.map(p => ({
+      납입ID: p.id, 목표ID: p.goalId, 납입일: p.date, 납입금액: p.amount, 메모: p.note ?? '',
+    }))
+  ), sn(S.GOAL_PAYMENTS))
+
+  // 9. 거래내역
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    [...transactions].sort((a, b) => a.date.localeCompare(b.date)).map(t => ({
+      거래ID: t.id, 날짜: t.date, 내용: t.description, 금액: t.amount, 유형: t.type,
+      카테고리ID: t.categoryId,
+      카테고리명: (() => {
+        const cat = categories.find(c => c.id === t.categoryId)
+        const par = cat?.parentId ? categories.find(c => c.id === cat.parentId) : null
+        return par ? `${par.name} > ${cat?.name}` : (cat?.name ?? '')
+      })(),
+      계좌ID: t.accountId,
+      계좌명: accounts.find(a => a.id === t.accountId)?.name ?? '',
+      받는계좌ID: t.toAccountId ?? '',
+      받는계좌명: t.toAccountId ? (accounts.find(a => a.id === t.toAccountId)?.name ?? '') : '',
+      결제방법: t.paymentMethod, 카드ID: t.cardId ?? '',
+      카드명: t.cardId ? (cards.find(c => c.id === t.cardId)?.name ?? '') : '',
+      메모: t.note ?? '', 할부여부: t.isInstallment ? 'Y' : '',
+      할부개월: t.installmentMonths ?? '', 할부회차: t.installmentCurrent ?? '',
+      청구월: t.billingMonth ?? '', 소비유형: t.consumptionType ?? '',
+      적금연결: t.savingLinks && t.savingLinks.length > 0 ? JSON.stringify(t.savingLinks) : '',
+    }))
+  ), sn(S.TRANSACTIONS))
+
+  // 10. 할부 내역
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    installments.map(i => ({
+      할부ID: i.id, 카드ID: i.cardId, 내용: i.description,
+      총금액: i.totalAmount, 월납입액: i.monthlyAmount,
+      총개월: i.totalMonths, 납입완료개월: i.paidMonths, 시작일: i.startDate,
+    }))
+  ), sn(S.INSTALLMENTS))
+
+  // 11. 카드 청구·납부
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    cardBillings.map(b => ({
+      청구ID: b.id, 카드ID: b.cardId, 사용월: b.billingMonth,
+      납부월: b.paymentMonth, 청구총액: b.totalAmount, 납부완료금액: b.paidAmount,
+    }))
+  ), sn(S.CARD_BILLINGS))
+
+  // 12. 가맹점-카테고리 매핑
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    mappingRules.map(r => ({
+      규칙ID: r.id, 키워드: r.keyword, 카테고리ID: r.categoryId,
+      카테고리명: categories.find(c => c.id === r.categoryId)?.name ?? '',
+    }))
+  ), sn(S.MAPPING_RULES))
+
+  // 13. 투자 계좌
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    investmentAccounts.map(a => ({
+      투자계좌ID: a.id, 계좌명: a.name, 증권사: a.bank,
+      유형ID: a.typeId, 색상: a.color, 계좌번호: a.accountNumber ?? '',
+    }))
+  ), sn(S.INV_ACCOUNTS))
+
+  // 14. 투자 계좌 유형 (커스텀 포함 전체)
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    investmentAccountTypes.map(t => ({
+      유형ID: t.id, 유형명: t.name, 기본제공: t.isDefault ? 'Y' : '',
+    }))
+  ), sn(S.INV_ACCOUNT_TYPES))
+
+  // 15. 보유 종목
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    investments.map(inv => ({
+      종목ID: inv.id, 종목명: inv.name, 티커: inv.ticker ?? '',
+      자산유형: inv.assetType, 통화: inv.currency,
+      투자계좌ID: inv.accountId ?? '', 거래소: inv.exchange ?? '',
+      현재가: inv.currentPrice ?? '', 현재가갱신: inv.currentPriceUpdatedAt ?? '',
+      전일대비금액: inv.prevCloseDiff ?? '', 전일대비율: inv.prevCloseDiffRate ?? '',
+    }))
+  ), sn(S.INV_HOLDINGS))
+
+  // 16. 투자 거래
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    investmentTrades.map(tr => ({
+      거래ID: tr.id, 종목ID: tr.investmentId, 유형: tr.type,
+      날짜: tr.date ?? '', 수량: tr.quantity, 단가: tr.price,
+      통화: tr.currency, 환율: tr.exchangeRate ?? '', 수수료: tr.fee ?? '',
+      메모: tr.note ?? '', 현금계좌ID: tr.cashAccountId ?? '',
+    }))
+  ), sn(S.INV_TRADES))
+
+  // 17. 배당금 기록
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    investmentDividends.map(d => ({
+      배당ID: d.id, 투자계좌ID: d.accountId, 종목ID: d.investmentId ?? '',
+      입금일: d.date, 세전배당금: d.grossAmount, 원천징수세: d.tax,
+      실수령액: d.netAmount, 메모: d.note ?? '', 현금계좌ID: d.cashAccountId ?? '',
+    }))
+  ), sn(S.INV_DIVIDENDS))
+
+  // 18. 예수금 입금내역
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    investmentCashDeposits.map(d => ({
+      입금ID: d.id, 투자계좌ID: d.accountId, 입금일: d.date, 금액: d.amount, 메모: d.note ?? '',
+    }))
+  ), sn(S.INV_CASH_DEPOSITS))
+
+  // 19. 포트폴리오 플랜 (JSON 직렬화)
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    portfolioPlans.map(plan => ({
+      투자계좌ID: plan.accountId,
+      플랜데이터: JSON.stringify({ items: plan.items, groups: plan.groups }),
+    }))
+  ), sn(S.PORTFOLIO_PLANS))
+
+  // 20. 관심종목
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    watchlist.map(w => ({
+      관심종목ID: w.id, 종목명: w.name, 티커: w.ticker ?? '',
+      거래소: w.exchange ?? '', 자산유형: w.assetType, 통화: w.currency,
+      현재가: w.currentPrice ?? '', 전일대비금액: w.prevCloseDiff ?? '',
+      전일대비율: w.prevCloseDiffRate ?? '', 현재가갱신: w.currentPriceUpdatedAt ?? '',
+    }))
+  ), sn(S.WATCHLIST))
+
+  // 21. 메타정보 (이 가계부 기준 건수 요약)
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([
+    { 항목: '계좌수',       값: accounts.length },
+    { 항목: '카드수',       값: cards.length },
+    { 항목: '카테고리수',   값: categories.length },
+    { 항목: '예산수',       값: budgets.length },
+    { 항목: '적금예금수',   값: savings.length },
+    { 항목: '적금납입수',   값: savingPayments.length },
+    { 항목: '목표수',       값: goals.length },
+    { 항목: '목표납입수',   값: goalPayments.length },
+    { 항목: '거래수',       값: transactions.length },
+    { 항목: '할부수',       값: installments.length },
+    { 항목: '카드청구수',   값: cardBillings.length },
+    { 항목: '매핑규칙수',   값: mappingRules.length },
+    { 항목: '투자계좌수',   값: investmentAccounts.length },
+    { 항목: '보유종목수',   값: investments.length },
+    { 항목: '투자거래수',   값: investmentTrades.length },
+    { 항목: '배당금수',     값: investmentDividends.length },
+    { 항목: '예수금내역수', 값: investmentCashDeposits.length },
+    { 항목: '포트폴리오수', 값: portfolioPlans.length },
+    { 항목: '관심종목수',   값: watchlist.length },
+  ]), sn(S.META))
+}
+
 export default function BackupPage() {
   const {
     data, multiData, categories,
@@ -433,6 +678,52 @@ export default function BackupPage() {
       { 항목: '포트폴리오수',   값: (portfolioPlans ?? []).length },
       { 항목: '관심종목수',     값: (watchlist ?? []).length },
     ]), S.META)
+
+    // ★ 가계부 목록 개요 — 모든 가계부를 한 시트에서 한눈에
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+      multiData.budgetList.map((m, i) => {
+        const b = multiData.budgets[m.id]
+        return {
+          번호: i + 1,
+          가계부명: m.name,
+          활성: m.id === multiData.activeBudgetId ? '✓' : '',
+          거래수: (b?.transactions ?? []).length,
+          계좌수: (b?.accounts ?? []).length,
+          카드수: (b?.cards ?? []).length,
+          카테고리수: (b?.categories ?? []).length,
+          예산수: (b?.budgets ?? []).length,
+        }
+      })
+    ), '가계부목록')
+
+    // ★ 활성 외 나머지 가계부의 "사람이 읽는" 시트도 추가
+    //   (활성 가계부 시트는 위에서 이미 추가됨. 전체 복구는 __raw_data__ 시트가 담당)
+    //   시트명 뒤에 가계부 이름을 붙여 구분 — 예: 거래내역_여행가계부
+    const usedSheetNames = new Set<string>(wb.SheetNames)
+    const makeSheetNamer = (label: string) => {
+      const safeLabel = (label || '가계부').replace(/[\\/?*:[\]]/g, ' ').trim() || '가계부'
+      return (base: string) => {
+        let name = `${base}_${safeLabel}`
+        if (name.length > 31) {
+          const room = Math.max(1, 31 - base.length - 1)
+          name = `${base}_${safeLabel.slice(0, room)}`
+        }
+        let final = name.slice(0, 31)
+        let k = 2
+        while (usedSheetNames.has(final)) {
+          const suffix = `~${k++}`
+          final = name.slice(0, 31 - suffix.length) + suffix
+        }
+        usedSheetNames.add(final)
+        return final
+      }
+    }
+    for (const meta of multiData.budgetList) {
+      if (meta.id === multiData.activeBudgetId) continue
+      const bd = multiData.budgets[meta.id]
+      if (!bd) continue
+      appendBudgetSheets(wb, bd, makeSheetNamer(meta.name))
+    }
 
     // ★ 이전 가계부 업로드 파일도 백업에 포함 (새 계정으로 이전해도 함께 이동)
     //    각 파일을 base64로 변환 → 청크로 나눠 시트에 저장
