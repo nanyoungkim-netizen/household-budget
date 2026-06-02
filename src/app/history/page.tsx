@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useApp } from '@/lib/AppContext'
+import { useApp, DEFAULT_BUDGET_ID } from '@/lib/AppContext'
 import { supabase } from '@/lib/supabase'
 
 const BUCKET = 'history-files'
@@ -11,6 +11,7 @@ interface StoredFile {
   id: string | null
   created_at: string | null
   metadata: { size?: number } | null
+  path: string   // 스토리지 전체 경로 (다운로드/삭제용) — 가계부별 하위 폴더 포함
 }
 
 // 원래 파일명(한글·공백·특수문자 포함)을 스토리지 키에 쓸 수 있도록 ASCII(base64url)로 인코딩
@@ -56,7 +57,7 @@ function fmtDate(iso: string | null) {
 }
 
 export default function HistoryPage() {
-  const { user } = useApp()
+  const { user, activeBudgetId } = useApp()
   const [files, setFiles] = useState<StoredFile[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -65,36 +66,38 @@ export default function HistoryPage() {
   const [confirmDelete, setConfirmDelete] = useState<StoredFile | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // 가계부별 폴더(${user.id}/${activeBudgetId})의 파일만 조회.
+  // 기본 가계부에서는 예전(가계부 구분 없이 최상위에 올린) 파일도 함께 보여줌.
   const loadFiles = useCallback(async () => {
     if (!user || !supabase) { setFiles([]); return }
+    const folder = `${user.id}/${activeBudgetId}`
     const { data, error: listErr } = await supabase.storage
       .from(BUCKET)
-      .list(user.id, { sortBy: { column: 'created_at', order: 'desc' }, limit: 200 })
+      .list(folder, { sortBy: { column: 'created_at', order: 'desc' }, limit: 200 })
     if (listErr) {
       setError('파일 목록을 불러오지 못했어요. 저장소 설정(버킷)이 되어 있는지 확인해주세요.')
       setFiles([])
       return
     }
-    setFiles(((data ?? []) as StoredFile[]).filter(f => f.name !== '.emptyFolderPlaceholder'))
-  }, [user])
+    const result: StoredFile[] = ((data ?? []) as unknown as StoredFile[])
+      .filter(f => f.name !== '.emptyFolderPlaceholder')
+      .map(f => ({ ...f, path: `${folder}/${f.name}` }))
 
-  useEffect(() => {
-    if (!user || !supabase) return
-    let cancelled = false
-    supabase.storage
-      .from(BUCKET)
-      .list(user.id, { sortBy: { column: 'created_at', order: 'desc' }, limit: 200 })
-      .then(({ data, error: listErr }) => {
-        if (cancelled) return
-        if (listErr) {
-          setError('파일 목록을 불러오지 못했어요. 저장소 설정(버킷)이 되어 있는지 확인해주세요.')
-          setFiles([])
-          return
-        }
-        setFiles(((data ?? []) as StoredFile[]).filter(f => f.name !== '.emptyFolderPlaceholder'))
-      })
-    return () => { cancelled = true }
-  }, [user])
+    // 기본 가계부: 레거시 최상위 파일도 포함 (id === null 인 항목은 하위 폴더(가계부) 엔트리라 제외)
+    if (activeBudgetId === DEFAULT_BUDGET_ID) {
+      const { data: legacy } = await supabase.storage
+        .from(BUCKET)
+        .list(user.id, { sortBy: { column: 'created_at', order: 'desc' }, limit: 200 })
+      ;((legacy ?? []) as unknown as StoredFile[])
+        .filter(f => f.name !== '.emptyFolderPlaceholder' && f.id !== null)
+        .forEach(f => result.push({ ...f, path: `${user.id}/${f.name}` }))
+    }
+
+    result.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+    setFiles(result)
+  }, [user, activeBudgetId])
+
+  useEffect(() => { loadFiles() }, [loadFiles])
 
   async function uploadFile(file: File) {
     if (!user || !supabase) return
@@ -102,7 +105,8 @@ export default function HistoryPage() {
     setUploading(true)
     try {
       // 스토리지 키엔 ASCII만 허용 → 원본 파일명은 base64url로 인코딩해 보관 (표시는 displayName으로 복원)
-      const path = `${user.id}/${Date.now()}.${encodeName(file.name)}`
+      // 가계부별 하위 폴더에 저장해 다른 가계부와 분리
+      const path = `${user.id}/${activeBudgetId}/${Date.now()}.${encodeName(file.name)}`
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { upsert: false, contentType: file.type || undefined })
@@ -125,7 +129,7 @@ export default function HistoryPage() {
     try {
       const { data, error: dlErr } = await supabase.storage
         .from(BUCKET)
-        .download(`${user.id}/${f.name}`)
+        .download(f.path)
       if (dlErr || !data) {
         setError('다운로드에 실패했어요. 잠시 후 다시 시도해주세요.')
         return
@@ -152,7 +156,7 @@ export default function HistoryPage() {
     try {
       const { error: rmErr } = await supabase.storage
         .from(BUCKET)
-        .remove([`${user.id}/${target.name}`])
+        .remove([target.path])
       if (rmErr) {
         setError('삭제에 실패했어요. 잠시 후 다시 시도해주세요.')
         return
@@ -169,7 +173,7 @@ export default function HistoryPage() {
     const file = e.dataTransfer.files[0]
     if (file) uploadFile(file)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
+  }, [user, activeBudgetId])
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

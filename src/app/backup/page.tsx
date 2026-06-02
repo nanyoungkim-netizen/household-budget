@@ -729,18 +729,28 @@ export default function BackupPage() {
     //    각 파일을 base64로 변환 → 청크로 나눠 시트에 저장
     if (supabase && user) {
       try {
-        const { data: fileList } = await supabase.storage
-          .from(HISTORY_BUCKET)
-          .list(user.id, { limit: 500, sortBy: { column: 'created_at', order: 'asc' } })
-        const fileObjs = (fileList ?? []).filter(f => f.name !== '.emptyFolderPlaceholder')
-        const fileRows: { name: string; part: number; total: number; b64: string }[] = []
-        for (const fo of fileObjs) {
-          const { data: blob } = await supabase.storage.from(HISTORY_BUCKET).download(`${user.id}/${fo.name}`)
-          if (!blob) continue
-          const b64 = await blobToBase64(blob)
-          const total = Math.max(1, Math.ceil(b64.length / CHUNK))
-          for (let i = 0; i < total; i++) {
-            fileRows.push({ name: fo.name, part: i + 1, total, b64: b64.slice(i * CHUNK, (i + 1) * CHUNK) })
+        // 수집 대상: 레거시 최상위 폴더('') + 가계부별 하위 폴더(각 budgetId)
+        // dir = '' → 최상위, dir = budgetId → 해당 가계부 폴더. 복원 시 같은 위치로 되돌림.
+        const fileRows: { dir: string; name: string; part: number; total: number; b64: string }[] = []
+        const targets: { dir: string; listPath: string }[] = [
+          { dir: '', listPath: user.id },
+          ...multiData.budgetList.map(m => ({ dir: m.id, listPath: `${user.id}/${m.id}` })),
+        ]
+        for (const { dir, listPath } of targets) {
+          const { data: fileList } = await supabase.storage
+            .from(HISTORY_BUCKET)
+            .list(listPath, { limit: 500, sortBy: { column: 'created_at', order: 'asc' } })
+          // id === null = 하위 폴더 엔트리 → 실제 파일만 (최상위에서 가계부 폴더 중복 수집 방지)
+          const fileObjs = (fileList ?? []).filter(f => f.name !== '.emptyFolderPlaceholder' && f.id !== null)
+          for (const fo of fileObjs) {
+            const fullPath = dir ? `${user.id}/${dir}/${fo.name}` : `${user.id}/${fo.name}`
+            const { data: blob } = await supabase.storage.from(HISTORY_BUCKET).download(fullPath)
+            if (!blob) continue
+            const b64 = await blobToBase64(blob)
+            const total = Math.max(1, Math.ceil(b64.length / CHUNK))
+            for (let i = 0; i < total; i++) {
+              fileRows.push({ dir, name: fo.name, part: i + 1, total, b64: b64.slice(i * CHUNK, (i + 1) * CHUNK) })
+            }
           }
         }
         if (fileRows.length > 0) {
@@ -891,18 +901,21 @@ export default function BackupPage() {
     if (!wb.SheetNames.includes(S.HISTORY_FILES)) return
     try {
       const fileRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[S.HISTORY_FILES])
-      // 파일명별로 청크 합치기
-      const byName = new Map<string, { part: number; b64: string }[]>()
+      // (가계부 폴더 + 파일명)별로 청크 합치기 — 구 백업엔 dir 컬럼이 없어 ''(최상위)로 처리
+      const byKey = new Map<string, { dir: string; name: string; parts: { part: number; b64: string }[] }>()
       for (const r of fileRows) {
         const nm = safeStr(r['name'])
         if (!nm) continue
-        if (!byName.has(nm)) byName.set(nm, [])
-        byName.get(nm)!.push({ part: safeNum(r['part']), b64: safeStr(r['b64']) })
+        const dir = safeStr(r['dir'])
+        const key = `${dir}//${nm}`
+        if (!byKey.has(key)) byKey.set(key, { dir, name: nm, parts: [] })
+        byKey.get(key)!.parts.push({ part: safeNum(r['part']), b64: safeStr(r['b64']) })
       }
-      for (const [nm, parts] of byName) {
+      for (const { dir, name, parts } of byKey.values()) {
         parts.sort((a, b) => a.part - b.part)
         const blob = base64ToBlob(parts.map(p => p.b64).join(''))
-        await supabase.storage.from(HISTORY_BUCKET).upload(`${user.id}/${nm}`, blob, { upsert: true })
+        const target = dir ? `${user.id}/${dir}/${name}` : `${user.id}/${name}`
+        await supabase.storage.from(HISTORY_BUCKET).upload(target, blob, { upsert: true })
       }
     } catch { /* 파일 복원 실패해도 본 데이터 복구는 완료 처리 */ }
   }

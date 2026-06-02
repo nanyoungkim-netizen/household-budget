@@ -155,7 +155,14 @@ export default function TransactionsPage() {
     const catParam = params.get('category')
     if (catParam) setFilterCategories(catParam.split(',').filter(Boolean))
     const monthParam = params.get('month')
-    if (monthParam) setMonth(monthParam)
+    if (monthParam) {
+      setMonth(monthParam)
+      // 예산 화면 등에서 특정 월로 넘어올 때 날짜 필터도 그 달로 맞춤
+      // (안 그러면 기본값인 이번 달 기간이 적용돼 해당 월 내역이 안 보임)
+      const [from, to] = monthToRange(monthParam)
+      setFilterDateFrom(from)
+      setFilterDateTo(to)
+    }
     const labelParam = params.get('catLabel')
     if (labelParam) setFromBudgetLabel(decodeURIComponent(labelParam))
     // F-06: 대시보드 거래추가 버튼 연동 — ?action=add 시 모달 자동 오픈

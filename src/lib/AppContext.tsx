@@ -166,7 +166,7 @@ export interface MultiData {
   activeBudgetId: string
 }
 
-const DEFAULT_BUDGET_ID = 'budget_default'
+export const DEFAULT_BUDGET_ID = 'budget_default'
 
 function makeDefaultMeta(): BudgetMeta {
   return { id: DEFAULT_BUDGET_ID, name: '내 가계부', createdAt: new Date().toISOString() }

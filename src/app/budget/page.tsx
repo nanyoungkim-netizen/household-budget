@@ -23,6 +23,12 @@ function prevMonth(month: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+function nextMonth(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(y, m, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 function fmtMonthLabel(ym: string): string {
   const [y, m] = ym.split('-')
   return `${y}년 ${parseInt(m)}월`
@@ -516,8 +522,17 @@ export default function BudgetPage() {
           >
             ← 이전달 이월
           </button>
-          <input type="month" min="1900-01" max="2099-12" value={month} onChange={e => setMonth(e.target.value)}
-            className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {/* 이전/다음 달 이동 + 월 선택 */}
+          <div className="flex items-center border border-gray-200 rounded-xl">
+            <button type="button" onClick={() => setMonth(prevMonth(month))}
+              title="이전 달"
+              className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-blue-600 text-lg rounded-l-xl hover:bg-gray-50">‹</button>
+            <input type="month" min="1900-01" max="2099-12" value={month} onChange={e => setMonth(e.target.value)}
+              className="text-sm border-none outline-none bg-transparent text-center cursor-pointer w-[120px] py-1.5" />
+            <button type="button" onClick={() => setMonth(nextMonth(month))}
+              title="다음 달"
+              className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-blue-600 text-lg rounded-r-xl hover:bg-gray-50">›</button>
+          </div>
         </div>
       </div>
 
