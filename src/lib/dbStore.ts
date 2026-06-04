@@ -276,3 +276,225 @@ export async function loadMultiDataFromTables(
 
   return { budgetList, budgets: budgetsObj, activeBudgetId }
 }
+
+// ============================================================================
+//  쓰기 레이어 : 앱 데이터(MultiData) → 항목별 테이블 (바뀐 행만 저장 = diff)
+//
+//  앱은 "배열 통째 교체" 구조라, 직전 상태(prev)와 새 상태(next)를 비교해서
+//  추가/수정된 항목만 upsert, 사라진 항목은 소프트 삭제(deleted_at)한다.
+//  ⚠️ 스위치 ON일 때만 호출. 기존 blob 저장과 "동시"에 실행(이중 저장)된다.
+// ============================================================================
+type MD = {
+  budgetList: Array<{ id: string; name: string; createdAt?: string }>
+  budgets: Record<string, Record<string, unknown>>
+  activeBudgetId: string
+}
+
+const nv = (v: unknown) => (v === undefined ? null : v)
+
+// 엔티티 정의: 테이블명, AppData 내 배열 키, 행 빌더(앱 camel → DB snake)
+interface EntitySpec {
+  table: string
+  key: string
+  idCol: string                                   // 식별 컬럼 (대부분 'id')
+  conflict: string                                // upsert 충돌 기준
+  build: (it: Record<string, unknown>) => Record<string, unknown>
+}
+
+const ENTITIES: EntitySpec[] = [
+  { table: 'accounts', key: 'accounts', idCol: 'id', conflict: 'user_id,ledger_id,id', build: a => ({
+    name: nv(a.name), bank: nv(a.bank), balance: nv(a.balance) ?? 0, color: nv(a.color),
+    asset_type: nv(a.assetType), investment_sub_type: nv(a.investmentSubType), memo: nv(a.memo),
+    account_number: nv(a.accountNumber) }) },
+  { table: 'categories', key: 'categories', idCol: 'id', conflict: 'user_id,ledger_id,id', build: c => ({
+    name: nv(c.name), type: nv(c.type), icon: nv(c.icon), color: nv(c.color), parent_id: nv(c.parentId),
+    saving_id: nv(c.savingId), role: nv(c.role), exclude_from_real: nv(c.excludeFromReal) }) },
+  { table: 'transactions', key: 'transactions', idCol: 'id', conflict: 'user_id,ledger_id,id', build: t => ({
+    date: nv(t.date), description: nv(t.description), amount: nv(t.amount) ?? 0, type: nv(t.type),
+    account_id: nv(t.accountId), to_account_id: nv(t.toAccountId), category_id: nv(t.categoryId),
+    payment_method: nv(t.paymentMethod), card_id: nv(t.cardId), note: nv(t.note),
+    is_installment: nv(t.isInstallment), installment_months: nv(t.installmentMonths),
+    installment_current: nv(t.installmentCurrent), saving_links: nv(t.savingLinks),
+    billing_month: nv(t.billingMonth), consumption_type: nv(t.consumptionType) }) },
+  { table: 'budgets', key: 'budgets', idCol: 'id', conflict: 'user_id,ledger_id,id', build: b2 => ({
+    category_id: nv(b2.categoryId), month: nv(b2.month), amount: nv(b2.amount) ?? 0 }) },
+  { table: 'cards', key: 'cards', idCol: 'id', conflict: 'user_id,ledger_id,id', build: c => ({
+    name: nv(c.name), bank: nv(c.bank), billing_date: nv(c.billingDate), color: nv(c.color),
+    annual_fee_amount: nv(c.annualFeeAmount), annual_fee_date: nv(c.annualFeeDate) }) },
+  { table: 'installments', key: 'installments', idCol: 'id', conflict: 'user_id,ledger_id,id', build: i => ({
+    card_id: nv(i.cardId), description: nv(i.description), total_amount: nv(i.totalAmount) ?? 0,
+    monthly_amount: nv(i.monthlyAmount) ?? 0, total_months: nv(i.totalMonths), paid_months: nv(i.paidMonths),
+    start_date: nv(i.startDate) }) },
+  { table: 'savings', key: 'savings', idCol: 'id', conflict: 'user_id,ledger_id,id', build: s2 => ({
+    name: nv(s2.name), bank: nv(s2.bank), status: nv(s2.status), type: nv(s2.type),
+    monthly_amount: nv(s2.monthlyAmount), interest_rate: nv(s2.interestRate), start_date: nv(s2.startDate),
+    maturity_date: nv(s2.maturityDate), current_amount: nv(s2.currentAmount), expected_amount: nv(s2.expectedAmount),
+    interest_type: nv(s2.interestType), manual_interest: nv(s2.manualInterest), tax_type: nv(s2.taxType),
+    account_number: nv(s2.accountNumber), payment_cycle: nv(s2.paymentCycle), payment_day: nv(s2.paymentDay),
+    payment_weekday: nv(s2.paymentWeekday), payment_amount: nv(s2.paymentAmount), target_amount: nv(s2.targetAmount),
+    skip_weekends: nv(s2.skipWeekends), actual_interest: nv(s2.actualInterest), memo: nv(s2.memo) }) },
+  { table: 'saving_payments', key: 'savingPayments', idCol: 'id', conflict: 'user_id,ledger_id,id', build: p => ({
+    saving_id: nv(p.savingId), date: nv(p.date), amount: nv(p.amount) ?? 0, note: nv(p.note) }) },
+  { table: 'goals', key: 'goals', idCol: 'id', conflict: 'user_id,ledger_id,id', build: g => ({
+    name: nv(g.name), target_amount: nv(g.targetAmount) ?? 0, current_amount: nv(g.currentAmount) ?? 0,
+    deadline: nv(g.deadline), color: nv(g.color), goal_category: nv(g.goalCategory),
+    target_date: nv(g.targetDate), start_date: nv(g.startDate) }) },
+  { table: 'goal_payments', key: 'goalPayments', idCol: 'id', conflict: 'user_id,ledger_id,id', build: p => ({
+    goal_id: nv(p.goalId), date: nv(p.date), amount: nv(p.amount) ?? 0, note: nv(p.note) }) },
+  { table: 'card_billings', key: 'cardBillings', idCol: 'id', conflict: 'user_id,ledger_id,id', build: b2 => ({
+    card_id: nv(b2.cardId), billing_month: nv(b2.billingMonth), payment_month: nv(b2.paymentMonth),
+    total_amount: nv(b2.totalAmount) ?? 0, paid_amount: nv(b2.paidAmount) ?? 0 }) },
+  { table: 'mapping_rules', key: 'mappingRules', idCol: 'id', conflict: 'user_id,ledger_id,id', build: r => ({
+    keyword: nv(r.keyword), category_id: nv(r.categoryId) }) },
+  { table: 'investment_account_types', key: 'investmentAccountTypes', idCol: 'id', conflict: 'user_id,ledger_id,id', build: t => ({
+    name: nv(t.name), is_default: nv(t.isDefault) ?? false }) },
+  { table: 'investment_accounts', key: 'investmentAccounts', idCol: 'id', conflict: 'user_id,ledger_id,id', build: a => ({
+    name: nv(a.name), bank: nv(a.bank), type_id: nv(a.typeId), type: nv(a.type), color: nv(a.color),
+    cash_deposits: nv(a.cashDeposits), account_number: nv(a.accountNumber) }) },
+  { table: 'investments', key: 'investments', idCol: 'id', conflict: 'user_id,ledger_id,id', build: inv => ({
+    account_id: nv(inv.accountId), asset_type: nv(inv.assetType), name: nv(inv.name), ticker: nv(inv.ticker),
+    exchange: nv(inv.exchange), currency: nv(inv.currency), current_price: nv(inv.currentPrice),
+    current_price_updated_at: nv(inv.currentPriceUpdatedAt), prev_close_diff: nv(inv.prevCloseDiff),
+    prev_close_diff_rate: nv(inv.prevCloseDiffRate) }) },
+  { table: 'investment_trades', key: 'investmentTrades', idCol: 'id', conflict: 'user_id,ledger_id,id', build: tr => ({
+    investment_id: nv(tr.investmentId), type: nv(tr.type), date: nv(tr.date), quantity: nv(tr.quantity),
+    price: nv(tr.price), currency: nv(tr.currency), exchange_rate: nv(tr.exchangeRate), fee: nv(tr.fee),
+    note: nv(tr.note), cash_account_id: nv(tr.cashAccountId), linked_tx_id: nv(tr.linkedTxId),
+    linked_deposit_id: nv(tr.linkedDepositId) }) },
+  { table: 'investment_dividends', key: 'investmentDividends', idCol: 'id', conflict: 'user_id,ledger_id,id', build: d => ({
+    account_id: nv(d.accountId), investment_id: nv(d.investmentId), date: nv(d.date),
+    gross_amount: nv(d.grossAmount) ?? 0, tax: nv(d.tax) ?? 0, net_amount: nv(d.netAmount) ?? 0,
+    note: nv(d.note), cash_account_id: nv(d.cashAccountId), linked_tx_id: nv(d.linkedTxId) }) },
+  { table: 'investment_cash_deposits', key: 'investmentCashDeposits', idCol: 'id', conflict: 'user_id,ledger_id,id', build: d => ({
+    account_id: nv(d.accountId), date: nv(d.date), amount: nv(d.amount) ?? 0, note: nv(d.note) }) },
+  { table: 'watchlist', key: 'watchlist', idCol: 'id', conflict: 'user_id,ledger_id,id', build: w => ({
+    name: nv(w.name), ticker: nv(w.ticker), exchange: nv(w.exchange), asset_type: nv(w.assetType),
+    currency: nv(w.currency), current_price: nv(w.currentPrice), prev_close_diff: nv(w.prevCloseDiff),
+    prev_close_diff_rate: nv(w.prevCloseDiffRate), current_price_updated_at: nv(w.currentPriceUpdatedAt) }) },
+]
+
+// 한 엔티티 배열 diff 후 upsert/소프트삭제
+async function syncEntity(
+  spec: EntitySpec, prevList: Record<string, unknown>[], nextList: Record<string, unknown>[],
+  userId: string, ledgerId: string, now: string,
+) {
+  if (!supabase) return
+  const prevMap = new Map(prevList.map(i => [String(i[spec.idCol]), i]))
+  const seen = new Set<string>()
+  const upserts: Record<string, unknown>[] = []
+  for (const it of nextList) {
+    const id = String(it[spec.idCol])
+    seen.add(id)
+    const prevIt = prevMap.get(id)
+    if (!prevIt || JSON.stringify(prevIt) !== JSON.stringify(it)) {
+      upserts.push({ ...spec.build(it), [spec.idCol]: it[spec.idCol], user_id: userId, ledger_id: ledgerId, updated_at: now, deleted_at: null })
+    }
+  }
+  const removed: string[] = []
+  for (const id of prevMap.keys()) if (!seen.has(id)) removed.push(id)
+
+  if (upserts.length) {
+    const { error } = await supabase.from(spec.table).upsert(upserts, { onConflict: spec.conflict })
+    if (error) throw error
+  }
+  if (removed.length) {
+    const { error } = await supabase.from(spec.table)
+      .update({ deleted_at: now })
+      .eq('user_id', userId).eq('ledger_id', ledgerId).in(spec.idCol, removed)
+    if (error) throw error
+  }
+}
+
+/**
+ * MultiData 변경분(prev→next)을 새 테이블에 저장. 바뀐 행만 upsert, 사라진 행은 소프트 삭제.
+ * prev 가 null 이면 next 전체를 처음 올린다(초기 동기화).
+ */
+export async function saveMultiDataToTables(prevRaw: unknown, nextRaw: unknown, userId: string): Promise<void> {
+  if (!supabase) return
+  const prev = prevRaw as MD | null
+  const next = nextRaw as MD
+  const now = new Date().toISOString()
+
+  // ── 가계부 목록 ──
+  const prevLedgers = new Map((prev?.budgetList ?? []).map(m => [m.id, m]))
+  const seenLedger = new Set<string>()
+  const ledgerUpserts: Record<string, unknown>[] = []
+  for (const m of next.budgetList) {
+    seenLedger.add(m.id)
+    const p = prevLedgers.get(m.id)
+    if (!p || p.name !== m.name) {
+      ledgerUpserts.push({ id: m.id, user_id: userId, name: m.name, updated_at: now, deleted_at: null })
+    }
+  }
+  if (ledgerUpserts.length) {
+    const { error } = await supabase.from('ledgers').upsert(ledgerUpserts, { onConflict: 'user_id,id' })
+    if (error) throw error
+  }
+  const removedLedgers = [...prevLedgers.keys()].filter(id => !seenLedger.has(id))
+  if (removedLedgers.length) {
+    await supabase.from('ledgers').update({ deleted_at: now }).eq('user_id', userId).in('id', removedLedgers)
+  }
+
+  // ── 가계부별 데이터 ──
+  for (const meta of next.budgetList) {
+    const lid = meta.id
+    const nd = next.budgets[lid]
+    if (!nd) continue
+    const pd = prev?.budgets?.[lid]
+
+    // 설정값(변경 시에만 upsert)
+    const settingsRow = {
+      user_id: userId, ledger_id: lid,
+      category_hidden_months: nv(nd.categoryHiddenMonths) ?? {},
+      category_exclude_months: nv(nd.categoryExcludeMonths) ?? {},
+      dashboard_widget_order: nv(nd.dashboardWidgetOrder) ?? [],
+      budget_carried_months: nv(nd.budgetCarriedMonths) ?? [],
+      dashboard_memo: nv(nd.dashboardMemo) ?? '',
+      dismissed_notification_ids: nv(nd.dismissedNotificationIds) ?? [],
+      notification_log: nv(nd.notificationLog) ?? [],
+      investment_exchange_rates: nv(nd.investmentExchangeRates) ?? {},
+      is_setup_complete: nv(nd.isSetupComplete) ?? false,
+      updated_at: now,
+    }
+    const settingsKeys = ['categoryHiddenMonths','categoryExcludeMonths','dashboardWidgetOrder','budgetCarriedMonths','dashboardMemo','dismissedNotificationIds','notificationLog','investmentExchangeRates','isSetupComplete']
+    const settingsChanged = !pd || settingsKeys.some(k => JSON.stringify(pd[k]) !== JSON.stringify(nd[k]))
+    if (settingsChanged) {
+      const { error } = await supabase.from('ledger_settings').upsert(settingsRow, { onConflict: 'user_id,ledger_id' })
+      if (error) throw error
+    }
+
+    // 각 엔티티
+    for (const spec of ENTITIES) {
+      await syncEntity(
+        spec,
+        (pd?.[spec.key] as Record<string, unknown>[]) ?? [],
+        (nd[spec.key] as Record<string, unknown>[]) ?? [],
+        userId, lid, now,
+      )
+    }
+
+    // 포트폴리오 플랜 (account_id 기준)
+    const pPlans = (pd?.portfolioPlans as Record<string, unknown>[]) ?? []
+    const nPlans = (nd.portfolioPlans as Record<string, unknown>[]) ?? []
+    const prevPlanMap = new Map(pPlans.map(p => [String(p.accountId), p]))
+    const seenPlan = new Set<string>()
+    const planUpserts: Record<string, unknown>[] = []
+    for (const pl of nPlans) {
+      const aid = String(pl.accountId)
+      seenPlan.add(aid)
+      const pp = prevPlanMap.get(aid)
+      if (!pp || JSON.stringify(pp) !== JSON.stringify(pl)) {
+        planUpserts.push({ account_id: pl.accountId, user_id: userId, ledger_id: lid,
+          items: nv(pl.items) ?? [], groups: nv(pl.groups) ?? [], updated_at: now, deleted_at: null })
+      }
+    }
+    if (planUpserts.length) {
+      const { error } = await supabase.from('portfolio_plans').upsert(planUpserts, { onConflict: 'user_id,ledger_id,account_id' })
+      if (error) throw error
+    }
+    const removedPlans = [...prevPlanMap.keys()].filter(a => !seenPlan.has(a))
+    if (removedPlans.length) {
+      await supabase.from('portfolio_plans').update({ deleted_at: now }).eq('user_id', userId).eq('ledger_id', lid).in('account_id', removedPlans)
+    }
+  }
+}

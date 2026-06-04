@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan, WatchlistItem, NotificationLogItem } from '@/types'
 import { supabase } from './supabase'
-import { useTablesEnabled, loadMultiDataFromTables } from './dbStore'
+import { useTablesEnabled, loadMultiDataFromTables, saveMultiDataToTables } from './dbStore'
 import type { User } from '@supabase/supabase-js'
 
 // ── 기본 카테고리 (대분류/소분류 계층 구조) ───────────────────────────────────
@@ -302,6 +302,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userRef = useRef<User | null>(null)
   const multiDataRef = useRef<MultiData>(INITIAL_MULTI_DATA)
+  const tablesSyncedRef = useRef<MultiData | null>(null)  // 새 테이블에 마지막으로 동기화한 상태 (diff 기준)
+  const tablesSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sessionTokenRef = useRef<string | null>(null)   // keepalive sync 용 JWT 캐시
   const isExplicitSignOutRef = useRef(false)            // 의도적 로그아웃 여부
   // 자동 백업(버전) — 세션 단위 사본
@@ -534,6 +536,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (userRef.current) syncToSupabase(userRef.current.id, next, { snapshot: true })
       }, 200)
     }
+    // ── (신규) 항목별 테이블 이중 저장 — 스위치 ON일 때만 ──────────────────
+    // 기존 blob 저장과 동시에, 바뀐 행만 새 테이블에 저장한다(diff).
+    // 실패해도 위 blob 저장은 그대로라 데이터는 안전.
+    if (supabase && userRef.current && useTablesEnabled()) {
+      if (tablesSyncTimerRef.current) clearTimeout(tablesSyncTimerRef.current)
+      tablesSyncTimerRef.current = setTimeout(() => {
+        const uid = userRef.current?.id
+        if (!uid) return
+        const baseline = tablesSyncedRef.current
+        saveMultiDataToTables(baseline, next, uid)
+          .then(() => { tablesSyncedRef.current = next })
+          .catch(() => { /* 실패해도 blob 저장 유지 → 데이터 안전. 다음 저장 때 재시도됨 */ })
+      }, 250)
+    }
   }
 
   // ── 구 AppData → MultiData 래핑 ─────────────────────────────────────────────
@@ -688,6 +704,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 if (fromTables) {
                   const winnerT = hydrateMultiData(fromTables)
                   setMultiData(winnerT)
+                  tablesSyncedRef.current = winnerT   // diff 기준점
                   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(winnerT)) } catch { /* ignore */ }
                   tablesLoaded = true
                 }
@@ -724,6 +741,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               winner = mergeMultiData(localMulti, remoteMulti)
             }
             setMultiData(winner)
+            tablesSyncedRef.current = winner   // diff 기준점 (스위치 ON 시 이중 저장용)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
             if (remoteFetchOk) {
               await syncToSupabase(session.user.id, winner)
