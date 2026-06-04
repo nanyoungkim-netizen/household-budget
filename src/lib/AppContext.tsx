@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { Account, Category, Transaction, Budget, Card, Installment, Saving, Goal, GoalPayment, CardBilling, MappingRule, Investment, InvestmentTrade, InvestmentAccount, InvestmentDividend, InvestmentCashDeposit, SavingPayment, ConsumptionType, InvestmentAccountType, InvestmentTargetAllocation, PortfolioPlan, WatchlistItem, NotificationLogItem } from '@/types'
 import { supabase } from './supabase'
+import { useTablesEnabled, loadMultiDataFromTables } from './dbStore'
 import type { User } from '@supabase/supabase-js'
 
 // ── 기본 카테고리 (대분류/소분류 계층 구조) ───────────────────────────────────
@@ -676,6 +677,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             userRef.current = session.user
             sessionTokenRef.current = session.access_token  // JWT 캐시
 
+            // ── (신규) 항목별 테이블 방식 — 스위치 켜졌을 때만 "읽기" ───────────
+            // 새 테이블에서 데이터를 불러와 화면에 사용. 실패/데이터없음이면 아래
+            // 기존(blob) 방식으로 자동 폴백. 이 단계는 읽기 전용이라 Supabase blob은
+            // 건드리지 않는다 → 원본 안전.
+            let tablesLoaded = false
+            if (useTablesEnabled()) {
+              try {
+                const fromTables = await loadMultiDataFromTables(session.user.id, localMulti?.activeBudgetId)
+                if (fromTables) {
+                  const winnerT = hydrateMultiData(fromTables)
+                  setMultiData(winnerT)
+                  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(winnerT)) } catch { /* ignore */ }
+                  tablesLoaded = true
+                }
+              } catch { /* 테이블 읽기 실패 → 기존 방식으로 폴백 */ }
+            }
+
+            if (!tablesLoaded) {
             // dirty flag: 이전 세션에서 미동기 데이터가 있으면 로컬을 Supabase에 먼저 push
             const hasPendingSync = localStorage.getItem(NEEDS_SYNC_KEY) === '1'
             if (hasPendingSync && localMulti) {
@@ -708,6 +727,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(winner))
             if (remoteFetchOk) {
               await syncToSupabase(session.user.id, winner)
+            }
             }
           } else {
             if (localMulti) setMultiData(localMulti)
