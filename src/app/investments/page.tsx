@@ -42,7 +42,7 @@ const ACCOUNT_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '
 
 type PageTab = 'dashboard' | 'holdings' | 'watchlist' | 'trades' | 'portfolio'
 
-const ETF_NAME_PREFIXES = ['TIGER', 'KODEX', 'KBSTAR', 'ARIRANG', 'HANARO', 'KOSEF', 'TIMEFOLIO', 'ACE', 'PLUS', 'SOL', 'TREX', 'WOORI', 'KB']
+const ETF_NAME_PREFIXES = ['TIGER', 'KODEX', 'KBSTAR', 'RISE', 'ARIRANG', 'HANARO', 'KOSEF', 'TIMEFOLIO', 'ACE', 'KINDEX', 'PLUS', 'SOL', 'TREX', 'WOORI', 'KIWOOM', '히어로즈', '1Q', 'KB']
 function isDomesticEtf(name: string, market?: string): boolean {
   if (market && /ETF/i.test(market)) return true
   return ETF_NAME_PREFIXES.some(p => name.toUpperCase().startsWith(p))

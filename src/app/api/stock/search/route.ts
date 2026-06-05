@@ -85,30 +85,30 @@ export async function GET(req: NextRequest) {
     // naver autocomplete 실패 시 etf 목록으로만 응답
   }
 
-  // ── 2. ETF 전체 목록 부분 문자열 검색 ────────────────────────────────────
-  // 네이버 자동완성이 이미 10개 찾았고 한글이 아닌 쿼리면 ETF 검색 생략
-  const needEtfSearch = q.length >= 1
-  let etfItems: { name: string; ticker: string; market: string }[] = []
+  // ── 2. ETF 전체 목록 부분 문자열 검색 + ETF 태깅 ─────────────────────────
+  const qLower = q.toLowerCase()
+  const allEtfs = await fetchEtfList()
+  const etfCodes = new Set(allEtfs.map(e => e.itemcode))
 
-  if (needEtfSearch) {
-    const qLower = q.toLowerCase()
-    const allEtfs = await fetchEtfList()
-    const matched = allEtfs.filter(e =>
-      e.itemname?.toLowerCase().includes(qLower) ||
-      e.itemcode?.toLowerCase().includes(qLower)
-    )
+  // 네이버 자동완성 결과 중 ETF 목록에 있는 종목은 market을 'ETF'로 보정.
+  // (예: 'RISE …' ETF는 자동완성에선 '코스피'로 와서 ETF 인식이 안 되는 문제 해결)
+  naverItems = naverItems.map(i => (i.ticker && etfCodes.has(i.ticker) ? { ...i, market: 'ETF' } : i))
 
-    // 네이버 자동완성에 이미 있는 ticker 제외 (중복 방지)
-    const naverTickers = new Set(naverItems.map(i => i.ticker))
-    etfItems = matched
-      .filter(e => !naverTickers.has(e.itemcode))
-      .slice(0, 10)
-      .map(e => ({
-        name:   e.itemname,
-        ticker: e.itemcode,
-        market: 'ETF',
-      }))
-  }
+  const matched = allEtfs.filter(e =>
+    e.itemname?.toLowerCase().includes(qLower) ||
+    e.itemcode?.toLowerCase().includes(qLower)
+  )
+
+  // 네이버 자동완성에 이미 있는 ticker 제외 (중복 방지)
+  const naverTickers = new Set(naverItems.map(i => i.ticker))
+  const etfItems: { name: string; ticker: string; market: string }[] = matched
+    .filter(e => !naverTickers.has(e.itemcode))
+    .slice(0, 10)
+    .map(e => ({
+      name:   e.itemname,
+      ticker: e.itemcode,
+      market: 'ETF',
+    }))
 
   // ── 3. 합치기: 네이버 결과 우선, ETF 부분 검색 결과 후순위 ───────────────
   const combined = [...naverItems, ...etfItems].slice(0, 15)
