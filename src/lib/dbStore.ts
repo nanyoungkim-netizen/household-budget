@@ -148,12 +148,20 @@ const mapWatchlist = (r: Row) => clean({
 // 한 테이블 전체 행 조회 (내 것 + 삭제 안 된 것)
 async function fetchAll(table: string, userId: string): Promise<Row[]> {
   if (!supabase) return []
-  let q = supabase.from(table).select('*').eq('user_id', userId)
-  // ledger_settings 는 소프트삭제 대상이 아니라 deleted_at 컬럼이 없음 → 필터 제외
-  if (table !== 'ledger_settings') q = q.is('deleted_at', null)
-  const { data, error } = await q
-  if (error) throw error
-  return (data ?? []) as Row[]
+  // PostgREST는 한 번에 최대 1000건만 반환 → 페이지로 끝까지 모아 1000건 초과도 전부 가져옴
+  const PAGE = 1000
+  const all: Row[] = []
+  for (let from = 0; ; from += PAGE) {
+    let q = supabase.from(table).select('*').eq('user_id', userId)
+    // ledger_settings 는 소프트삭제 대상이 아니라 deleted_at 컬럼이 없음 → 필터 제외
+    if (table !== 'ledger_settings') q = q.is('deleted_at', null)
+    const { data, error } = await q.range(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as Row[]
+    all.push(...rows)
+    if (rows.length < PAGE) break   // 마지막 페이지
+  }
+  return all
 }
 
 /**
