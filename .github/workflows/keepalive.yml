@@ -19,7 +19,7 @@ jobs:
       - name: Ping Supabase REST API
         run: |
           code=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "https://romxbwiclhieymdnxmyu.supabase.co/rest/v1/ledgers?select=row_id&limit=1" \
+            "https://romxbwiclhieymdnxmyu.supabase.co/rest/v1/user_data?select=user_id&limit=1" \
             -H "apikey: sb_publishable_lT6dbgLTL6YVvYusDnQZaQ_UkwDYS1A")
           echo "Supabase responded HTTP $code"
           # 2xx/4xx 모두 '프로젝트가 깨어있음'을 의미(요청이 도달함). 5xx/000만 실패로 처리.
