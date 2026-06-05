@@ -48,7 +48,10 @@ export const DEFAULT_CATEGORIES: Category[] = [
 
 // 기존 데이터에 role 자동 부여 (이름/ID 기반 → 1회 마이그레이션)
 export function migrateCategories(cats: Category[]): Category[] {
-  return cats.map(cat => {
+  return cats.map(cat0 => {
+    // 대분류의 parentId(null)가 누락되면(마이그레이션 round-trip 등) 화면에 카테고리가
+    // 안 보임 → parentId가 없으면 null로 복원. (이름·계층 등 다른 값은 그대로)
+    const cat = cat0.parentId === undefined ? { ...cat0, parentId: null } : cat0
     if (cat.role !== undefined) return cat
     if (cat.id === 'card' || /카드대금/.test(cat.name)) return { ...cat, role: 'card_payment' as const }
     if (cat.parentId === null && /적금|예금|저축/.test(cat.name)) return { ...cat, role: 'savings' as const }
