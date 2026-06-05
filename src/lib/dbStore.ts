@@ -148,11 +148,10 @@ const mapWatchlist = (r: Row) => clean({
 // 한 테이블 전체 행 조회 (내 것 + 삭제 안 된 것)
 async function fetchAll(table: string, userId: string): Promise<Row[]> {
   if (!supabase) return []
-  const { data, error } = await supabase
-    .from(table)
-    .select('*')
-    .eq('user_id', userId)
-    .is('deleted_at', null)
+  let q = supabase.from(table).select('*').eq('user_id', userId)
+  // ledger_settings 는 소프트삭제 대상이 아니라 deleted_at 컬럼이 없음 → 필터 제외
+  if (table !== 'ledger_settings') q = q.is('deleted_at', null)
+  const { data, error } = await q
   if (error) throw error
   return (data ?? []) as Row[]
 }
