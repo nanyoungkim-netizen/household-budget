@@ -2,9 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApp, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
-import { Transaction, PaymentMethod, Saving, ConsumptionType } from '@/types'
+import { Transaction, PaymentMethod, Saving, ConsumptionType, Category } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
+
+// 거래 화면에서 새 카테고리 추가 시 쓰는 아이콘·색상 프리셋
+const NEW_CAT_ICONS = ['📦','🏠','🍽️','🚌','📱','🛡️','💰','🏦','💳','🎁','✈️','🍺','🧴','📺','⚡','💧','🔥','🛍️','📚','❤️','🎵','🏋️','🚗','☕','🎮','💊','🐶','🌱']
+const NEW_CAT_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6F','#DDA0DD','#82E0AA','#F1948A','#85C1E9','#F0B27A','#A9CCE3','#EC7063','#A8D8EA','#B0BEC5','#CFD8DC']
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 // FR-007: 금액 입력 포맷 헬퍼
@@ -114,7 +118,7 @@ const TOAST_INCOME = [
 ]
 
 export default function TransactionsPage() {
-  const { data, categories, addTransaction, updateTransaction, deleteTransaction, setSavings } = useApp()
+  const { data, categories, addTransaction, updateTransaction, deleteTransaction, setSavings, setCategories } = useApp()
   const { accounts, transactions, cards, categoryExcludeMonths } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
@@ -646,6 +650,13 @@ export default function TransactionsPage() {
   // 카테고리 선택 (모달)
   const [catSearch, setCatSearch] = useState('')
   const [catModalParent, setCatModalParent] = useState('')
+  // 거래 화면 내 새 카테고리 추가 폼
+  const [showAddCat, setShowAddCat] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatParent, setNewCatParent] = useState('')      // 기존 대분류 id 또는 '__new__'
+  const [newParentName, setNewParentName] = useState('')
+  const [newCatIcon, setNewCatIcon] = useState('📦')
+  const [newCatColor, setNewCatColor] = useState('#CFD8DC')
   // 계좌 선택 검색 (모달)
   const [accountSearch, setAccountSearch] = useState('')
 
@@ -1476,6 +1487,27 @@ export default function TransactionsPage() {
                       }
                     }
 
+                    function handleAddCategory() {
+                      const name = newCatName.trim()
+                      if (!name) return
+                      const catType: 'income' | 'expense' = formType === 'income' ? 'income' : 'expense'
+                      let parentId = newCatParent
+                      const additions: Category[] = []
+                      if (newCatParent === '__new__') {
+                        const pName = newParentName.trim()
+                        if (!pName) return
+                        parentId = `pg_${Date.now()}`
+                        additions.push({ id: parentId, name: pName, type: catType, icon: newCatIcon, color: newCatColor, parentId: null })
+                      }
+                      if (!parentId) return
+                      const cid = `cat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+                      additions.push({ id: cid, name, type: catType, icon: newCatIcon, color: newCatColor, parentId })
+                      setCategories([...categories, ...additions])
+                      selectCat(cid)
+                      setShowAddCat(false); setNewCatName(''); setNewCatParent(''); setNewParentName('')
+                      setNewCatIcon('📦'); setNewCatColor('#CFD8DC'); setCatModalParent(parentId)
+                    }
+
                     return (
                       <div className={`border ${borderCls} rounded-xl overflow-hidden`}>
                         {formType === 'refund' && (
@@ -1563,6 +1595,65 @@ export default function TransactionsPage() {
                               </button>
                             )
                           })}
+                        </div>
+
+                        {/* ── 새 카테고리 추가 ── */}
+                        <div className="border-t border-gray-100 bg-white p-2">
+                          {!showAddCat ? (
+                            <button type="button"
+                              onClick={() => { setShowAddCat(true); setNewCatParent(catModalParent || catParentList[0]?.id || '__new__') }}
+                              className="w-full text-xs font-medium text-blue-600 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+                              + 새 카테고리 추가
+                            </button>
+                          ) : (
+                            <div className="space-y-2">
+                              <input type="text" value={newCatName} autoFocus
+                                onChange={e => setNewCatName(e.target.value)}
+                                placeholder="새 소분류 이름 (예: 케이패스)"
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                              <div>
+                                <div className="text-[11px] text-gray-400 mb-1">대분류 선택</div>
+                                <select value={newCatParent} onChange={e => setNewCatParent(e.target.value)}
+                                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                  {catParentList.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+                                  <option value="__new__">+ 새 대분류 만들기</option>
+                                </select>
+                              </div>
+                              {newCatParent === '__new__' && (
+                                <input type="text" value={newParentName}
+                                  onChange={e => setNewParentName(e.target.value)}
+                                  placeholder="새 대분류 이름 (예: 여행통장)"
+                                  className="w-full border border-blue-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                              )}
+                              <div>
+                                <div className="text-[11px] text-gray-400 mb-1">아이콘</div>
+                                <div className="flex gap-1 overflow-x-auto pb-1">
+                                  {NEW_CAT_ICONS.map(ic => (
+                                    <button key={ic} type="button" onClick={() => setNewCatIcon(ic)}
+                                      className={`w-7 h-7 shrink-0 rounded-lg text-sm flex items-center justify-center ${newCatIcon === ic ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-gray-100 hover:bg-gray-200'}`}>{ic}</button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] text-gray-400 mb-1">색상</div>
+                                <div className="flex gap-1 flex-wrap">
+                                  {NEW_CAT_COLORS.map(col => (
+                                    <button key={col} type="button" onClick={() => setNewCatColor(col)}
+                                      className={`w-6 h-6 rounded-lg transition-transform ${newCatColor === col ? 'ring-2 ring-offset-1 ring-blue-400 scale-110' : ''}`}
+                                      style={{ backgroundColor: col }} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2 pt-0.5">
+                                <button type="button"
+                                  onClick={() => { setShowAddCat(false); setNewCatName(''); setNewParentName(''); setNewCatParent('') }}
+                                  className="flex-1 py-2 rounded-lg bg-gray-100 text-gray-500 text-xs font-medium hover:bg-gray-200">취소</button>
+                                <button type="button" onClick={handleAddCategory}
+                                  disabled={!newCatName.trim() || (newCatParent === '__new__' && !newParentName.trim())}
+                                  className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-40">추가하고 선택</button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )

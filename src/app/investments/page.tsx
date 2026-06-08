@@ -139,6 +139,39 @@ export default function InvestmentsPage() {
   const compositionPopupRef = useRef<HTMLDivElement>(null)
   const activeButtonRef = useRef<HTMLElement | null>(null)  // 스크롤 추적용 버튼 ref
 
+  // ── 관심종목 드래그 순서 변경 (마우스 + 터치) ───────────────────────────────
+  const [wlDragId, setWlDragId] = useState<string | null>(null)
+  const [wlOverId, setWlOverId] = useState<string | null>(null)
+  const wlTouchDragRef = useRef<string | null>(null)
+  const wlTouchOverRef = useRef<string | null>(null)
+
+  function reorderWatchlist(dragId: string, targetId: string) {
+    if (!dragId || dragId === targetId) return
+    const arr = [...watchlist]
+    const from = arr.findIndex(w => w.id === dragId)
+    const to = arr.findIndex(w => w.id === targetId)
+    if (from < 0 || to < 0) return
+    const [moved] = arr.splice(from, 1)
+    arr.splice(to, 0, moved)
+    setWatchlist(arr)
+  }
+  function onWlDragOver(e: React.DragEvent, id: string) { e.preventDefault(); if (id !== wlDragId) setWlOverId(id) }
+  function onWlDrop(e: React.DragEvent, id: string) { e.preventDefault(); if (wlDragId) reorderWatchlist(wlDragId, id); setWlDragId(null); setWlOverId(null) }
+  function onWlDragEnd() { setWlDragId(null); setWlOverId(null) }
+  function onWlTouchStart(id: string) { wlTouchDragRef.current = id; wlTouchOverRef.current = null; setWlDragId(id) }
+  function onWlTouchMove(e: React.TouchEvent) {
+    if (!wlTouchDragRef.current) return
+    e.preventDefault()
+    const t = e.touches[0]
+    const el = document.elementFromPoint(t.clientX, t.clientY)
+    const item = el?.closest('[data-wl-id]') as HTMLElement | null
+    if (item?.dataset.wlId && item.dataset.wlId !== wlTouchDragRef.current) { wlTouchOverRef.current = item.dataset.wlId; setWlOverId(item.dataset.wlId) }
+  }
+  function onWlTouchEnd() {
+    if (wlTouchDragRef.current && wlTouchOverRef.current) reorderWatchlist(wlTouchDragRef.current, wlTouchOverRef.current)
+    wlTouchDragRef.current = null; wlTouchOverRef.current = null; setWlDragId(null); setWlOverId(null)
+  }
+
   async function fetchComposition(ticker: string, invName?: string) {
     if (compositionCache[ticker] || compositionLoading.has(ticker)) return
     setCompositionLoading(prev => new Set(prev).add(ticker))
@@ -2187,7 +2220,21 @@ export default function InvestmentsPage() {
                 const hasChange = w.prevCloseDiff !== undefined
                 const isForeignCcy = w.currency !== 'KRW'
                 return (
-                  <div key={w.id} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                  <div key={w.id}
+                    data-wl-id={w.id}
+                    draggable
+                    onDragStart={() => setWlDragId(w.id)}
+                    onDragOver={e => onWlDragOver(e, w.id)}
+                    onDrop={e => onWlDrop(e, w.id)}
+                    onDragEnd={onWlDragEnd}
+                    className={`bg-white rounded-2xl p-4 shadow-sm flex items-center gap-2 transition-all ${wlDragId === w.id ? 'opacity-40' : ''} ${wlOverId === w.id && wlDragId !== w.id ? 'ring-2 ring-blue-400' : ''}`}>
+                    {/* 드래그 손잡이 (터치는 여기서 시작) */}
+                    <span
+                      onTouchStart={() => onWlTouchStart(w.id)}
+                      onTouchMove={onWlTouchMove}
+                      onTouchEnd={onWlTouchEnd}
+                      className="shrink-0 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 select-none touch-none text-lg leading-none"
+                      title="드래그하여 순서 변경">⠿</span>
                     <span className="text-2xl shrink-0">{ASSET_TYPE_META[w.assetType].icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-gray-800 text-sm flex items-center gap-1.5 flex-wrap">
