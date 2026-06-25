@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
@@ -591,6 +592,9 @@ export default function Dashboard() {
     : viewMode === 'week' ? weekLabel(weekStart, weekEnd)
     : monthLabel(selectedMonth)
   const isNow       = viewMode === 'day' ? isToday : viewMode === 'week' ? isThisWeek : isThisMonth
+
+  // ESC 키로 열린 모달(알림 내역) 닫기
+  useEscClose(showNotifHistory, () => setShowNotifHistory(false))
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">

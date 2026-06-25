@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState } from 'react'
 import { useApp, computeAccountBalance } from '@/lib/AppContext'
@@ -147,6 +148,9 @@ export default function AccountsPage() {
     items: accountBalances.filter(a => (a.assetType ?? 'cash') === at.value),
     subtotal: accountBalances.filter(a => (a.assetType ?? 'cash') === at.value).reduce((s, a) => s + a.computed, 0),
   })).filter(g => g.items.length > 0)
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showModal, () => setShowModal(false))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

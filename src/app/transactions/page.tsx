@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApp, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
@@ -677,6 +678,10 @@ export default function TransactionsPage() {
     }
     return [...result].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   })()
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showModal, closeModal)
+  useEscClose(showQuickAddSaving, () => setShowQuickAddSaving(false))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

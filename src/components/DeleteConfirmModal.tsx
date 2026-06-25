@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 interface Props {
   message?: string
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function DeleteConfirmModal({ message, onConfirm, onCancel }: Props) {
+  useEscClose(true, onCancel)
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onCancel}>
       <div className="bg-white rounded-2xl w-full max-w-xs p-5 shadow-xl" onClick={e => e.stopPropagation()}>

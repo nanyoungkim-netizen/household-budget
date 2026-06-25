@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState } from 'react'
 import { useApp } from '@/lib/AppContext'
@@ -90,6 +91,10 @@ export default function CardsPage() {
   const totalBilled = viewBillings.reduce((s, b) => s + b.totalAmount, 0)
   const totalPaid   = viewBillings.reduce((s, b) => s + b.paidAmount, 0)
   const totalRemain = totalBilled - totalPaid
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showInstModal, () => setShowInstModal(false))
+  useEscClose(showBillingModal, () => setShowBillingModal(false))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

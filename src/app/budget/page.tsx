@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -490,6 +491,11 @@ export default function BudgetPage() {
   const prevM = prevMonth(month)
   const hasPrevBudget = budgets.some(b => b.month === prevM)
   const hasCurrentBudget = budgets.some(b => b.month === month)
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showCarryOver, () => setShowCarryOver(false))
+  useEscClose(modal !== null, () => setModal(null))
+  useEscClose(deleteCatId !== null, () => setDeleteCatId(null))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

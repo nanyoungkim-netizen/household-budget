@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useRef } from 'react'
 import { useApp } from '@/lib/AppContext'
@@ -229,6 +230,10 @@ export default function GoalsPage() {
       return next
     })
   }
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showModal, () => setShowModal(false))
+  useEscClose(paymentGoalId !== null, () => setPaymentGoalId(null))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

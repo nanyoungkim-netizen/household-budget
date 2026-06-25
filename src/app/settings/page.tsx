@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import React, { useState, useRef } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
@@ -408,6 +409,11 @@ export default function SettingsPage() {
   function deleteMappingRule(id: string) {
     setMappingRules(mappingRules.filter(r => r.id !== id))
   }
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showAccountModal, () => setShowAccountModal(false))
+  useEscClose(showCardModal, () => setShowCardModal(false))
+  useEscClose(catModal !== null, () => setCatModal(null))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

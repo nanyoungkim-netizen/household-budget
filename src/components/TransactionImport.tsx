@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
@@ -303,6 +304,7 @@ type Step = 'upload' | 'map' | 'review'
 const steps: Step[] = ['upload', 'map', 'review']
 
 export default function TransactionImport({ onClose }: TransactionImportProps) {
+  useEscClose(true, onClose)
   const { data, categories, addTransaction, setCategories } = useApp()
   const { accounts, cards, mappingRules } = data
   const fileRef = useRef<HTMLInputElement>(null)

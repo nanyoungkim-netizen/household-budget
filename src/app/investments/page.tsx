@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useApp, DEFAULT_INVESTMENT_ACCOUNT_TYPES } from '@/lib/AppContext'
@@ -1672,6 +1673,15 @@ export default function InvestmentsPage() {
       </div>
     )
   }
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(showInvPicker !== null, () => setShowInvPicker(null))
+  useEscClose(showTypeModal, () => setShowTypeModal(false))
+  useEscClose(showAccountModal, () => setShowAccountModal(false))
+  useEscClose(showInvestmentModal, () => setShowInvestmentModal(false))
+  useEscClose(showTradeModal, () => setShowTradeModal(false))
+  useEscClose(showDividendModal, () => setShowDividendModal(false))
+  useEscClose(showDepositModal, () => setShowDepositModal(false))
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">

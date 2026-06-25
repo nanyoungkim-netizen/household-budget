@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useMemo, useRef } from 'react'
 import { useApp } from '@/lib/AppContext'
@@ -355,6 +356,11 @@ export default function SavingsPage() {
   const TAX_LABELS: Record<TaxType, string> = {
     general: '일반과세(15.4%)', low_tax: '저율과세(9.9%)', exempt: '비과세',
   }
+
+  // ESC 키로 열린 모달 닫기
+  useEscClose(!!pendingTab, () => setPendingTab(null))
+  useEscClose(showModal, () => setShowModal(false))
+  useEscClose(!!maturityModal, () => setMaturityModal(null))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
