@@ -124,6 +124,14 @@ export default function Dashboard() {
   type ViewMode = 'day' | 'week' | 'month'
   const [greeting] = useState(dailyComment)   // 매일 바뀌는 코멘트 (마운트 시 1회 계산)
   const [viewMode, setViewMode]       = useState<ViewMode>('day')
+  // 대시보드 현금성자산 계좌번호 보이기/숨기기 (localStorage로 유지 — 다음 접속에도 동일)
+  const [showAcctNo, setShowAcctNo] = useState(false)
+  useEffect(() => { try { setShowAcctNo(localStorage.getItem('hb_dash_show_acct_no') === '1') } catch { /* ignore */ } }, [])
+  const toggleAcctNo = () => setShowAcctNo(v => {
+    const nv = !v
+    try { localStorage.setItem('hb_dash_show_acct_no', nv ? '1' : '0') } catch { /* ignore */ }
+    return nv
+  })
   const [selectedDay, setSelectedDay] = useState(todayStr)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
 
@@ -934,6 +942,13 @@ export default function Dashboard() {
                       <span className="text-xs font-bold text-gray-500">현금성 자산</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      {sectionAccounts.some(a => a.accountNumber) && (
+                        <button type="button" onClick={toggleAcctNo}
+                          title={showAcctNo ? '계좌번호 숨기기' : '계좌번호 보이기'}
+                          className={`text-[11px] px-1.5 py-0.5 rounded-md border transition-colors ${showAcctNo ? 'bg-blue-50 border-blue-200 text-blue-500' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}>
+                          {showAcctNo ? '👁 계좌번호' : '🙈 계좌번호'}
+                        </button>
+                      )}
                       <span className="text-xs font-semibold text-blue-600">{fmtKRW(subtotal)}</span>
                       <Link href="/accounts" className="text-xs text-blue-500 hover:text-blue-700">관리 →</Link>
                     </div>
@@ -948,6 +963,9 @@ export default function Dashboard() {
                             <div className="mb-2">
                               {acc.bank && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{acc.bank}</div>}
                               <div className="text-xs text-gray-700 font-medium">{acc.name}</div>
+                              {showAcctNo && acc.accountNumber && (
+                                <div className="text-[11px] text-gray-500 font-mono tracking-tight mt-0.5">{acc.accountNumber}</div>
+                              )}
                               {acc.memo && <div className="text-[10px] text-gray-400 mt-0.5">{acc.memo}</div>}
                             </div>
                             <div className="text-xl font-bold text-gray-900 tabular-nums">{acc.computed.toLocaleString('ko-KR')}원</div>

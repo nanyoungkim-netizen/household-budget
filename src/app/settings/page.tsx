@@ -491,7 +491,7 @@ export default function SettingsPage() {
                       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide truncate">{acc.bank}</div>
                       <div className="font-semibold text-gray-900 truncate">{acc.name}</div>
                       {acc.accountNumber && (
-                        <div className="text-[11px] text-gray-400 mt-0.5 truncate font-mono" title={acc.accountNumber}>
+                        <div className="text-xs text-gray-600 mt-0.5 truncate font-mono tracking-tight" title={acc.accountNumber}>
                           {acc.accountNumber}
                         </div>
                       )}
@@ -899,23 +899,37 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
-                <input type="text" placeholder="계좌 이름" value={accountForm.name}
-                  onChange={e => setAccountForm(f => ({ ...f, name: e.target.value }))}
-                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <input type="text" placeholder="은행명" value={accountForm.bank}
-                  onChange={e => setAccountForm(f => ({ ...f, bank: e.target.value }))}
-                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">계좌명</label>
+                  <input type="text" placeholder="예: 월급통장" value={accountForm.name}
+                    onChange={e => setAccountForm(f => ({ ...f, name: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">은행명</label>
+                  <input type="text" placeholder="예: 토스뱅크" value={accountForm.bank}
+                    onChange={e => setAccountForm(f => ({ ...f, bank: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
               </div>
-              <input type="text" inputMode="numeric" placeholder="현재 잔액 (원)" value={accountForm.balance}
-                onChange={e => setAccountForm(f => ({ ...f, balance: fmtInput(e.target.value) }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-
-              <input type="text" placeholder="메모 (대시보드에 작게 표시)" value={accountForm.memo}
-                onChange={e => setAccountForm(f => ({ ...f, memo: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <input type="text" placeholder="계좌번호 (선택)" value={accountForm.accountNumber}
-                onChange={e => setAccountForm(f => ({ ...f, accountNumber: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">현재 잔액 (원)</label>
+                <input type="text" inputMode="numeric" placeholder="0" value={accountForm.balance}
+                  onChange={e => setAccountForm(f => ({ ...f, balance: fmtInput(e.target.value) }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">메모 <span className="font-normal text-gray-300">· 대시보드에 작게 표시</span></label>
+                <input type="text" placeholder="예: 연 1% 우대" value={accountForm.memo}
+                  onChange={e => setAccountForm(f => ({ ...f, memo: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">계좌번호 <span className="font-normal text-gray-300">· 선택</span></label>
+                <input type="text" placeholder="예: 1000-0358-8930" value={accountForm.accountNumber}
+                  onChange={e => setAccountForm(f => ({ ...f, accountNumber: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+              </div>
 
               <div>
                 <div className="text-xs text-gray-400 mb-1.5">색상</div>
