@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useApp, DEFAULT_BUDGET_ID } from '@/lib/AppContext'
@@ -180,6 +181,9 @@ export default function HistoryPage() {
     if (file) uploadFile(file)
     e.target.value = ''
   }
+
+  // ESC 키로 삭제 확인창 닫기
+  useEscClose(confirmDelete !== null, () => setConfirmDelete(null))
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">

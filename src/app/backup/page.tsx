@@ -1,4 +1,5 @@
 'use client'
+import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useApp, MultiData, AppVersionMeta } from '@/lib/AppContext'
@@ -1292,6 +1293,11 @@ export default function BackupPage() {
     { label: '할부',       count: (installments ?? []).length,             color: 'rose' },
     { label: '매핑규칙',   count: (mappingRules ?? []).length,             color: 'orange' },
   ]
+
+  // ESC 키로 열린 확인창 닫기 (작업 진행 중이면 닫지 않음 — 배경클릭과 동일)
+  useEscClose(confirmVersion !== null, () => { if (versionRestoreStatus !== 'restoring') setConfirmVersion(null) })
+  useEscClose(confirmDeleteVersion !== null, () => { if (deleteStatus !== 'deleting') setConfirmDeleteVersion(null) })
+  useEscClose(bulkConfirm !== null, () => { if (!bulkDeleting) setBulkConfirm(null) })
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
