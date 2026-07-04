@@ -393,12 +393,14 @@ export default function TransactionsPage() {
   }))
 
   // 카드별 이번 달 누적 (월 필터 적용)
-  const cardMonthlyTotals = activeCards.map(card => ({
+  // 필터칩은 내역 조회용이므로 전체 카드 기준으로 집계하되,
+  // 렌더 시 '사용 중 카드' 또는 '해당 월에 사용 내역이 있는 해지 카드'만 노출한다.
+  const cardMonthlyTotals = cards.map(card => ({
     card,
     total: transactions
       .filter(t => t.date.startsWith(month) && t.paymentMethod === 'card' && t.cardId === card.id && (t.type === 'expense' || t.type === 'refund'))
       .reduce((s, t) => t.type === 'refund' ? s - t.amount : s + t.amount, 0),
-  }))
+  })).filter(({ card, total }) => isCardActive(card, month + '-01') || total !== 0)
 
   const grouped = filtered.reduce<Record<string, Transaction[]>>((acc, t) => {
     if (!acc[t.date]) acc[t.date] = []
@@ -834,7 +836,7 @@ export default function TransactionsPage() {
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${filterCard === card.id ? 'bg-white/60' : ''}`}
                     style={filterCard !== card.id ? { backgroundColor: card.color } : {}}
                   />
-                  <span>{card.name}</span>
+                  <span>{card.name}{!isCardActive(card) && <span className={`ml-1 text-[10px] ${filterCard === card.id ? 'text-white/70' : 'text-gray-400'}`}>해지</span>}</span>
                   <span className={`text-xs font-normal ${filterCard === card.id ? 'text-white/80' : 'text-red-400'}`}>
                     {total > 0 ? `${total.toLocaleString('ko-KR')}원` : '0원'}
                   </span>
