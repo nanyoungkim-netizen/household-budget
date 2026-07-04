@@ -93,6 +93,7 @@ export interface Card {
   color: string
   annualFeeAmount?: number  // 연회비 금액 (원)
   annualFeeDate?: string    // 연회비 납부일 "MM-DD" 형식
+  canceledDate?: string     // 해지일 "YYYY-MM-DD" — 이 날 이후 카드 선택/노출에서 숨김(내역은 유지)
 }
 
 export interface Installment {

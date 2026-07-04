@@ -3,6 +3,7 @@ import { useEscClose } from '@/lib/useEscClose'
 
 import { useState } from 'react'
 import { useApp } from '@/lib/AppContext'
+import { isCardActive } from '@/lib/card'
 import { Installment, CardBilling } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -16,11 +17,20 @@ const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padS
 export default function CardsPage() {
   const { data, setInstallments, setCardBillings } = useApp()
   const { cards, installments, cardBillings } = data
+  // 해지되지 않은 카드만 노출/선택. 청구·할부 내역의 카드명 조회는 전체 cards 사용(내역 유지).
+  const activeCards = cards.filter(c => isCardActive(c))
+  const cardOptions = (selectedId?: string) => {
+    if (selectedId && !activeCards.some(c => c.id === selectedId)) {
+      const sel = cards.find(c => c.id === selectedId)
+      if (sel) return [...activeCards, sel]
+    }
+    return activeCards
+  }
 
   // 할부 모달
   const [showInstModal, setShowInstModal] = useState(false)
   const [instForm, setInstForm] = useState({
-    cardId: cards[0]?.id || '', description: '', totalAmount: '',
+    cardId: activeCards[0]?.id || '', description: '', totalAmount: '',
     totalMonths: '6', startDate: today.toISOString().slice(0, 10),
   })
 
@@ -28,7 +38,7 @@ export default function CardsPage() {
   const [showBillingModal, setShowBillingModal] = useState(false)
   const [editingBillingId, setEditingBillingId] = useState<string | null>(null)
   const [billingForm, setBillingForm] = useState({
-    cardId: cards[0]?.id || '',
+    cardId: activeCards[0]?.id || '',
     billingMonth: currentMonth,
     paymentMonth: currentMonth,
     totalAmount: '',
@@ -108,7 +118,7 @@ export default function CardsPage() {
 
       {/* 카드 요약 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {cards.map(card => {
+        {activeCards.map(card => {
           const monthly = installments.filter(i => i.cardId === card.id).reduce((s, i) => s + i.monthlyAmount, 0)
           return (
             <div key={card.id} className="text-white rounded-2xl p-4 shadow-sm" style={{ backgroundColor: card.color }}>
@@ -243,7 +253,7 @@ export default function CardsPage() {
             </div>
             <div className="space-y-3">
               <select value={instForm.cardId} onChange={e => setInstForm(f => ({ ...f, cardId: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {cardOptions(instForm.cardId).map(c => <option key={c.id} value={c.id}>{c.name}{isCardActive(c) ? '' : ' (해지)'}</option>)}
               </select>
               <input type="text" placeholder="품목명" value={instForm.description} onChange={e => setInstForm(f => ({ ...f, description: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               {/* FR-007 */}
@@ -275,7 +285,7 @@ export default function CardsPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1">카드 선택</label>
                 <select value={billingForm.cardId} onChange={e => setBillingForm(f => ({ ...f, cardId: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {cardOptions(billingForm.cardId).map(c => <option key={c.id} value={c.id}>{c.name}{isCardActive(c) ? '' : ' (해지)'}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2">

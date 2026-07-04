@@ -3,6 +3,7 @@ import { useEscClose } from '@/lib/useEscClose'
 
 import React, { useState, useRef } from 'react'
 import { useApp, DEFAULT_CATEGORIES, computeAccountBalance } from '@/lib/AppContext'
+import { isCardActive } from '@/lib/card'
 import { Account, Card, Category, CategoryRole, MappingRule, INVESTMENT_SUB_LABELS } from '@/types'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
@@ -74,7 +75,7 @@ export default function SettingsPage() {
   const [editCardId, setEditCardId] = useState<string | null>(null)
   const [cardForm, setCardForm] = useState({
     name: '', bank: '', billingDate: '15', color: '#0065CC',
-    annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '',
+    annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '', canceledDate: '',
   })
 
   // ── 카테고리 상태 ──────────────────────────────────────────────────────────
@@ -178,7 +179,7 @@ export default function SettingsPage() {
   // ── 카드 함수 ──────────────────────────────────────────────────────────────
   function openAddCard() {
     setEditCardId(null)
-    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC', annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '' })
+    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC', annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '', canceledDate: '' })
     setShowCardModal(true)
   }
 
@@ -193,6 +194,7 @@ export default function SettingsPage() {
       annualFeeAmount: card.annualFeeAmount ? fmtInput(String(card.annualFeeAmount)) : '',
       annualFeeMonth: mm ? String(parseInt(mm)) : '',
       annualFeeDay:   dd ? String(parseInt(dd)) : '',
+      canceledDate: card.canceledDate ?? '',
     })
     setShowCardModal(true)
   }
@@ -212,6 +214,7 @@ export default function SettingsPage() {
         color: cardForm.color,
         annualFeeAmount: feeAmt,
         annualFeeDate,
+        canceledDate: cardForm.canceledDate || undefined,
       } : c))
     } else {
       const newCard: Card = {
@@ -222,12 +225,13 @@ export default function SettingsPage() {
         color: cardForm.color,
         annualFeeAmount: feeAmt,
         annualFeeDate,
+        canceledDate: cardForm.canceledDate || undefined,
       }
       setCards([...cards, newCard])
     }
     setShowCardModal(false)
     setEditCardId(null)
-    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC', annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '' })
+    setCardForm({ name: '', bank: '', billingDate: '15', color: '#0065CC', annualFeeAmount: '', annualFeeMonth: '', annualFeeDay: '', canceledDate: '' })
   }
 
   function deleteCard(id: string) {
@@ -638,20 +642,23 @@ export default function SettingsPage() {
                 )
               }
             }
+            const canceled = !isCardActive(card)
             return (
-              <div key={card.id} className="bg-white rounded-2xl p-5 shadow-sm">
+              <div key={card.id} className={`bg-white rounded-2xl p-5 shadow-sm ${canceled ? 'opacity-60' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: card.color }}>
+                    <div className="w-12 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: canceled ? '#9ca3af' : card.color }}>
                       {(card.bank || card.name).slice(0, 2)}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-gray-900">{card.name}</span>
+                        {canceled && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500">해지됨</span>}
                         {annualFeeBadge}
                       </div>
                       <div className="text-xs text-gray-400">
                         {card.bank || card.name} · 매월 {card.billingDate}일 결제
+                        {card.canceledDate && <span className="ml-1.5 text-gray-400">· 🚫 {card.canceledDate} 해지</span>}
                         {card.annualFeeAmount && card.annualFeeDate && (
                           <span className="ml-1.5">
                             · 연회비 {fmtKRW(card.annualFeeAmount)}
@@ -1014,6 +1021,23 @@ export default function SettingsPage() {
                   <div className="text-xs text-amber-700 bg-amber-100 rounded-lg px-2.5 py-1.5">
                     📅 매년 {cardForm.annualFeeMonth}월 {cardForm.annualFeeDay}일 · {cardForm.annualFeeAmount}원 청구 예정
                   </div>
+                )}
+              </div>
+
+              {/* 해지일 */}
+              <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/60 space-y-2">
+                <div className="text-xs font-semibold text-gray-600">🚫 해지일 <span className="font-normal text-gray-400">(선택사항)</span></div>
+                <input type="date" value={cardForm.canceledDate}
+                  onChange={e => setCardForm(f => ({ ...f, canceledDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white" />
+                {cardForm.canceledDate && (
+                  <div className="text-xs text-gray-500 bg-gray-100 rounded-lg px-2.5 py-1.5">
+                    📌 {cardForm.canceledDate} 이후 카드 선택·목록에서 숨겨집니다. <span className="text-gray-400">(지난 거래내역은 그대로 유지)</span>
+                  </div>
+                )}
+                {cardForm.canceledDate && (
+                  <button type="button" onClick={() => setCardForm(f => ({ ...f, canceledDate: '' }))}
+                    className="text-xs text-blue-600 hover:underline">해지 취소(다시 사용)</button>
                 )}
               </div>
 
