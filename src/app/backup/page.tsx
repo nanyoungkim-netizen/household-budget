@@ -125,6 +125,7 @@ function appendBudgetSheets(
     cards.map(c => ({
       카드ID: c.id, 카드명: c.name, 은행: c.bank, 결제일: c.billingDate,
       색상: c.color, 연회비금액: c.annualFeeAmount ?? '', 연회비납부일: c.annualFeeDate ?? '',
+      해지일: c.canceledDate ?? '',
     }))
   ), sn(S.CARDS))
 
@@ -476,6 +477,7 @@ export default function BackupPage() {
       cards.map(c => ({
         카드ID: c.id, 카드명: c.name, 은행: c.bank, 결제일: c.billingDate,
         색상: c.color, 연회비금액: c.annualFeeAmount ?? '', 연회비납부일: c.annualFeeDate ?? '',
+        해지일: c.canceledDate ?? '',
       }))
     ), S.CARDS)
 
@@ -985,6 +987,7 @@ export default function BackupPage() {
         color:           safeStr(r['색상']) || '#607D8B',
         annualFeeAmount: r['연회비금액'] ? safeNum(r['연회비금액']) : undefined,
         annualFeeDate:   safeStr(r['연회비납부일']) || undefined,
+        canceledDate:    safeStr(r['해지일']) || undefined,
       })))
     }
 
@@ -1660,7 +1663,7 @@ export default function BackupPage() {
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           {[
             ['계좌',         '계좌ID·은행·잔액·자산유형·계좌번호'],
-            ['카드',         '카드ID·결제일·연회비'],
+            ['카드',         '카드ID·결제일·연회비·해지일'],
             ['카테고리',     '카테고리ID·유형·아이콘·부모ID'],
             ['예산설정',     '예산ID·카테고리ID·연도월·금액'],
             ['적금예금',     '상품ID·이율·만기일·납입주기·상태'],

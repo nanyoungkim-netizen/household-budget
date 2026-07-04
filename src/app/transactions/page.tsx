@@ -3,6 +3,7 @@ import { useEscClose } from '@/lib/useEscClose'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApp, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
+import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Saving, ConsumptionType, Category } from '@/types'
 import TransactionImport from '@/components/TransactionImport'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
@@ -121,6 +122,16 @@ const TOAST_INCOME = [
 export default function TransactionsPage() {
   const { data, categories, addTransaction, updateTransaction, deleteTransaction, setSavings, setCategories } = useApp()
   const { accounts, transactions, cards, categoryExcludeMonths } = data
+  // 해지되지 않은(사용 중) 카드만 선택/노출에 사용. 전체 cards는 지난 내역의 카드명 조회에만 사용.
+  const activeCards = cards.filter(c => isCardActive(c))
+  // 선택 목록: 활성 카드 + (편집 중 이미 선택된 해지 카드는 그대로 표시되도록 포함)
+  const cardOptions = (selectedId?: string) => {
+    if (selectedId && !activeCards.some(c => c.id === selectedId)) {
+      const sel = cards.find(c => c.id === selectedId)
+      if (sel) return [...activeCards, sel]
+    }
+    return activeCards
+  }
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
@@ -218,7 +229,7 @@ export default function TransactionsPage() {
     toAccountId: accounts[1]?.id || accounts[0]?.id || '',
     categoryId: '',
     paymentMethod: 'account',
-    cardId: cards[0]?.id || '',
+    cardId: cards.find(c => isCardActive(c))?.id || '',
     installmentMonths: '1',
     billingMonth: '',
     consumptionType: undefined,
@@ -343,7 +354,7 @@ export default function TransactionsPage() {
   const savingExpense  = filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'savings_transfer').reduce((s, t) => s + t.amount, 0)
   const cardPayExpense = filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'card_payment').reduce((s, t) => s + t.amount, 0)
   const investExpense  = filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'investment').reduce((s, t) => s + t.amount, 0)
-  const cardPayByCard  = cards.map(card => ({
+  const cardPayByCard  = activeCards.map(card => ({
     ...card,
     amount: filtered.filter(t => t.type === 'expense' && getConsumptionType(t, categories) === 'card_payment' && t.cardId === card.id).reduce((s, t) => s + t.amount, 0),
   }))
@@ -382,7 +393,7 @@ export default function TransactionsPage() {
   }))
 
   // 카드별 이번 달 누적 (월 필터 적용)
-  const cardMonthlyTotals = cards.map(card => ({
+  const cardMonthlyTotals = activeCards.map(card => ({
     card,
     total: transactions
       .filter(t => t.date.startsWith(month) && t.paymentMethod === 'card' && t.cardId === card.id && (t.type === 'expense' || t.type === 'refund'))
@@ -1439,7 +1450,7 @@ export default function TransactionsPage() {
                         className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
                           formType === 'refund' ? 'border-purple-200 focus:ring-purple-400' : 'border-gray-200 focus:ring-blue-500'
                         }`}>
-                        {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {cardOptions(form.cardId).map(c => <option key={c.id} value={c.id}>{c.name}{isCardActive(c) ? '' : ' (해지)'}</option>)}
                       </select>
                       {/* 할부 선택 — 수정 모드에서는 숨김 */}
                       {!isEditing && formType === 'expense' && (
@@ -1676,7 +1687,7 @@ export default function TransactionsPage() {
                           onChange={e => setForm(f => ({ ...f, cardId: e.target.value }))}
                           className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
                           <option value="">카드 선택 (선택사항)</option>
-                          {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          {cardOptions(form.cardId).map(c => <option key={c.id} value={c.id}>{c.name}{isCardActive(c) ? '' : ' (해지)'}</option>)}
                         </select>
                       </div>
                       <div>

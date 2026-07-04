@@ -4,6 +4,7 @@ import { useEscClose } from '@/lib/useEscClose'
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { useApp } from '@/lib/AppContext'
+import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Category } from '@/types'
 
 // ── PDF 파싱 (pdfjs-dist) ─────────────────────────────────────────────────────
@@ -307,6 +308,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   useEscClose(true, onClose)
   const { data, categories, addTransaction, setCategories } = useApp()
   const { accounts, cards, mappingRules } = data
+  // 가져오기 대상 선택엔 해지되지 않은 카드만 노출(내역의 카드명 조회는 전체 cards 사용)
+  const activeCards = cards.filter(c => isCardActive(c))
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<Step>('upload')
@@ -390,7 +393,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   }
 
   const defaultAccountId = accounts[0]?.id || ''
-  const defaultCardId    = cards[0]?.id || ''
+  const defaultCardId    = activeCards[0]?.id || ''
 
   // FR-001: 자동 제외된 행 수
   const [excludedCount, setExcludedCount] = useState(0)
@@ -808,7 +811,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                           🏦 {acc.name}
                         </button>
                       ))}
-                      {cards.map(card => (
+                      {activeCards.map(card => (
                         <button key={card.id} onClick={() => selectImportSource(card.id, 'card')}
                           className={`px-3 py-2 rounded-xl text-sm border transition-all ${importSourceType === 'card' && importSourceId === card.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>
                           💳 {card.name}
@@ -1007,7 +1010,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                     🏦 {acc.name}
                   </button>
                 ))}
-                {cards.map(card => (
+                {activeCards.map(card => (
                   <button key={card.id}
                     onClick={() => selectImportSource(card.id, 'card')}
                     className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${

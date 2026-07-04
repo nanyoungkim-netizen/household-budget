@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
+import { isCardActive } from '@/lib/card'
 import { Transaction, NotificationLogItem } from '@/types'
 
 // 매일 바뀌는 기분전환 코멘트 (날짜 기준 고정 → 같은 날 새로고침해도 안 바뀜)
@@ -519,7 +520,7 @@ export default function Dashboard() {
 
     // 연회비 알림 (납부일 2개월 전 1일부터 납부 당월 말일까지)
     cards
-      .filter(c => c.annualFeeAmount && c.annualFeeDate)
+      .filter(c => c.annualFeeAmount && c.annualFeeDate && isCardActive(c))
       .forEach(c => {
         const [mm, dd] = c.annualFeeDate!.split('-').map(Number)
         const thisYear = new Date(now.getFullYear(), mm - 1, dd)
