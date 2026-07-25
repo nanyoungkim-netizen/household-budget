@@ -153,7 +153,7 @@ export default function SavingsPage() {
       id: `t${Date.now()}_maturity_principal`,
       date: dateStr,
       description: `${s.name} 만기원금`,
-      amount: s.currentAmount,
+      amount: maturityModal.principal,
       type: 'income',
       accountId: accId,
       categoryId: 'saving_return',
