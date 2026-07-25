@@ -121,6 +121,7 @@ export default function SavingsPage() {
   const [maturityAccountId, setMaturityAccountId] = useState('')
   const [maturityDate, setMaturityDate] = useState('')
   const [maturityMemo, setMaturityMemo] = useState('')
+  const [cancelMaturityId, setCancelMaturityId] = useState<string | null>(null)
 
   // ── 토스트 ─────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null)
@@ -182,6 +183,35 @@ export default function SavingsPage() {
     } : sv))
     setMaturityModal(null)
     showToast('거래내역에 반영되었습니다.')
+  }
+
+  // 만기처리가 생성한 거래내역(만기원금·이자수입)을 되찾는다.
+  // 금액은 사용자가 수정했을 수 있으므로 id 접미사 + 설명으로만 매칭한다.
+  function findMaturityTxs(s: Saving) {
+    return data.transactions.filter(t =>
+      (t.id.endsWith('_maturity_principal') && t.description === `${s.name} 만기원금`) ||
+      (t.id.endsWith('_maturity_interest')  && t.description === `${s.name} 이자수입`)
+    )
+  }
+
+  function handleCancelMaturity(id: string) {
+    const s = savings.find(sv => sv.id === id)
+    if (!s) return
+
+    const removeIds = new Set(findMaturityTxs(s).map(t => t.id))
+    if (removeIds.size > 0) {
+      setTransactions(data.transactions.filter(t => !removeIds.has(t.id)))
+    }
+    setSavings(savings.map(sv => sv.id === id ? {
+      ...sv,
+      status: 'active' as const,
+      actualInterest: undefined,
+    } : sv))
+
+    setCancelMaturityId(null)
+    showToast(removeIds.size > 0
+      ? `만기처리를 취소하고 거래내역 ${removeIds.size}건을 삭제했습니다.`
+      : '만기처리를 취소했습니다.')
   }
 
   // ── D-day ──────────────────────────────────────────────────────────────────
@@ -361,6 +391,7 @@ export default function SavingsPage() {
   useEscClose(!!pendingTab, () => setPendingTab(null))
   useEscClose(showModal, () => setShowModal(false))
   useEscClose(!!maturityModal, () => setMaturityModal(null))
+  useEscClose(!!cancelMaturityId, () => setCancelMaturityId(null))
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -676,8 +707,13 @@ export default function SavingsPage() {
                               {s.bank} · 연 {s.interestRate}% {totalMonths > 0 ? `· ${totalMonths}개월` : ''}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 ml-2">
-                            <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600">수정</button>
+                          <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                            <button
+                              onClick={() => setCancelMaturityId(s.id)}
+                              className="text-xs text-amber-600 font-medium border border-amber-300 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-lg transition-colors">
+                              만기처리 취소
+                            </button>
+                            <button onClick={() => openEdit(s)} className="text-xs text-blue-400 hover:text-blue-600 ml-1">수정</button>
                             <button onClick={() => setDeleteConfirmId(s.id)} className="text-xs text-red-400 hover:text-red-600 ml-1">삭제</button>
                           </div>
                         </div>
@@ -1163,6 +1199,57 @@ export default function SavingsPage() {
           </div>
         </div>
       )}
+
+      {/* ── 만기처리 취소 확인 모달 ────────────────────────────────────────── */}
+      {cancelMaturityId && (() => {
+        const s = savings.find(sv => sv.id === cancelMaturityId)
+        if (!s) return null
+        const txs = findMaturityTxs(s)
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setCancelMaturityId(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-lg">↩️</div>
+                <h2 className="text-base font-bold text-gray-900">만기처리 취소</h2>
+              </div>
+              <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                <span className="font-semibold text-gray-900">{s.name}</span>을(를) 납입 중 상태로 되돌립니다.
+                입력한 실수령 이자도 함께 지워집니다.
+              </p>
+              {txs.length > 0 ? (
+                <div className="bg-gray-50 rounded-xl p-3 mb-5">
+                  <div className="text-xs text-gray-500 mb-2">아래 거래내역 {txs.length}건이 삭제됩니다.</div>
+                  <div className="space-y-1.5">
+                    {txs.map(t => (
+                      <div key={t.id} className="flex justify-between items-center gap-2 text-xs">
+                        <span className="text-gray-600 truncate">{t.date} · {t.description}</span>
+                        <span className="font-semibold text-gray-900 flex-shrink-0">{fmtKRW(t.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-3 mb-5 text-xs text-gray-500">
+                  삭제할 만기 거래내역을 찾지 못했습니다. 이미 직접 삭제하셨다면 상태만 되돌립니다.
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCancelMaturityId(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                  닫기
+                </button>
+                <button
+                  onClick={() => handleCancelMaturity(s.id)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 transition-colors">
+                  만기처리 취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── 토스트 ─────────────────────────────────────────────────────────── */}
       {toast && (
