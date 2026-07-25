@@ -41,8 +41,8 @@ const PRESET_COLORS = ['#FF6B6B','#FF8E53','#4ECDC4','#45B7D1','#96CEB4','#F7DC6
 type ModalType = 'addChild' | 'addParent' | null
 
 export default function BudgetPage() {
-  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths, setCategoryExcludeMonths, setBudgetCarriedMonths } = useApp()
-  const { budgets, transactions, categoryHiddenMonths, categoryExcludeMonths, cardBillings } = data
+  const { data, categories, setBudgets, setCategories, setCategoryHiddenMonths, setCategoryHiddenFromMonth, setCategoryExcludeMonths, setBudgetCarriedMonths } = useApp()
+  const { budgets, transactions, categoryHiddenMonths, categoryHiddenFromMonth, categoryExcludeMonths, cardBillings } = data
 
   function isCardPaymentCat(categoryId: string): boolean {
     const cat = categories.find(c => c.id === categoryId)
@@ -71,6 +71,7 @@ export default function BudgetPage() {
   const [editNameValue, setEditNameValue] = useState('')
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [hiddenSectionOpen, setHiddenSectionOpen] = useState(false)
   const [modal, setModal] = useState<ModalType>(null)
   const [modalParentId, setModalParentId] = useState<string>('')
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#CFD8DC' })
@@ -463,8 +464,37 @@ export default function BudgetPage() {
   }
 
   function isHiddenThisMonth(catId: string) {
-    return (categoryHiddenMonths[catId] ?? []).includes(month)
+    if ((categoryHiddenMonths[catId] ?? []).includes(month)) return true
+    const from = categoryHiddenFromMonth[catId]
+    return !!from && month >= from
   }
+
+  // 이 달부터 계속 숨기기 — 이 달 이후(포함) 예산은 정리하고, 과거 예산·실적은 그대로 유지
+  function hideCategoryFromNowOn(id: string) {
+    const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
+    const toHide = [id, ...childIds]
+    setBudgets(budgets.filter(b => !(toHide.includes(b.categoryId) && b.month >= month)))
+    const next = { ...categoryHiddenFromMonth }
+    toHide.forEach(cid => { next[cid] = month })
+    setCategoryHiddenFromMonth(next)
+  }
+
+  // "이 달부터 계속 숨기기" 해제 — 다시 예산 목록에 노출(과거 예산·실적은 원래부터 안 건드림)
+  function unhideCategoryFromNowOn(id: string) {
+    const childIds = categories.filter(c => c.parentId === id).map(c => c.id)
+    const toShow = [id, ...childIds]
+    const next = { ...categoryHiddenFromMonth }
+    toShow.forEach(cid => delete next[cid])
+    setCategoryHiddenFromMonth(next)
+  }
+
+  // "이 달부터 계속 숨기기"로 숨겨진 카테고리 목록(숨긴 카테고리 섹션용)
+  // 대분류가 숨겨지면 그 소분류는 화면에 따로 안 뜨므로(부모가 이미 안 보임) 제외하고,
+  // 부모는 안 숨겨졌는데 소분류만 숨겨진 경우만 별도로 보여준다.
+  const hiddenFromNowParents = expenseParents.filter(p => !!categoryHiddenFromMonth[p.id])
+  const hiddenFromNowChildren = categories.filter(c =>
+    c.type === 'expense' && c.parentId && !!categoryHiddenFromMonth[c.id] && !categoryHiddenFromMonth[c.parentId]
+  )
 
   // 이월된 예산인지 확인 (현재 달이 budgetCarriedMonths에 있고, 예산이 존재)
   const isCarriedMonth = (data.budgetCarriedMonths ?? []).includes(month) && month === currentMonth
@@ -924,6 +954,58 @@ export default function BudgetPage() {
         })}
       </div>
 
+      {/* 숨긴 카테고리 (이 달부터 계속 숨기기) */}
+      {(hiddenFromNowParents.length + hiddenFromNowChildren.length) > 0 && (
+        <div className="mt-4">
+          <button
+            onClick={() => setHiddenSectionOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 rounded-2xl hover:bg-gray-200 transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-600">숨긴 카테고리</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 font-medium">
+                {hiddenFromNowParents.length + hiddenFromNowChildren.length}건
+              </span>
+            </div>
+            <span className="text-gray-400 text-sm">{hiddenSectionOpen ? '▲' : '▼'}</span>
+          </button>
+          {hiddenSectionOpen && (
+            <div className="mt-2 space-y-2">
+              {hiddenFromNowParents.map(p => (
+                <div key={p.id} className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between opacity-70">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">{p.icon}</span>
+                    <span className="text-sm text-gray-600 truncate">{p.name}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{fmtMonthLabel(categoryHiddenFromMonth[p.id])}부터 숨김</span>
+                  </div>
+                  <button
+                    onClick={() => unhideCategoryFromNowOn(p.id)}
+                    className="text-xs text-blue-500 font-medium border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg flex-shrink-0 ml-2">
+                    다시 보이기
+                  </button>
+                </div>
+              ))}
+              {hiddenFromNowChildren.map(c => {
+                const parent = categories.find(p => p.id === c.parentId)
+                return (
+                  <div key={c.id} className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between opacity-70">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base">{c.icon}</span>
+                      <span className="text-sm text-gray-600 truncate">{parent ? `${parent.name} > ${c.name}` : c.name}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{fmtMonthLabel(categoryHiddenFromMonth[c.id])}부터 숨김</span>
+                    </div>
+                    <button
+                      onClick={() => unhideCategoryFromNowOn(c.id)}
+                      className="text-xs text-blue-500 font-medium border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg flex-shrink-0 ml-2">
+                      다시 보이기
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* + 대분류 추가 버튼 */}
       {!isPastMonth && (
         <button
@@ -1083,7 +1165,7 @@ export default function BudgetPage() {
                 </div>
               )}
               <p className="text-sm text-gray-500 mb-4">
-                이번 달 예산만 숨기거나, 카테고리를 완전히 삭제할 수 있습니다.<br />
+                이번 달만 숨기거나, 이번 달부터 계속 숨기거나, 카테고리를 완전히 삭제할 수 있습니다.<br />
                 완전 삭제 시 <span className="text-red-600 font-medium">모든 달의 예산과 거래 내역 분류</span>가 사라집니다.
               </p>
               <div className="space-y-2">
@@ -1092,6 +1174,13 @@ export default function BudgetPage() {
                   className="w-full py-2.5 rounded-xl bg-blue-50 text-blue-600 font-medium text-sm hover:bg-blue-100 transition-colors"
                 >
                   이번 달 예산만 숨기기
+                </button>
+                <button
+                  onClick={() => { hideCategoryFromNowOn(deleteCatId); setDeleteCatId(null) }}
+                  className="w-full py-2.5 rounded-xl bg-amber-50 text-amber-700 font-medium text-sm hover:bg-amber-100 transition-colors"
+                  title="이번 달부터 이후 모든 달에서 숨깁니다. 지난 달 예산·실적은 그대로 유지되고, 나중에 다시 보이게 되돌릴 수 있습니다."
+                >
+                  이번 달부터 계속 숨기기 <span className="text-amber-400 font-normal">(예: 적금 만기)</span>
                 </button>
                 <button
                   onClick={() => { if (!hasTx || confirm(`거래 내역이 있는 카테고리입니다. 정말 완전 삭제할까요?`)) { deleteCategoryGlobal(deleteCatId); setDeleteCatId(null) } }}
