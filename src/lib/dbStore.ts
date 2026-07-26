@@ -265,6 +265,7 @@ export async function loadMultiDataFromTables(
       portfolioPlans: gPortfolioPlans[lid] ?? [],
       watchlist: gWatchlist[lid] ?? [],
       categoryHiddenMonths: st.category_hidden_months ?? {},
+      categoryHiddenFromMonth: st.category_hidden_from_month ?? {},
       categoryExcludeMonths: st.category_exclude_months ?? {},
       dashboardWidgetOrder: st.dashboard_widget_order ?? undefined,
       budgetCarriedMonths: st.budget_carried_months ?? [],
@@ -453,6 +454,7 @@ export async function saveMultiDataToTables(prevRaw: unknown, nextRaw: unknown, 
     const settingsRow = {
       user_id: userId, ledger_id: lid,
       category_hidden_months: nv(nd.categoryHiddenMonths) ?? {},
+      category_hidden_from_month: nv(nd.categoryHiddenFromMonth) ?? {},
       category_exclude_months: nv(nd.categoryExcludeMonths) ?? {},
       dashboard_widget_order: nv(nd.dashboardWidgetOrder) ?? [],
       budget_carried_months: nv(nd.budgetCarriedMonths) ?? [],
@@ -463,7 +465,7 @@ export async function saveMultiDataToTables(prevRaw: unknown, nextRaw: unknown, 
       is_setup_complete: nv(nd.isSetupComplete) ?? false,
       updated_at: now,
     }
-    const settingsKeys = ['categoryHiddenMonths','categoryExcludeMonths','dashboardWidgetOrder','budgetCarriedMonths','dashboardMemo','dismissedNotificationIds','notificationLog','investmentExchangeRates','isSetupComplete']
+    const settingsKeys = ['categoryHiddenMonths','categoryHiddenFromMonth','categoryExcludeMonths','dashboardWidgetOrder','budgetCarriedMonths','dashboardMemo','dismissedNotificationIds','notificationLog','investmentExchangeRates','isSetupComplete']
     const settingsChanged = !pd || settingsKeys.some(k => JSON.stringify(pd[k]) !== JSON.stringify(nd[k]))
     if (settingsChanged) {
       const { error } = await supabase.from('ledger_settings').upsert(settingsRow, { onConflict: 'user_id,ledger_id' })

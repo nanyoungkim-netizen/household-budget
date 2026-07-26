@@ -104,6 +104,7 @@ interface AppData {
   portfolioPlans: PortfolioPlan[]
   savingPayments: SavingPayment[]
   categoryHiddenMonths: Record<string, string[]>
+  categoryHiddenFromMonth: Record<string, string>   // 이 달부터 계속 숨김(과거 예산·실적은 유지)
   categoryExcludeMonths: Record<string, string[]>
   dashboardWidgetOrder: string[]
   budgetCarriedMonths: string[]
@@ -138,6 +139,7 @@ const INITIAL_DATA: AppData = {
   portfolioPlans: [],
   savingPayments: [],
   categoryHiddenMonths: {},
+  categoryHiddenFromMonth: {},
   categoryExcludeMonths: {},
   dashboardWidgetOrder: ['cash_accounts', 'investment_accounts', 'card_payment', 'savings_summary', 'budget', 'goals', 'transactions'],
   budgetCarriedMonths: [],
@@ -247,6 +249,8 @@ interface AppContextType {
   setSavingPayments: (payments: SavingPayment[]) => void
   // 월별 카테고리 숨김
   setCategoryHiddenMonths: (map: Record<string, string[]>) => void
+  // 특정 달부터 계속 카테고리 숨김(과거 예산·실적은 유지)
+  setCategoryHiddenFromMonth: (map: Record<string, string>) => void
   // 월별 실소비 제외 토글
   setCategoryExcludeMonths: (map: Record<string, string[]>) => void
   // 대시보드 위젯 순서
@@ -634,6 +638,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       portfolioPlans: raw.portfolioPlans ?? [],
       savingPayments: raw.savingPayments ?? [],
       categoryHiddenMonths: raw.categoryHiddenMonths ?? {},
+      categoryHiddenFromMonth: raw.categoryHiddenFromMonth ?? {},
       categoryExcludeMonths: raw.categoryExcludeMonths ?? {},
       budgetCarriedMonths: raw.budgetCarriedMonths ?? [],
       dashboardMemo: raw.dashboardMemo ?? '',
@@ -1082,6 +1087,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update(d => ({ ...d, categoryHiddenMonths, lastModified: now() }))
   }, [update])
 
+  const setCategoryHiddenFromMonth = useCallback((categoryHiddenFromMonth: Record<string, string>) => {
+    update(d => ({ ...d, categoryHiddenFromMonth, lastModified: now() }))
+  }, [update])
+
   const setCategoryExcludeMonths = useCallback((categoryExcludeMonths: Record<string, string[]>) => {
     update(d => ({ ...d, categoryExcludeMonths, lastModified: now() }))
   }, [update])
@@ -1301,6 +1310,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPortfolioPlans,
       setSavingPayments,
       setCategoryHiddenMonths,
+      setCategoryHiddenFromMonth,
       setCategoryExcludeMonths,
       setDashboardWidgetOrder,
       setBudgetCarriedMonths,
