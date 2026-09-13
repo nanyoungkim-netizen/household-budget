@@ -7,115 +7,6 @@ import { useApp } from '@/lib/AppContext'
 import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Category } from '@/types'
 
-// ── PDF 파싱 (pdfjs-dist) → 표 추출 (모든 은행/카드 공용) ──────────────────────
-// PDF에서 텍스트 조각을 뽑아 x/y 좌표로 표(헤더 + 행)를 복원한다.
-// 은행마다 양식이 달라도, 복원된 표를 엑셀과 동일한 "컬럼 설정" 화면으로 넘겨
-// 사용자가 날짜/금액/내용 컬럼을 자동인식하거나 직접 지정할 수 있게 한다.
-async function extractPDFTable(file: File, password?: string): Promise<{ headers: string[]; rows: string[][] }> {
-  // 구버전 모바일 브라우저(iOS Safari 17.4 미만 등) 호환:
-  // pdfjs가 쓰는 최신 API(Promise.withResolvers)가 없으면 직접 채워준다.
-  const P = Promise as unknown as { withResolvers?: () => unknown }
-  if (typeof P.withResolvers !== 'function') {
-    P.withResolvers = function () {
-      let resolve: (value?: unknown) => void = () => {}
-      let reject: (reason?: unknown) => void = () => {}
-      const promise = new Promise((res, rej) => { resolve = res; reject = rej })
-      return { promise, resolve, reject }
-    }
-  }
-
-  // 넓은 브라우저 호환을 위해 legacy 빌드 사용 (모바일/구버전 대응)
-  const pdfjsLib = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as typeof import('pdfjs-dist')
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-
-  const buf = await file.arrayBuffer()
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(buf),
-    password: password || '',
-  })
-  const pdf = await loadingTask.promise
-
-  // 1) 모든 페이지의 텍스트를 y(행) → [{x, text}] 로 수집
-  type Cell = { x: number; text: string }
-  const lines: Cell[][] = []
-  for (let pn = 1; pn <= pdf.numPages; pn++) {
-    const page = await pdf.getPage(pn)
-    const content = await page.getTextContent()
-    const byY = new Map<number, Cell[]>()
-    for (const item of content.items) {
-      if (!('str' in item) || !(item.str as string).trim()) continue
-      const raw = item as { str: string; transform: number[] }
-      const y = Math.round(raw.transform[5] / 3) * 3
-      const x = raw.transform[4]
-      if (!byY.has(y)) byY.set(y, [])
-      byY.get(y)!.push({ x, text: (raw.str as string).trim() })
-    }
-    const pageLines = [...byY.entries()]
-      .sort(([ya], [yb]) => yb - ya)
-      .map(([, cells]) => cells.sort((a, b) => a.x - b.x))
-    lines.push(...pageLines)
-  }
-  if (lines.length === 0) return { headers: [], rows: [] }
-
-  // 2) 전체 x좌표를 모아 컬럼 경계를 클러스터링 (GAP보다 벌어지면 다른 컬럼)
-  const allX = lines.flatMap(l => l.map(c => c.x)).sort((a, b) => a - b)
-  const centers: number[] = []
-  const GAP = 22
-  let bucket: number[] = []
-  for (const x of allX) {
-    if (bucket.length && x - bucket[bucket.length - 1] > GAP) {
-      centers.push(bucket.reduce((s, v) => s + v, 0) / bucket.length)
-      bucket = []
-    }
-    bucket.push(x)
-  }
-  if (bucket.length) centers.push(bucket.reduce((s, v) => s + v, 0) / bucket.length)
-  if (centers.length === 0) return { headers: [], rows: [] }
-
-  const colOf = (x: number) => {
-    let best = 0
-    let bestDist = Infinity
-    for (let i = 0; i < centers.length; i++) {
-      const d = Math.abs(centers[i] - x)
-      if (d < bestDist) { bestDist = d; best = i }
-    }
-    return best
-  }
-
-  // 3) 각 줄을 컬럼 슬롯에 배치해 직사각형 표로 정렬
-  const grid: string[][] = lines.map(cells => {
-    const rowArr: string[] = new Array(centers.length).fill('')
-    for (const c of cells) {
-      const ci = colOf(c.x)
-      rowArr[ci] = rowArr[ci] ? `${rowArr[ci]} ${c.text}` : c.text
-    }
-    return rowArr
-  })
-
-  // 4) 헤더 줄 찾기 (컬럼명 키워드가 가장 많이 맞는 줄)
-  const HEADER_KW = ['거래일','거래일시','거래일자','날짜','일자','이용일','승인일','매출일','적요','내용','거래내용','가맹점','거래처','상호','거래유형','유형','구분','출금','입금','금액','거래금액','이용금액','승인금액','결제금액','잔액','승인','비고']
-  let headerIdx = -1
-  let bestScore = 1
-  grid.forEach((r, i) => {
-    const score = r.filter(c => {
-      const cc = c.replace(/\s/g, '')
-      return cc && HEADER_KW.some(k => cc.includes(k))
-    }).length
-    if (score > bestScore) { bestScore = score; headerIdx = i }
-  })
-
-  if (headerIdx >= 0) {
-    const headers = grid[headerIdx].map((h, i) => h.trim() || `열${i + 1}`)
-    const rows = grid.slice(headerIdx + 1).filter(r => r.some(c => c.trim()))
-    return { headers, rows }
-  }
-
-  // 헤더를 못 찾으면: 일반 컬럼명(열1, 열2…)으로 두고 전체를 데이터로 → 수동 지정
-  const width = centers.length
-  const headers = Array.from({ length: width }, (_, i) => `열${i + 1}`)
-  return { headers, rows: grid.filter(r => r.some(c => c.trim())) }
-}
-
 // ── 키워드 → 카테고리 자동 매핑 ────────────────────────────────────────────
 const KEYWORD_MAP: { keywords: string[]; catId: string; type: 'income' | 'expense' }[] = [
   // 수입
@@ -511,7 +402,27 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setPdfLoading(true)
     setPdfError('')
     try {
-      const { headers, rows: bodyRows } = await extractPDFTable(pendingFile, pdfPassword || undefined)
+      // PDF 해석은 서버(Node)에서 수행 → 폰/PC 브라우저 버전과 무관하게 동작
+      const res = await fetch('/api/parse-pdf', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-pdf-password': pdfPassword || '',
+        },
+        body: pendingFile,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data?.password) {
+          setPdfError('비밀번호가 틀렸습니다.')
+        } else {
+          setPdfError('PDF를 여는 중 문제가 발생했어요 → ' + (data?.error || res.status))
+        }
+        setPdfLoading(false)
+        return
+      }
+      const headers: string[] = data.headers || []
+      const bodyRows: string[][] = data.rows || []
 
       if (headers.length === 0 || bodyRows.length === 0) {
         setPdfError('PDF에서 표를 찾지 못했어요. 스캔(이미지)으로 저장된 PDF이거나 형식이 특이할 수 있어요. 엑셀 파일이 있으면 엑셀로 시도해보세요.')
