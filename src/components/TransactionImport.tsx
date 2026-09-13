@@ -522,7 +522,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
       if (msg.toLowerCase().includes('password')) {
         setPdfError('비밀번호가 틀렸습니다.')
       } else {
-        setPdfError('PDF 파싱 중 오류가 발생했습니다.')
+        // 원인 파악을 위해 실제 오류 메시지를 함께 표시
+        console.error('[PDF import] parse failed:', err)
+        setPdfError('PDF를 여는 중 문제가 발생했어요 → ' + msg)
       }
     }
     setPdfLoading(false)
