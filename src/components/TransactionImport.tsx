@@ -6,82 +6,9 @@ import * as XLSX from 'xlsx'
 import { useApp } from '@/lib/AppContext'
 import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Category } from '@/types'
+import { matchLibrary, isTransferDesc, normalizeDesc, CANON_CAT_NAMES } from '@/lib/descLibrary'
 
-// ── 키워드 → 카테고리 자동 매핑 ────────────────────────────────────────────
-const KEYWORD_MAP: { keywords: string[]; catId: string; type: 'income' | 'expense' }[] = [
-  // 수입
-  { keywords: ['급여','월급','임금','급료','상여','인센티브','성과금'], catId: 'salary', type: 'income' },
-  // 이자 (결산이자, 이자세금 포함, FBS/모니모적립 포함)
-  { keywords: ['결산이자','이자세금','통장이자','이자입금','이자수익','예금이자','적금이자'], catId: 'interest', type: 'income' },
-  { keywords: ['fbs입금','모니모적립','적립금','포인트적립','리워드'], catId: 'interest', type: 'income' },
-  { keywords: ['적금만기','만기해지','만기'], catId: 'saving_return', type: 'income' },
-  { keywords: ['환급','국세환급','지방세환급','건보환급','보험환급'], catId: 'other_income', type: 'income' },
-  { keywords: ['입출금지원금','지원금','보조금'], catId: 'other_income', type: 'income' },
 
-  // 저축 / 이체
-  { keywords: ['잔돈모으기','잔돈'], catId: 'saving', type: 'expense' },
-  { keywords: ['적금','정기적금','청약','주택청약','청약저금'], catId: 'saving', type: 'expense' },
-  { keywords: ['달러로모으기','달러저축','외화저축'], catId: 'saving', type: 'expense' },
-
-  // 카드 납부
-  { keywords: ['카드자동이체','카드대금','카드결제','카드납부'], catId: 'etc', type: 'expense' },
-  { keywords: ['롯데카드','현대카드','삼성카드','신한카드','kb카드','하나카드','우리카드','bc카드','씨티카드'], catId: 'etc', type: 'expense' },
-
-  // 대출
-  { keywords: ['대출이자','이자납부','원리금','상환','대출원금'], catId: 'loan', type: 'expense' },
-
-  // 교통
-  { keywords: ['버스','지하철','택시','카카오택시','ktx','기차','tmoney','t머니','교통','따릉이','킥보드'], catId: 'transport', type: 'expense' },
-
-  // 카페/음료
-  { keywords: ['스타벅스','카페','커피','빽다방','이디야','투썸','할리스','파스쿠찌','메가커피','컴포즈'], catId: 'drink', type: 'expense' },
-
-  // 식비
-  { keywords: ['배달의민족','쿠팡이츠','요기요','배민','식당','음식점','분식','치킨','피자','족발','보쌈','한식','중식','일식','양식','햄버거','맥도날드','버거킹','롯데리아','편의점도시락'], catId: 'food', type: 'expense' },
-
-  // 마트/생활
-  { keywords: ['이마트','홈플러스','롯데마트','코스트코','마트'], catId: 'daily', type: 'expense' },
-  { keywords: ['gs25','cu','세븐일레븐','미니스톱','편의점','씨유'], catId: 'daily', type: 'expense' },
-  { keywords: ['다이소','올리브영','드럭스토어'], catId: 'daily', type: 'expense' },
-
-  // 쇼핑
-  { keywords: ['쿠팡','11번가','옥션','지마켓','무신사','ably','에이블리','아이허브','네이버쇼핑','카카오쇼핑'], catId: 'shopping', type: 'expense' },
-
-  // 통신
-  { keywords: ['skt','kt','lg유플','통신','핸드폰','휴대폰','인터넷요금','알뜰폰'], catId: 'communication', type: 'expense' },
-
-  // 보험
-  { keywords: ['보험료','삼성생명','한화생명','kb생명','메리츠','db손해','현대해상','흥국생명'], catId: 'insurance', type: 'expense' },
-
-  // 공과금
-  { keywords: ['전기요금','한전','전기세'], catId: 'electricity', type: 'expense' },
-  { keywords: ['도시가스','가스요금','가스비'], catId: 'gas', type: 'expense' },
-  { keywords: ['수도요금','수도세','상수도'], catId: 'water', type: 'expense' },
-  { keywords: ['관리비','아파트관리','주택관리'], catId: 'living', type: 'expense' },
-
-  // 구독
-  { keywords: ['넷플릭스','유튜브프리미엄','왓챠','웨이브','티빙','애플tv','시즌','스포티파이','구독','멜론','플로'], catId: 'subscription', type: 'expense' },
-
-  // 여행
-  { keywords: ['여행','숙박','호텔','에어비앤비','항공','비행기','에어','숙소'], catId: 'travel', type: 'expense' },
-
-  // 교육
-  { keywords: ['학원','도서','책','교육','온라인강의','인프런','클래스101'], catId: 'selfdev', type: 'expense' },
-
-  // 경조사
-  { keywords: ['경조사','축의금','조의금','선물','화환'], catId: 'gift', type: 'expense' },
-
-  // 의료
-  { keywords: ['병원','의원','약국','치과','한의원','안과','성형','피부과','건강검진'], catId: 'health', type: 'expense' },
-]
-
-// 이체로 자동 분류할 키워드
-const TRANSFER_KEYWORDS = ['이체','송금','계좌이동','모임통장','잔돈모으기','달러로모으기','외화저축','계좌간','오픈뱅킹출금','오픈뱅킹입금','전자금융']
-
-function isTransferLike(desc: string, txType: string): boolean {
-  const lower = (desc + txType).toLowerCase().replace(/\s/g, '')
-  return TRANSFER_KEYWORDS.some(kw => lower.includes(kw.replace(/\s/g, '')))
-}
 
 // 토스뱅크 거래유형 → income/expense 판단
 function txTypeToDir(txType: string): 'income' | 'expense' | null {
@@ -91,65 +18,82 @@ function txTypeToDir(txType: string): 'income' | 'expense' | null {
   return null
 }
 
-// 표준 catId → 사용자 카테고리 이름 매칭용 대표 키워드(긴 것 우선). 기본 id가 달라도
-// 이름으로 연결하고, 기본 카테고리에 없는 개념(전기/가스/수도/의료)은 대체 후보로 흡수.
-const CANON_CAT_NAMES: Record<string, string[]> = {
-  salary: ['급여', '월급'],
-  interest: ['이자'],
-  saving_return: ['적금 만기', '적금만기', '만기'],
-  other_income: ['기타수입', '기타 수입'],
-  living: ['생활비', '관리비', '공과금'],
-  food: ['식비', '음식'],
-  transport: ['교통'],
-  communication: ['통신'],
-  insurance: ['보험'],
-  subscription: ['구독'],
-  shopping: ['쇼핑', '미용'],
-  selfdev: ['자기계발', '교육'],
-  gift: ['선물', '경조'],
-  travel: ['여행'],
-  drink: ['술', '음료', '카페'],
-  daily: ['생필품', '생활용품'],
-  loan: ['대출'],
-  saving: ['적금', '저축'],
-  card: ['카드대금', '카드'],
-  etc: ['기타'],
-  // 기본 카테고리에 전용 항목이 없으면 공과금/생활비로 흡수
-  electricity: ['전기', '공과금', '생활비'],
-  gas: ['가스', '공과금', '생활비'],
-  water: ['수도', '공과금', '생활비'],
-  health: ['의료', '병원', '건강', '의약'],
+
+// 카테고리 추천 1건 (칩·표시용)
+export interface CatSuggestion {
+  categoryId: string
+  reason: string
+  source: 'rule' | 'history' | 'library'
 }
 
-// 적요/내용에서 가장 "구체적인(가장 긴)" 키워드를 찾아 표준 catId를 추천.
-// 매칭 없으면 '' 반환(→ 기타로 폴백). 맵 순서가 아닌 키워드 길이로 우선순위 결정.
-function suggestCanonicalCat(
+interface SuggestCtx {
+  userRules: { keyword: string; categoryId: string }[]
+  /** 과거 거래를 미리 정규화해 둔 색인 (행마다 재계산하지 않도록) */
+  pastIndex: { desc: string; categoryId: string; type: string }[]
+  catList: Category[]
+}
+
+/** 과거 거래 색인 — buildRows에서 한 번만 만든다 */
+function buildPastIndex(txs: { description: string; categoryId: string; type: string }[]) {
+  const out: { desc: string; categoryId: string; type: string }[] = []
+  for (const t of txs) {
+    if (!t.categoryId) continue
+    const d = normalizeDesc(t.description)
+    if (d.length < 2) continue
+    out.push({ desc: d, categoryId: t.categoryId, type: t.type })
+  }
+  return out
+}
+
+/**
+ * 적요를 근거로 카테고리 후보를 우선순위대로 추천한다.
+ *   1) 저장한 가맹점 규칙      — 사용자가 직접 정한 값이라 가장 강함
+ *   2) 과거 같은 적요의 선택   — "지난번에 이걸로 분류했음"
+ *   3) 은행 적요 라이브러리    — 가맹점 사전 매칭
+ * 모두 실제 카테고리 id로 해석된 상태로 돌아오며, 중복은 제거된다.
+ */
+function suggestCategories(
   desc: string,
   txType: string,
   type: 'income' | 'expense',
-  userRules: { keyword: string; categoryId: string }[] = []
-): { catId: string; matched: boolean } {
-  const lower = (desc + ' ' + txType).toLowerCase().replace(/\s/g, '')
-
-  // FR-08: 사용자 정의 규칙 우선 (가장 긴 키워드 기준) — categoryId는 실제 카테고리 id
-  const matchedUserRules = userRules.filter(r => r.keyword && lower.includes(r.keyword.toLowerCase().replace(/\s/g, '')))
-  if (matchedUserRules.length > 0) {
-    matchedUserRules.sort((a, b) => b.keyword.length - a.keyword.length)
-    return { catId: matchedUserRules[0].categoryId, matched: true }
+  ctx: SuggestCtx,
+  limit = 3
+): CatSuggestion[] {
+  const norm = (s: string) => normalizeDesc(s)
+  const key = norm(desc + ' ' + txType)
+  const out: CatSuggestion[] = []
+  const seen = new Set<string>()
+  const push = (categoryId: string, reason: string, source: CatSuggestion['source']) => {
+    if (!categoryId || seen.has(categoryId)) return
+    if (!ctx.catList.some(c => c.id === categoryId)) return
+    seen.add(categoryId); out.push({ categoryId, reason, source })
   }
 
-  // 키워드 맵 — 같은 유형 규칙 전체에서 "가장 긴" 매칭 키워드 채택(오탐 방지)
-  let best = { catId: '', len: 0 }
-  for (const rule of KEYWORD_MAP) {
-    if (rule.type !== type) continue
-    for (const kw of rule.keywords) {
-      const k = kw.toLowerCase().replace(/\s/g, '')
-      if (k.length > best.len && lower.includes(k)) best = { catId: rule.catId, len: k.length }
+  // 1) 저장한 규칙 (긴 키워드 우선)
+  const hits = ctx.userRules.filter(r => r.keyword && key.includes(norm(r.keyword)))
+  hits.sort((a, b) => b.keyword.length - a.keyword.length)
+  for (const r of hits) push(r.categoryId, '저장한 규칙', 'rule')
+
+  // 2) 과거 같은/비슷한 적요를 실제로 어떻게 분류했는지
+  const tally = new Map<string, number>()
+  if (key.length >= 2) {
+    for (const t of ctx.pastIndex) {
+      if (t.type !== type) continue
+      if (t.desc === key || key.includes(t.desc) || t.desc.includes(key)) {
+        tally.set(t.categoryId, (tally.get(t.categoryId) || 0) + 1)
+      }
     }
   }
-  if (best.catId) return { catId: best.catId, matched: true }
+  ;[...tally.entries()].sort((a, b) => b[1] - a[1]).forEach(([cid, n]) =>
+    push(cid, `이전에 ${n}번 이렇게 분류함`, 'history'))
 
-  return { catId: '', matched: false }
+  // 3) 은행 적요 라이브러리
+  for (const hit of matchLibrary(desc, txType, type, 4)) {
+    const { categoryId, resolved } = resolveCategoryId(hit.catId, ctx.catList, type)
+    if (resolved) push(categoryId, `‘${hit.matched}’ 포함`, 'library')
+  }
+
+  return out.slice(0, limit)
 }
 
 // 표준 catId → 실제 사용자 카테고리 id로 해석. 없으면 기타/기타수입으로 폴백.
@@ -295,6 +239,7 @@ interface ImportRow {
   cardId?: string
   include: boolean
   autoSuggested: boolean  // 자동추천 여부 표시
+  suggestions?: CatSuggestion[]  // 적요 기반 카테고리 추천 후보(칩 표시용)
 }
 
 interface TransactionImportProps {
@@ -589,6 +534,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   // ── 매핑 확인 → 검토 단계 ─────────────────────────────────────────────────
   function buildRows() {
+    // 과거 거래 색인은 행마다가 아니라 한 번만 만든다
+    const pastIndex = buildPastIndex(data.transactions)
     const incomeLeaf  = categories.filter(c => c.type === 'income'  && c.parentId !== null)
     const expenseLeaf = categories.filter(c => c.type === 'expense' && c.parentId !== null)
 
@@ -654,20 +601,26 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
       if (amount === 0) return
 
-      // 이체 자동 감지
-      const isTransfer = isTransferLike(desc, txType)
+      // 이체 자동 감지 — 카드 명세서는 전부 지출이므로 이체로 보지 않는다.
+      // (통장 내역에서도 "우리카드 자동이체"처럼 지출 신호가 있으면 이체에서 제외)
+      const isTransfer = importSourceType !== 'card' && isTransferDesc(desc, txType)
       const finalType: 'income' | 'expense' | 'transfer' = isTransfer ? 'transfer' : type
 
       let categoryId = 'transfer'
       let autoSuggested = false
+      let suggestions: CatSuggestion[] = []
       if (!isTransfer) {
         const catList = type === 'income' ? incomeLeaf : expenseLeaf
-        const { catId: canonId } = suggestCanonicalCat(desc, txType, type, mappingRules)
-        const { categoryId: resolvedId, resolved } = resolveCategoryId(canonId, catList, type)
-        categoryId = resolvedId
-        // '기타/기타수입'으로 떨어진 경우는 추천이 아님(사용자가 직접 고르도록 표시)
-        const isEtc = canonId === (type === 'income' ? 'other_income' : 'etc')
-        autoSuggested = resolved && !isEtc
+        suggestions = suggestCategories(desc, txType, type, {
+          userRules: mappingRules, pastIndex, catList,
+        })
+        if (suggestions.length > 0) {
+          categoryId = suggestions[0].categoryId
+          autoSuggested = true
+        } else {
+          categoryId = resolveCategoryId('', catList, type).categoryId
+          autoSuggested = false
+        }
       }
 
       importRows.push({
@@ -684,6 +637,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         cardId: importSourceType === 'card' ? importCardId : defaultCardId,
         include: true,
         autoSuggested,
+        suggestions,
       })
     })
 
@@ -1383,6 +1337,30 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                   ))}
                                   <option value="__new__">➕ 새 카테고리 추가</option>
                                 </select>
+                                {/* 적요 기반 추천 — 드롭다운을 열지 않고 한 번에 지정 */}
+                                {(() => {
+                                  const sug = (row.suggestions || []).filter(s => s.categoryId !== row.categoryId).slice(0, 2)
+                                  if (sug.length === 0) return null
+                                  return (
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      {sug.map(s => {
+                                        const c = catList.find(x => x.id === s.categoryId)
+                                        if (!c) return null
+                                        return (
+                                          <button
+                                            key={s.categoryId}
+                                            type="button"
+                                            title={s.reason}
+                                            onClick={() => updateRow(row._key, { categoryId: s.categoryId, autoSuggested: false })}
+                                            className="text-[10px] px-1.5 py-0.5 rounded-md border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors whitespace-nowrap"
+                                          >
+                                            {c.icon} {c.name}
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  )
+                                })()}
                                 {/* FR-07: 새 카테고리 인라인 추가 UI */}
                                 {newCatRowKey === row._key && (
                                   <div className="flex items-center gap-1 mt-0.5">
