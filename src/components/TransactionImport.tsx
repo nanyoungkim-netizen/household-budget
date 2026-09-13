@@ -7,8 +7,11 @@ import { useApp } from '@/lib/AppContext'
 import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Category } from '@/types'
 
-// ── PDF 파싱 (pdfjs-dist) ─────────────────────────────────────────────────────
-async function extractPDFRows(file: File, password?: string): Promise<string[][]> {
+// ── PDF 파싱 (pdfjs-dist) → 표 추출 (모든 은행/카드 공용) ──────────────────────
+// PDF에서 텍스트 조각을 뽑아 x/y 좌표로 표(헤더 + 행)를 복원한다.
+// 은행마다 양식이 달라도, 복원된 표를 엑셀과 동일한 "컬럼 설정" 화면으로 넘겨
+// 사용자가 날짜/금액/내용 컬럼을 자동인식하거나 직접 지정할 수 있게 한다.
+async function extractPDFTable(file: File, password?: string): Promise<{ headers: string[]; rows: string[][] }> {
   const pdfjsLib = await import('pdfjs-dist')
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
@@ -17,108 +20,87 @@ async function extractPDFRows(file: File, password?: string): Promise<string[][]
     data: new Uint8Array(buf),
     password: password || '',
   })
-
   const pdf = await loadingTask.promise
-  const allRows: string[][] = []
 
+  // 1) 모든 페이지의 텍스트를 y(행) → [{x, text}] 로 수집
+  type Cell = { x: number; text: string }
+  const lines: Cell[][] = []
   for (let pn = 1; pn <= pdf.numPages; pn++) {
     const page = await pdf.getPage(pn)
     const content = await page.getTextContent()
-
-    // y좌표 기준으로 텍스트 그룹핑 (3px 허용오차)
-    const byY = new Map<number, Array<{ x: number; text: string }>>()
+    const byY = new Map<number, Cell[]>()
     for (const item of content.items) {
       if (!('str' in item) || !(item.str as string).trim()) continue
       const raw = item as { str: string; transform: number[] }
       const y = Math.round(raw.transform[5] / 3) * 3
       const x = raw.transform[4]
       if (!byY.has(y)) byY.set(y, [])
-      byY.get(y)!.push({ x, text: raw.str.trim() })
+      byY.get(y)!.push({ x, text: (raw.str as string).trim() })
     }
-
-    // 위→아래 정렬, 각 행은 왼→오른쪽
-    const rows = [...byY.entries()]
+    const pageLines = [...byY.entries()]
       .sort(([ya], [yb]) => yb - ya)
-      .map(([, cells]) => cells.sort((a, b) => a.x - b.x).map(c => c.text))
+      .map(([, cells]) => cells.sort((a, b) => a.x - b.x))
+    lines.push(...pageLines)
+  }
+  if (lines.length === 0) return { headers: [], rows: [] }
 
-    allRows.push(...rows)
+  // 2) 전체 x좌표를 모아 컬럼 경계를 클러스터링 (GAP보다 벌어지면 다른 컬럼)
+  const allX = lines.flatMap(l => l.map(c => c.x)).sort((a, b) => a - b)
+  const centers: number[] = []
+  const GAP = 22
+  let bucket: number[] = []
+  for (const x of allX) {
+    if (bucket.length && x - bucket[bucket.length - 1] > GAP) {
+      centers.push(bucket.reduce((s, v) => s + v, 0) / bucket.length)
+      bucket = []
+    }
+    bucket.push(x)
+  }
+  if (bucket.length) centers.push(bucket.reduce((s, v) => s + v, 0) / bucket.length)
+  if (centers.length === 0) return { headers: [], rows: [] }
+
+  const colOf = (x: number) => {
+    let best = 0
+    let bestDist = Infinity
+    for (let i = 0; i < centers.length; i++) {
+      const d = Math.abs(centers[i] - x)
+      if (d < bestDist) { bestDist = d; best = i }
+    }
+    return best
   }
 
-  return allRows
-}
-
-// ── KB 국민은행 PDF 형식 파싱 ─────────────────────────────────────────────────
-// 컬럼: 거래일시 | 적요 | 보낸분/받는분 | 출금액 | 입금액 | 잔액 | 송금메모 | 거래점
-function parseKBBankRows(rows: string[][], importAccountId: string, secondAccountId: string): ImportRow[] {
-  // 헤더 행 찾기
-  const headerIdx = rows.findIndex(r =>
-    r.some(c => c.includes('거래일시')) && r.some(c => c.includes('출금액'))
-  )
-  if (headerIdx < 0) return []
-
-  const header = rows[headerIdx]
-  const ci = (candidates: string[]) =>
-    header.findIndex(h => candidates.some(c => h.includes(c)))
-
-  const cDate    = ci(['거래일시', '거래일자'])
-  const cDesc    = ci(['적요'])
-  const cSender  = ci(['보낸분', '받는분'])
-  const cOut     = ci(['출금액'])
-  const cIn      = ci(['입금액'])
-
-  if (cDate < 0 || cOut < 0 || cIn < 0) return []
-
-  const importRows: ImportRow[] = []
-
-  rows.slice(headerIdx + 1).forEach((row, i) => {
-    const dateStr = row[cDate] || ''
-    if (!dateStr.match(/\d{4}[.\-]\d{2}[.\-]\d{2}/)) return
-
-    const desc    = [row[cDesc], row[cSender]].filter(Boolean).join(' ').trim()
-    const outAmt  = parseAmountSigned(row[cOut] || '0')
-    const inAmt   = parseAmountSigned(row[cIn]  || '0')
-    const txType  = row[cDesc] || ''
-
-    const withdrawal = Math.abs(outAmt)
-    const deposit    = Math.abs(inAmt)
-
-    let amount: number
-    let type: 'income' | 'expense' | 'transfer'
-
-    if (deposit > 0 && withdrawal === 0) {
-      amount = deposit; type = 'income'
-    } else if (withdrawal > 0 && deposit === 0) {
-      amount = withdrawal; type = 'expense'
-    } else {
-      return // 둘 다 0이거나 둘 다 있으면 스킵
+  // 3) 각 줄을 컬럼 슬롯에 배치해 직사각형 표로 정렬
+  const grid: string[][] = lines.map(cells => {
+    const rowArr: string[] = new Array(centers.length).fill('')
+    for (const c of cells) {
+      const ci = colOf(c.x)
+      rowArr[ci] = rowArr[ci] ? `${rowArr[ci]} ${c.text}` : c.text
     }
-
-    // 이체 자동 감지
-    if (isTransferLike(desc, txType)) type = 'transfer'
-
-    const date = parseDate(dateStr)
-    const sugCatId = type !== 'transfer' ? suggestCategory(desc, txType, type as 'income' | 'expense') : 'transfer'
-    const catList  = type === 'income' ? [] : []  // 나중에 채움
-    const autoSuggested = type !== 'transfer' && sugCatId !== (type === 'income' ? 'other_income' : 'etc')
-
-    importRows.push({
-      _key: `pdf_${i}_${Date.now()}`,
-      date,
-      description: desc || '(내용 없음)',
-      txType,
-      amount,
-      type,
-      categoryId: sugCatId,
-      accountId: importAccountId,
-      toAccountId: secondAccountId,
-      paymentMethod: 'account',
-      cardId: undefined,
-      include: true,
-      autoSuggested,
-    })
+    return rowArr
   })
 
-  return importRows
+  // 4) 헤더 줄 찾기 (컬럼명 키워드가 가장 많이 맞는 줄)
+  const HEADER_KW = ['거래일','거래일시','거래일자','날짜','일자','이용일','승인일','매출일','적요','내용','거래내용','가맹점','거래처','상호','거래유형','유형','구분','출금','입금','금액','거래금액','이용금액','승인금액','결제금액','잔액','승인','비고']
+  let headerIdx = -1
+  let bestScore = 1
+  grid.forEach((r, i) => {
+    const score = r.filter(c => {
+      const cc = c.replace(/\s/g, '')
+      return cc && HEADER_KW.some(k => cc.includes(k))
+    }).length
+    if (score > bestScore) { bestScore = score; headerIdx = i }
+  })
+
+  if (headerIdx >= 0) {
+    const headers = grid[headerIdx].map((h, i) => h.trim() || `열${i + 1}`)
+    const rows = grid.slice(headerIdx + 1).filter(r => r.some(c => c.trim()))
+    return { headers, rows }
+  }
+
+  // 헤더를 못 찾으면: 일반 컬럼명(열1, 열2…)으로 두고 전체를 데이터로 → 수동 지정
+  const width = centers.length
+  const headers = Array.from({ length: width }, (_, i) => `열${i + 1}`)
+  return { headers, rows: grid.filter(r => r.some(c => c.trim())) }
 }
 
 // ── 키워드 → 카테고리 자동 매핑 ────────────────────────────────────────────
@@ -270,12 +252,12 @@ function detectColumns(headers: string[]): Record<string, number> {
   const find = (candidates: string[]) =>
     normalized.findIndex(h => candidates.some(c => h.includes(c)))
 
-  result.date       = find(['거래일시','거래일자','날짜','거래일','date','일자','년월일'])
-  result.desc       = find(['적요','내용','거래내용','description','상호명','거래처'])
-  result.txType     = find(['거래유형','유형','거래종류','종류','구분'])
-  result.withdrawal = find(['출금액','지출액','출금금액','debit','인출'])
-  result.deposit    = find(['입금액','수입액','입금금액','credit'])
-  result.amount     = find(['거래금액','금액','amount'])
+  result.date       = find(['거래일시','거래일자','날짜','거래일','date','일자','년월일','이용일','승인일','매출일','결제일'])
+  result.desc       = find(['적요','내용','거래내용','description','상호명','거래처','가맹점','이용내역','상호','내역','비고'])
+  result.txType     = find(['거래유형','유형','거래종류','종류','구분','승인구분'])
+  result.withdrawal = find(['출금액','지출액','출금금액','debit','인출','출금'])
+  result.deposit    = find(['입금액','수입액','입금금액','credit','입금'])
+  result.amount     = find(['거래금액','금액','amount','이용금액','승인금액','결제금액','청구금액','합계'])
 
   return result
 }
@@ -507,39 +489,34 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setFileLoading(false)
   }
 
-  // ── PDF 파싱 실행 ──────────────────────────────────────────────────────────
+  // ── PDF 파싱 실행 (모든 은행/카드 공용) ─────────────────────────────────────
+  // PDF에서 표를 추출한 뒤, 엑셀과 동일한 "컬럼 설정(map)" 화면으로 넘긴다.
+  // 이렇게 하면 KB국민은행뿐 아니라 토스뱅크·카카오페이·카드사 등 어떤 PDF든
+  // 자동인식(가능하면) 또는 사용자가 직접 컬럼을 지정해 가져올 수 있다.
   async function handlePDFParse() {
     if (!pendingFile) return
     setPdfLoading(true)
     setPdfError('')
     try {
-      const rawTextRows = await extractPDFRows(pendingFile, pdfPassword || undefined)
-      const parsed = parseKBBankRows(rawTextRows, importAccountId, secondAccountId)
+      const { headers, rows: bodyRows } = await extractPDFTable(pendingFile, pdfPassword || undefined)
 
-      if (parsed.length === 0) {
-        setPdfError('거래 내역을 인식하지 못했습니다. 지원 형식: KB국민은행')
+      if (headers.length === 0 || bodyRows.length === 0) {
+        setPdfError('PDF에서 표를 찾지 못했어요. 스캔(이미지)으로 저장된 PDF이거나 형식이 특이할 수 있어요. 엑셀 파일이 있으면 엑셀로 시도해보세요.')
         setPdfLoading(false)
         return
       }
 
-      // 카테고리 검증 및 보정 + 카드 소스 반영
-      const incomeLeaf  = categories.filter(c => c.type === 'income'  && c.parentId !== null)
-      const expenseLeaf = categories.filter(c => c.type === 'expense' && c.parentId !== null)
-      const fixed = parsed.map(r => {
-        if (r.type === 'transfer') return r
-        const catList = r.type === 'income' ? incomeLeaf : expenseLeaf
-        const exists  = catList.some(c => c.id === r.categoryId)
-        return {
-          ...r,
-          categoryId: exists ? r.categoryId : (catList[0]?.id || ''),
-          paymentMethod: (importSourceType === 'card' ? 'card' : 'account') as PaymentMethod,
-          cardId: importSourceType === 'card' ? importCardId : undefined,
-          accountId: importAccountId,
-        }
-      })
-
-      setRows(fixed)
-      setStep('review')
+      // 추출한 표를 엑셀과 동일한 매핑 파이프라인에 태운다
+      setRawHeaders(headers)
+      setRawRows(bodyRows)
+      const detected = detectColumns(headers)
+      setColDate(detected.date ?? -1)
+      setColDesc(detected.desc ?? -1)
+      setColTxType(detected.txType ?? -1)
+      setColWithdrawal(detected.withdrawal ?? -1)
+      setColDeposit(detected.deposit ?? -1)
+      setColAmount(detected.amount ?? -1)
+      setStep('map')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg.toLowerCase().includes('password')) {
@@ -828,8 +805,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                     {pdfError && <p className="text-xs text-red-500 mt-1.5">⚠️ {pdfError}</p>}
                   </div>
                   <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-600 space-y-0.5">
-                    <p>• KB국민은행: 생년월일 8자리 (예: 19980915)</p>
-                    <p>• 비밀번호 없는 PDF는 그냥 확인 버튼을 누르세요</p>
+                    <p>• 모든 은행·카드 PDF 지원 (다음 화면에서 컬럼을 확인/지정)</p>
+                    <p>• 비밀번호가 걸린 PDF만 비밀번호 입력, 없으면 비워두고 확인</p>
+                    <p>• 예) KB국민은행: 생년월일 8자리(19980915)</p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setIsPDF(false); setFileName('') }} className="px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">← 다시 선택</button>
@@ -861,7 +839,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                 </div>
                 {fileError && <p className="text-xs text-red-500 text-center">⚠️ {fileError}</p>}
                 <div className="text-xs text-gray-400 text-center space-y-0.5">
-                  <p>💡 토스뱅크(엑셀) · KB국민은행(PDF) 등 지원</p>
+                  <p>💡 엑셀·PDF 모두 지원 (모든 은행·카드)</p>
                   <p>암호 걸린 파일도 가능합니다 (Excel·PDF 모두)</p>
                 </div>
               </div>
