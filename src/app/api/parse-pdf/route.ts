@@ -9,10 +9,51 @@ export const maxDuration = 30
 
 interface PdfTextItem { str?: string; transform?: number[] }
 
+// 서버(Node/서버리스)엔 브라우저 그래픽 객체가 없어 pdfjs 로딩이 실패할 수 있다
+// (예: "DOMMatrix is not defined"). 텍스트 추출엔 실제로 쓰이지 않으므로
+// 로딩만 통과하도록 최소 스텁을 전역에 채워준다.
+function ensureDomPolyfills() {
+  const g = globalThis as unknown as Record<string, unknown>
+  if (typeof g.DOMMatrix === 'undefined') {
+    class DOMMatrixPolyfill {
+      a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
+      constructor(init?: number[] | string) {
+        if (Array.isArray(init) && init.length === 6) {
+          this.a = init[0]; this.b = init[1]; this.c = init[2]
+          this.d = init[3]; this.e = init[4]; this.f = init[5]
+        }
+      }
+      multiplySelf() { return this }
+      preMultiplySelf() { return this }
+      translateSelf() { return this }
+      scaleSelf() { return this }
+    }
+    g.DOMMatrix = DOMMatrixPolyfill
+  }
+  if (typeof g.Path2D === 'undefined') {
+    class Path2DPolyfill {
+      addPath() {} moveTo() {} lineTo() {} bezierCurveTo() {}
+      quadraticCurveTo() {} closePath() {} rect() {} arc() {}
+    }
+    g.Path2D = Path2DPolyfill
+  }
+  if (typeof g.ImageData === 'undefined') {
+    class ImageDataPolyfill {
+      width: number; height: number; data: Uint8ClampedArray
+      constructor(w: number, h: number) {
+        this.width = w; this.height = h
+        this.data = new Uint8ClampedArray(Math.max(0, w * h * 4))
+      }
+    }
+    g.ImageData = ImageDataPolyfill
+  }
+}
+
 async function extractPDFTable(
   data: Uint8Array,
   password: string,
 ): Promise<{ headers: string[]; rows: string[][] }> {
+  ensureDomPolyfills()
   // Node 환경용 legacy 빌드 (worker 불필요, 메인 스레드에서 처리)
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const loadingTask = pdfjs.getDocument({ data, password: password || '', isEvalSupported: false })
