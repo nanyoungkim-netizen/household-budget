@@ -12,7 +12,20 @@ import { Transaction, PaymentMethod, Category } from '@/types'
 // 은행마다 양식이 달라도, 복원된 표를 엑셀과 동일한 "컬럼 설정" 화면으로 넘겨
 // 사용자가 날짜/금액/내용 컬럼을 자동인식하거나 직접 지정할 수 있게 한다.
 async function extractPDFTable(file: File, password?: string): Promise<{ headers: string[]; rows: string[][] }> {
-  const pdfjsLib = await import('pdfjs-dist')
+  // 구버전 모바일 브라우저(iOS Safari 17.4 미만 등) 호환:
+  // pdfjs가 쓰는 최신 API(Promise.withResolvers)가 없으면 직접 채워준다.
+  const P = Promise as unknown as { withResolvers?: () => unknown }
+  if (typeof P.withResolvers !== 'function') {
+    P.withResolvers = function () {
+      let resolve: (value?: unknown) => void = () => {}
+      let reject: (reason?: unknown) => void = () => {}
+      const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+      return { promise, resolve, reject }
+    }
+  }
+
+  // 넓은 브라우저 호환을 위해 legacy 빌드 사용 (모바일/구버전 대응)
+  const pdfjsLib = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as typeof import('pdfjs-dist')
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
   const buf = await file.arrayBuffer()
