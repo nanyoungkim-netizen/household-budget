@@ -155,6 +155,9 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState('all')
   const [paymentTab, setPaymentTab] = useState<PaymentTab>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  // 검색 중에는 기본적으로 전체 기간에서 찾음(기간에 갇혀 못 찾는 문제 해소).
+  // true면 선택한 기간 안에서만 검색.
+  const [restrictSearchToPeriod, setRestrictSearchToPeriod] = useState(false)
   const [filterDateFrom, setFilterDateFrom] = useState(() => monthToRange(currentMonth)[0])
   const [filterDateTo, setFilterDateTo] = useState(() => monthToRange(currentMonth)[1])
   const [quickDateKey, setQuickDateKey] = useState('')
@@ -215,6 +218,7 @@ export default function TransactionsPage() {
   // 적금·예금 상품 연동 상태
   const [savingLinks, setSavingLinks] = useState<{ savingId: string; amount: string }[]>([])
   const [savingSearch, setSavingSearch] = useState('')
+  const [savingLinkTab, setSavingLinkTab] = useState<'saving' | 'deposit' | 'subscription'>('saving')
   const [showQuickAddSaving, setShowQuickAddSaving] = useState(false)
   const [quickSavingForm, setQuickSavingForm] = useState({
     name: '', bank: '', type: 'saving' as 'saving' | 'deposit' | 'subscription',
@@ -315,8 +319,12 @@ export default function TransactionsPage() {
   ].reduce((s, v) => s + v, 0)
 
   // ── 필터링 ──────────────────────────────────────────────────────────────────
+  // 검색 중이면 기간 필터를 건너뛴다(전체 기간 검색) — '이번 달만 보기'로 되돌릴 수 있음
+  const isSearching = searchQuery.trim().length > 0
+  const ignoreDateRange = isSearching && !restrictSearchToPeriod
+
   const filtered = transactions
-    .filter(t => (filterDateFrom && filterDateTo) ? true : t.date.startsWith(month))
+    .filter(t => ignoreDateRange ? true : ((filterDateFrom && filterDateTo) ? true : t.date.startsWith(month)))
     .filter(t => filterAccount === 'all' || t.accountId === filterAccount || t.toAccountId === filterAccount)
     .filter(t => filterType === 'all' || t.type === filterType)
     .filter(t => {
@@ -326,8 +334,8 @@ export default function TransactionsPage() {
       return t.type !== 'transfer' && t.paymentMethod === 'card'
     })
     .filter(t => filterCard === 'all' || (t.paymentMethod === 'card' && t.cardId === filterCard))
-    .filter(t => !filterDateFrom || t.date >= filterDateFrom)
-    .filter(t => !filterDateTo   || t.date <= filterDateTo)
+    .filter(t => ignoreDateRange || !filterDateFrom || t.date >= filterDateFrom)
+    .filter(t => ignoreDateRange || !filterDateTo   || t.date <= filterDateTo)
     .filter(t => !searchQuery.trim() ||
       t.description.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
       String(t.amount).includes(searchQuery.trim())
@@ -697,7 +705,7 @@ export default function TransactionsPage() {
   useEscClose(showQuickAddSaving, () => setShowQuickAddSaving(false))
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto">
+    <div className="p-2.5 md:p-6 max-w-3xl mx-auto">
       {/* 예산 화면에서 이동 배너 (FR-003) */}
       {fromBudgetLabel && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-2.5 mb-4 flex items-center justify-between">
@@ -967,7 +975,7 @@ export default function TransactionsPage() {
       })()}
 
       {/* 빠른 날짜 필터 */}
-      <div className="bg-white rounded-2xl shadow-sm mb-3 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm mb-2 md:mb-3 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
           <span className="text-xs font-semibold text-gray-500 flex-shrink-0">빠른 날짜</span>
           {activeFilterCount > 0 && (
@@ -1015,7 +1023,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* 필터 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 flex flex-wrap gap-2">
+      <div className="bg-white rounded-2xl p-2.5 md:p-4 shadow-sm mb-2.5 md:mb-4 flex flex-wrap gap-1.5 md:gap-2">
         {/* PRD 2.1: 실소비만 보기 토글 */}
         <div className="w-full flex items-center gap-2 pb-2 border-b border-gray-100 mb-1">
           <button
@@ -1065,25 +1073,25 @@ export default function TransactionsPage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setRestrictSearchToPeriod(false) }}
             placeholder="적요, 금액 검색..."
             className="w-full pl-8 pr-3 border border-gray-200 rounded-lg py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">×</button>
+            <button onClick={() => { setSearchQuery(''); setRestrictSearchToPeriod(false) }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">×</button>
           )}
         </div>
       </div>
 
       {/* 요약 카드 */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">수입</div>
-          <div className="text-base font-bold text-emerald-600">+{fmtKRW(income)}</div>
+      <div className="grid grid-cols-3 gap-2 md:gap-3 mb-2.5 md:mb-4">
+        <div className="bg-white rounded-2xl p-2.5 md:p-4 shadow-sm">
+          <div className="text-xs text-gray-500 mb-0.5 md:mb-1">수입</div>
+          <div className="text-sm md:text-base font-bold text-emerald-600 tabular-nums">+{fmtKRW(income)}</div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">지출{refundAmt > 0 ? ' (환급 차감)' : ''}</div>
-          <div className="text-base font-bold text-red-500">-{fmtKRW(expense)}</div>
+        <div className="bg-white rounded-2xl p-2.5 md:p-4 shadow-sm">
+          <div className="text-xs text-gray-500 mb-0.5 md:mb-1">지출{refundAmt > 0 ? ' (환급 차감)' : ''}</div>
+          <div className="text-sm md:text-base font-bold text-red-500 tabular-nums">-{fmtKRW(expense)}</div>
           {refundAmt > 0 && (
             <div className="text-xs text-purple-500 mt-0.5">↩ 환급 -{fmtKRW(refundAmt)}</div>
           )}
@@ -1103,9 +1111,9 @@ export default function TransactionsPage() {
             </div>
           )}
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="text-xs text-gray-500 mb-1">이체</div>
-          <div className="text-base font-bold text-blue-500">{fmtKRW(transfer)}</div>
+        <div className="bg-white rounded-2xl p-2.5 md:p-4 shadow-sm">
+          <div className="text-xs text-gray-500 mb-0.5 md:mb-1">이체</div>
+          <div className="text-sm md:text-base font-bold text-blue-500 tabular-nums">{fmtKRW(transfer)}</div>
         </div>
       </div>
 
@@ -1146,15 +1154,23 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* 검색 결과 건수 */}
-      {searchQuery.trim() && (
-        <div className="text-sm text-gray-500 mb-2">
-          검색 결과 {filtered.length}건
+      {/* 검색 결과 — 기본은 전체 기간에서 검색, 기간 안으로 좁히기 토글 */}
+      {isSearching && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl bg-blue-50 border border-blue-100 px-3 py-2.5">
+          <span className="text-sm text-blue-800">
+            🔍 <span className="font-semibold">{ignoreDateRange ? '전체 기간' : '선택한 기간'}</span>
+            에서 &lsquo;{searchQuery.trim()}&rsquo; <span className="font-semibold">{filtered.length}건</span>
+          </span>
+          <button
+            onClick={() => setRestrictSearchToPeriod(v => !v)}
+            className="ml-auto text-xs font-semibold text-blue-600 bg-white border border-blue-200 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap">
+            {ignoreDateRange ? '선택 기간만 보기' : '전체 기간에서 찾기'}
+          </button>
         </div>
       )}
 
       {/* 거래 목록 */}
-      <div className="space-y-3">
+      <div className="space-y-2 md:space-y-3">
         {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => {
           const dayTxs = grouped[date]
           const dayIncome = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
@@ -1163,9 +1179,9 @@ export default function TransactionsPage() {
           const dayTransfer = dayTxs.filter(t => t.type === 'transfer').reduce((s, t) => s + t.amount, 0)
           return (
           <div key={date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-3 md:px-4 py-1.5 md:py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500">{date}</span>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 {dayIncome > 0 && (
                   <span className="text-[11px] font-medium text-blue-500">+{fmtDailyAmt(dayIncome)}</span>
                 )}
@@ -1190,11 +1206,11 @@ export default function TransactionsPage() {
               const consumptionType = getConsumptionType(t, categories)
               return (
                 <div key={t.id}
-                  className={`flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer ${isSavingTx ? 'bg-blue-50/40' : ''}`}
+                  className={`flex items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b border-gray-50 last:border-0 group hover:bg-gray-50/50 transition-colors cursor-pointer ${isSavingTx ? 'bg-blue-50/40' : ''}`}
                   onClick={() => openEdit(t)}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${isTransfer ? 'bg-blue-50' : isRefund ? 'bg-purple-50' : 'bg-gray-50'}`}>
+                  <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                    <div className={`w-8 h-8 md:w-9 md:h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${isTransfer ? 'bg-blue-50' : isRefund ? 'bg-purple-50' : 'bg-gray-50'}`}>
                       {isTransfer ? '↔️' : isRefund ? '↩️' : cat?.icon}
                     </div>
                     <div className="min-w-0">
@@ -1260,20 +1276,20 @@ export default function TransactionsPage() {
                         </div>
                       )}
                     </div>
-                    {/* 복사 / 수정 / 삭제 버튼 — hover 시 표시 */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* 복사 / 수정 / 삭제 — 모바일: 항상 표시(hover 없음) / 데스크탑: hover 시 표시 */}
+                    <div className="flex items-center gap-0 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={e => { e.stopPropagation(); openCopy(t) }}
-                        className="text-xs text-gray-400 hover:text-emerald-500 px-1.5 py-1 rounded-lg hover:bg-emerald-50 transition-colors"
+                        className="text-[11px] text-gray-400 hover:text-emerald-500 px-1 py-1.5 md:py-1 rounded-md hover:bg-emerald-50 transition-colors"
                         title="복사하여 추가"
                       >복사</button>
                       <button
                         onClick={e => { e.stopPropagation(); openEdit(t) }}
-                        className="text-xs text-gray-400 hover:text-blue-500 px-1.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                        className="text-[11px] text-gray-400 hover:text-blue-500 px-1 py-1.5 md:py-1 rounded-md hover:bg-blue-50 transition-colors"
                       >수정</button>
                       <button
                         onClick={e => { e.stopPropagation(); setDeleteConfirmId(t.id) }}
-                        className="text-xs text-red-600 hover:bg-red-50 px-1.5 py-1 rounded-lg transition-colors"
+                        className="text-[11px] text-gray-400 hover:text-red-500 px-1 py-1.5 md:py-1 rounded-md hover:bg-red-50 transition-colors"
                       >삭제</button>
                     </div>
                   </div>
@@ -1293,14 +1309,20 @@ export default function TransactionsPage() {
 
       {/* ── 추가 / 수정 모달 ────────────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900">
-                {isEditing ? '거래 수정' : '거래 추가'}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 text-xl leading-none">×</button>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center md:p-4">
+          {/* 모바일: 화면 바닥에 붙는 바텀시트 / 데스크탑: 중앙 카드 */}
+          <div className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-md px-5 pb-0 shadow-xl max-h-[92vh] md:max-h-[90vh] overflow-y-auto overscroll-contain">
+            {/* 헤더 — 스크롤해도 상단 고정 */}
+            <div className="sticky top-0 z-10 bg-white pt-3 pb-3 -mx-5 px-5 border-b border-gray-100">
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3 md:hidden" />
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-gray-900">
+                  {isEditing ? '거래 수정' : '거래 추가'}
+                </h2>
+                <button onClick={closeModal} className="text-gray-400 text-2xl leading-none w-9 h-9 flex items-center justify-center -mr-2 rounded-full hover:bg-gray-100">×</button>
+              </div>
             </div>
+            <div className="h-3" />
             <div className="space-y-3">
 
               {/* 유형 탭 */}
@@ -1749,9 +1771,12 @@ export default function TransactionsPage() {
                     <div className="border border-blue-100 rounded-xl bg-blue-50/40 p-3 space-y-2.5">
                       <div className="text-xs font-semibold text-blue-700">💰 저축 상품 연동 (적금·예금·청약)</div>
 
-                      {data.savings.length === 0 ? (
+                      {(() => {
+                        // 만기 처리된 상품은 연동 대상에서 제외
+                        const activeSavings = data.savings.filter(s => s.status !== 'matured')
+                        return activeSavings.length === 0 ? (
                         <div className="text-center py-3">
-                          <p className="text-xs text-gray-400 mb-2">등록된 적금·예금 상품이 없습니다</p>
+                          <p className="text-xs text-gray-400 mb-2">연동 가능한 적금·예금·청약 상품이 없습니다</p>
                           <button
                             type="button"
                             onClick={() => setShowQuickAddSaving(true)}
@@ -1761,6 +1786,36 @@ export default function TransactionsPage() {
                         </div>
                       ) : (
                         <>
+                          {/* 유형 탭 — 적금·예금·청약 구분 */}
+                          <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+                            {([
+                              ['saving', '적금', 'blue'],
+                              ['deposit', '예금', 'amber'],
+                              ['subscription', '청약', 'teal'],
+                            ] as const).map(([val, label, color]) => {
+                              const count = activeSavings.filter(s => s.type === val && !savingLinks.some(l => l.savingId === s.id)).length
+                              const active = savingLinkTab === val
+                              return (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => { setSavingLinkTab(val); setSavingSearch('') }}
+                                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                                    active
+                                      ? color === 'blue' ? 'bg-blue-500 text-white'
+                                        : color === 'amber' ? 'bg-amber-500 text-white'
+                                        : 'bg-teal-500 text-white'
+                                      : 'text-gray-500 hover:bg-gray-50'
+                                  }`}>
+                                  {label}
+                                  {count > 0 && (
+                                    <span className={`text-[10px] leading-none px-1 py-0.5 rounded-full ${active ? 'bg-white/25' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+
                           {/* 상품 검색 */}
                           <div className="relative">
                             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
@@ -1768,14 +1823,15 @@ export default function TransactionsPage() {
                               type="text"
                               value={savingSearch}
                               onChange={e => setSavingSearch(e.target.value)}
-                              placeholder="상품명 검색..."
+                              placeholder={`${savingLinkTab === 'saving' ? '적금' : savingLinkTab === 'deposit' ? '예금' : '청약'} 상품명 검색...`}
                               className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                             />
                           </div>
 
-                          {/* 미선택 상품 목록 */}
+                          {/* 미선택 상품 목록 — 선택된 탭(유형)·만기제외·검색어 필터 */}
                           {(() => {
-                            const unlinked = data.savings.filter(s =>
+                            const unlinked = activeSavings.filter(s =>
+                              s.type === savingLinkTab &&
                               !savingLinks.some(l => l.savingId === s.id) &&
                               (!savingSearch.trim() || s.name.includes(savingSearch.trim()) || s.bank.includes(savingSearch.trim()))
                             )
@@ -1870,22 +1926,24 @@ export default function TransactionsPage() {
                             + 새 상품 추가
                           </button>
                         </>
-                      )}
+                      )
+                      })()}
                     </div>
                   )}
                 </>
               )}
 
-              <div className="flex gap-2 pt-1">
+              {/* 저장 버튼 — 스크롤해도 하단 고정(모바일에서 매번 끝까지 내리지 않도록) */}
+              <div className="sticky bottom-0 z-10 flex gap-2 bg-white pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] -mx-5 px-5 border-t border-gray-100">
                 {isEditing && (
                   <button
                     onClick={() => setDeleteConfirmId(editingId!)}
-                    className="px-4 py-3 rounded-xl text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">
+                    className="px-4 py-3.5 rounded-xl text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">
                     삭제
                   </button>
                 )}
                 <button onClick={handleSave}
-                  className={`flex-1 text-white font-semibold py-3 rounded-xl transition-colors ${
+                  className={`flex-1 text-white font-semibold py-3.5 rounded-xl transition-colors ${
                     formType === 'transfer' ? 'bg-blue-500 hover:bg-blue-600' :
                     formType === 'income'   ? 'bg-emerald-500 hover:bg-emerald-600' :
                     formType === 'refund'   ? 'bg-purple-500 hover:bg-purple-600' :
@@ -1901,11 +1959,14 @@ export default function TransactionsPage() {
 
       {/* ── 적금 빠른 추가 모달 (z-[60]: 메인 모달보다 위) ── */}
       {showQuickAddSaving && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-gray-900">새 상품 추가</h3>
-              <button onClick={() => setShowQuickAddSaving(false)} className="text-gray-400 text-xl leading-none">×</button>
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end md:items-center justify-center md:p-4">
+          <div className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-md px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-0 shadow-xl max-h-[88vh] overflow-y-auto overscroll-contain">
+            <div className="sticky top-0 z-10 bg-white pt-3 pb-3 mb-1 -mx-5 px-5 border-b border-gray-100">
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3 md:hidden" />
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-gray-900">새 상품 추가</h3>
+                <button onClick={() => setShowQuickAddSaving(false)} className="text-gray-400 text-2xl leading-none w-9 h-9 flex items-center justify-center -mr-2 rounded-full hover:bg-gray-100">×</button>
+              </div>
             </div>
             <div className="space-y-3">
               {/* 적금/예금/청약 탭 */}
