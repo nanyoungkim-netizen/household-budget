@@ -180,17 +180,79 @@ function resolveCategoryId(
 }
 
 // ── 날짜 파싱 ────────────────────────────────────────────────────────────────
-function parseDate(raw: unknown): string {
-  if (!raw) return new Date().toISOString().slice(0, 10)
+const pad2 = (v: string | number) => String(v).padStart(2, '0')
+
+/**
+ * refDate: 연도가 없는 날짜("09.13")의 연도를 추론하기 위한 기준일(YYYY-MM-DD).
+ * 보통 명세서 상단의 조회기간 종료일. 기준일보다 미래로 계산되면 전년도로 본다
+ * (12월~1월에 걸친 명세서 대응).
+ */
+function parseDate(raw: unknown, refDate?: string): string {
+  const today = new Date().toISOString().slice(0, 10)
+  if (raw === null || raw === undefined || raw === '') return today
+
   if (typeof raw === 'number') {
     const d = XLSX.SSF.parse_date_code(raw)
-    return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
+    if (d && d.y) return `${d.y}-${pad2(d.m)}-${pad2(d.d)}`
+    return today
   }
-  // "2026.04.10 10:47:23" 형식 처리 (토스뱅크 datetime)
+
   const s = String(raw).trim()
-  const m = s.match(/(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})/)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  return new Date().toISOString().slice(0, 10)
+
+  // 1) 연도 포함: "2026.04.10 10:47:23" / "2026-4-10" / "2026/04/10"
+  const full = s.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/)
+  if (full) return `${full[1]}-${pad2(full[2])}-${pad2(full[3])}`
+
+  // 2) 연도 없음: "09.13 11:21:26" (카드사 이용일) → 기준일에서 연도 추론
+  const md = s.match(/^(\d{1,2})[.\-/](\d{1,2})(?!\d)/)
+  if (md) {
+    const ref = refDate && /^\d{4}-\d{2}-\d{2}$/.test(refDate) ? refDate : today
+    const mm = pad2(md[1]), dd = pad2(md[2])
+    const year = Number(ref.slice(0, 4))
+    const cand = `${year}-${mm}-${dd}`
+    return cand > ref ? `${year - 1}-${mm}-${dd}` : cand
+  }
+
+  // 3) "20260410"
+  const compact = s.match(/^(\d{4})(\d{2})(\d{2})$/)
+  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`
+
+  return today
+}
+
+/**
+ * 연도 없는 날짜의 기준일을 찾는다.
+ * 헤더 위 안내 문구(예: "(2026.08.31 ~ 2026.09.13)")의 날짜를 우선 사용하고,
+ * 없으면 시트 전체에서 연도가 있는 가장 늦은 날짜(결제예정일 등)를 쓴다.
+ */
+function extractRefDate(allData: unknown[][], hdrIdx: number): string {
+  const scanMax = (rows: unknown[][]) => {
+    let best = ''
+    for (const row of rows) {
+      const line = (row || []).map(c => String(c ?? '')).join(' ')
+      for (const m of line.matchAll(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/g)) {
+        const d = `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`
+        if (d > best) best = d
+      }
+    }
+    return best
+  }
+  return scanMax(allData.slice(0, hdrIdx + 1)) || scanMax(allData)
+}
+
+/** 표의 헤더 행을 추정한다 (앞부분에 제목·기간 안내가 있는 명세서 대응) */
+function detectHeaderRow(allData: unknown[][]): number {
+  const KEYS = ['일자','일시','날짜','이용일','승인일','매출일','결제일','적요','내용','가맹점','상호',
+                '거래처','금액','출금','입금','구분','유형','카드','잔액','내역']
+  let bestIdx = 0, bestScore = 0
+  for (let r = 0; r < Math.min(15, allData.length); r++) {
+    const cells = (allData[r] || []).map(c => String(c ?? '').toLowerCase().replace(/\s/g, ''))
+    const filled = cells.filter(Boolean).length
+    if (filled < 2) continue
+    const score = cells.filter(c => c && KEYS.some(k => c.includes(k))).length
+    if (score > bestScore) { bestScore = score; bestIdx = r }
+  }
+  return bestScore >= 2 ? bestIdx : 0
 }
 
 // ── 금액 파싱 ────────────────────────────────────────────────────────────────
@@ -281,6 +343,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   const [rawHeaders, setRawHeaders] = useState<string[]>([])
   const [rawRows, setRawRows]       = useState<unknown[][]>([])
+  // 연도 없는 날짜("09.13")의 연도 추론 기준일 (명세서 조회기간 종료일)
+  const [dateRefDate, setDateRefDate] = useState('')
 
   const [colDate,       setColDate]       = useState(-1)
   const [colDesc,       setColDesc]       = useState(-1)
@@ -365,7 +429,10 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setStoredWorkbook(wb)
     setSheetNames(names)
     setSelectedSheet(names[0])
-    setHeaderRowIndex(0)
+    // 헤더 행 자동 추정 — 명세서 상단에 제목·조회기간 줄이 있는 경우 0행이 헤더가 아님
+    const ws0 = wb.Sheets[names[0]]
+    const all0 = ws0 ? (XLSX.utils.sheet_to_json<unknown[]>(ws0, { header: 1, defval: '' }) as unknown[][]) : []
+    setHeaderRowIndex(detectHeaderRow(all0))
     setSheetPreview(getSheetPreviewRows(wb, names[0]))
     setFileReady(true)
   }
@@ -379,6 +446,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     const body    = allData.slice(hdrIdx + 1) as unknown[][]
     setRawHeaders(headers)
     setRawRows(body)
+    // 연도 없는 이용일("09.13")의 연도 추론 기준일
+    setDateRefDate(extractRefDate(allData, hdrIdx))
     const detected = detectColumns(headers)
     setColDate(detected.date ?? -1)
     setColDesc(detected.desc ?? -1)
@@ -536,7 +605,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
       const desc   = String(descVal   || '').trim()
       const txType = String(txTypeVal || '').trim()
-      const date   = parseDate(dateVal)
+      const date   = parseDate(dateVal, dateRefDate)
 
       // FR-001: 취소 건 자동 제외
       if (txType && EXCLUDE_TX_TYPES.some(k => txType.includes(k))) {
