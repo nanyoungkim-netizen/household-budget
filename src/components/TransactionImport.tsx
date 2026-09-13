@@ -75,14 +75,6 @@ const KEYWORD_MAP: { keywords: string[]; catId: string; type: 'income' | 'expens
   { keywords: ['병원','의원','약국','치과','한의원','안과','성형','피부과','건강검진'], catId: 'health', type: 'expense' },
 ]
 
-// 한국 이름 패턴 (2~4글자 한글 이름)
-const KOREAN_NAME_RE = /^[가-힣]{2,4}(\(.*\))?$/
-
-function isKoreanName(s: string): boolean {
-  const base = s.replace(/\(.*\)/, '').trim()
-  return KOREAN_NAME_RE.test(base) && base.length >= 2 && base.length <= 4
-}
-
 // 이체로 자동 분류할 키워드
 const TRANSFER_KEYWORDS = ['이체','송금','계좌이동','모임통장','잔돈모으기','달러로모으기','외화저축','계좌간','오픈뱅킹출금','오픈뱅킹입금','전자금융']
 
@@ -99,32 +91,92 @@ function txTypeToDir(txType: string): 'income' | 'expense' | null {
   return null
 }
 
-function suggestCategory(
+// 표준 catId → 사용자 카테고리 이름 매칭용 대표 키워드(긴 것 우선). 기본 id가 달라도
+// 이름으로 연결하고, 기본 카테고리에 없는 개념(전기/가스/수도/의료)은 대체 후보로 흡수.
+const CANON_CAT_NAMES: Record<string, string[]> = {
+  salary: ['급여', '월급'],
+  interest: ['이자'],
+  saving_return: ['적금 만기', '적금만기', '만기'],
+  other_income: ['기타수입', '기타 수입'],
+  living: ['생활비', '관리비', '공과금'],
+  food: ['식비', '음식'],
+  transport: ['교통'],
+  communication: ['통신'],
+  insurance: ['보험'],
+  subscription: ['구독'],
+  shopping: ['쇼핑', '미용'],
+  selfdev: ['자기계발', '교육'],
+  gift: ['선물', '경조'],
+  travel: ['여행'],
+  drink: ['술', '음료', '카페'],
+  daily: ['생필품', '생활용품'],
+  loan: ['대출'],
+  saving: ['적금', '저축'],
+  card: ['카드대금', '카드'],
+  etc: ['기타'],
+  // 기본 카테고리에 전용 항목이 없으면 공과금/생활비로 흡수
+  electricity: ['전기', '공과금', '생활비'],
+  gas: ['가스', '공과금', '생활비'],
+  water: ['수도', '공과금', '생활비'],
+  health: ['의료', '병원', '건강', '의약'],
+}
+
+// 적요/내용에서 가장 "구체적인(가장 긴)" 키워드를 찾아 표준 catId를 추천.
+// 매칭 없으면 '' 반환(→ 기타로 폴백). 맵 순서가 아닌 키워드 길이로 우선순위 결정.
+function suggestCanonicalCat(
   desc: string,
   txType: string,
   type: 'income' | 'expense',
   userRules: { keyword: string; categoryId: string }[] = []
-): string {
-  const lower = (desc + txType).toLowerCase().replace(/\s/g, '')
+): { catId: string; matched: boolean } {
+  const lower = (desc + ' ' + txType).toLowerCase().replace(/\s/g, '')
 
-  // FR-08: 사용자 정의 규칙 우선 (가장 긴 키워드 기준)
-  const matchedUserRules = userRules.filter(r => lower.includes(r.keyword.toLowerCase().replace(/\s/g, '')))
+  // FR-08: 사용자 정의 규칙 우선 (가장 긴 키워드 기준) — categoryId는 실제 카테고리 id
+  const matchedUserRules = userRules.filter(r => r.keyword && lower.includes(r.keyword.toLowerCase().replace(/\s/g, '')))
   if (matchedUserRules.length > 0) {
     matchedUserRules.sort((a, b) => b.keyword.length - a.keyword.length)
-    return matchedUserRules[0].categoryId
+    return { catId: matchedUserRules[0].categoryId, matched: true }
   }
 
+  // 키워드 맵 — 같은 유형 규칙 전체에서 "가장 긴" 매칭 키워드 채택(오탐 방지)
+  let best = { catId: '', len: 0 }
   for (const rule of KEYWORD_MAP) {
     if (rule.type !== type) continue
-    if (rule.keywords.some(kw => lower.includes(kw.toLowerCase().replace(/\s/g, '')))) {
-      return rule.catId
+    for (const kw of rule.keywords) {
+      const k = kw.toLowerCase().replace(/\s/g, '')
+      if (k.length > best.len && lower.includes(k)) best = { catId: rule.catId, len: k.length }
     }
   }
-  // 한국 이름처럼 보이면 → 기타
-  if (isKoreanName(desc.trim())) {
-    return type === 'expense' ? 'etc' : 'other_income'
+  if (best.catId) return { catId: best.catId, matched: true }
+
+  return { catId: '', matched: false }
+}
+
+// 표준 catId → 실제 사용자 카테고리 id로 해석. 없으면 기타/기타수입으로 폴백.
+function resolveCategoryId(
+  canonId: string,
+  catList: Category[],
+  type: 'income' | 'expense'
+): { categoryId: string; resolved: boolean } {
+  const norm = (s: string) => s.toLowerCase().replace(/\s/g, '')
+  const fallback = () => {
+    const etc = catList.find(c => type === 'income'
+      ? /기타/.test(c.name)
+      : c.name.replace(/\s/g, '') === '기타' || /기타/.test(c.name))
+    return etc?.id || catList[0]?.id || ''
   }
-  return type === 'income' ? 'other_income' : 'etc'
+
+  if (canonId) {
+    // 1) 실제 id가 그대로 존재 (기본 카테고리 + 사용자 규칙 id)
+    if (catList.some(c => c.id === canonId)) return { categoryId: canonId, resolved: true }
+    // 2) 대표 이름으로 사용자 카테고리 매칭 (긴 후보 우선)
+    for (const nm of CANON_CAT_NAMES[canonId] || []) {
+      const n = norm(nm)
+      const hit = catList.find(c => norm(c.name).includes(n) || n.includes(norm(c.name)))
+      if (hit) return { categoryId: hit.id, resolved: true }
+    }
+  }
+  return { categoryId: fallback(), resolved: false }
 }
 
 // ── 날짜 파싱 ────────────────────────────────────────────────────────────────
@@ -540,11 +592,13 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
       let categoryId = 'transfer'
       let autoSuggested = false
       if (!isTransfer) {
-        const suggestedCatId = suggestCategory(desc, txType, type, mappingRules)
         const catList = type === 'income' ? incomeLeaf : expenseLeaf
-        const catExists = catList.some(c => c.id === suggestedCatId)
-        categoryId = catExists ? suggestedCatId : (catList[0]?.id || '')
-        autoSuggested = catExists && suggestedCatId !== (type === 'income' ? 'other_income' : 'etc')
+        const { catId: canonId } = suggestCanonicalCat(desc, txType, type, mappingRules)
+        const { categoryId: resolvedId, resolved } = resolveCategoryId(canonId, catList, type)
+        categoryId = resolvedId
+        // '기타/기타수입'으로 떨어진 경우는 추천이 아님(사용자가 직접 고르도록 표시)
+        const isEtc = canonId === (type === 'income' ? 'other_income' : 'etc')
+        autoSuggested = resolved && !isEtc
       }
 
       importRows.push({
