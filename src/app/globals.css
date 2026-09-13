@@ -33,6 +33,8 @@ body {
   /* 숫자·금액이 줄 중간에서 끊기지 않도록 */
   word-break: keep-all;
   overflow-wrap: break-word;
+  /* 모바일: 가로 스크롤(레이아웃 삐져나옴) 방지 */
+  overflow-x: hidden;
 }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -41,6 +43,22 @@ body {
 
 /* 모바일 탭바 스크롤바 숨김 */
 nav .overflow-x-auto::-webkit-scrollbar { display: none; }
+
+/* iOS Safari: 입력창 포커스 시 자동 확대(zoom) 방지 — 폼 컨트롤 글자 16px 고정.
+   데스크탑은 기존 컴팩트 크기 유지. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+    /* 16px 고정으로 입력창이 불필요하게 높아지지 않도록 줄간격 축소 */
+    line-height: 1.2;
+  }
+}
+
+/* 노치/홈 인디케이터 안전영역 유틸 */
+.safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+.safe-pt { padding-top: env(safe-area-inset-top); }
 
 .fade-in { animation: fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

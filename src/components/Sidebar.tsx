@@ -262,7 +262,17 @@ export default function Sidebar() {
   const { user, signOut, forceSyncNow, lastSyncedAt, isSyncingNow, isPendingSync, syncError } = useApp()
   const [spinning, setSpinning] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const prevSyncedAtRef = useRef<string | null>(null)
+
+  // 모바일 하단 탭: 자주 쓰는 4개 + "더보기"(나머지 전체)
+  const PRIMARY_HREFS = ['/', '/transactions', '/statistics', '/savings']
+  const primaryItems = navItems.filter(i => PRIMARY_HREFS.includes(i.href))
+  const moreItems = navItems.filter(i => !PRIMARY_HREFS.includes(i.href))
+  const moreActive = moreItems.some(i => i.href === pathname)
+
+  // 경로 이동 시 더보기 시트 자동 닫힘
+  useEffect(() => { setMoreOpen(false) }, [pathname])
 
   // lastSyncedAt이 바뀌면 (= 저장 성공) 2초간 "저장됐어요!" 표시
   useEffect(() => {
@@ -413,20 +423,17 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* 모바일 하단 탭바 — 전체 메뉴 가로 스크롤 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30">
-        <div
-          className="flex items-center overflow-x-auto gap-1 px-2 py-1"
-          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
-        >
-          {navItems.map(item => {
+      {/* 모바일 하단 탭바 — 주요 4개 + 더보기 (고정, 가로 스크롤 없음) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-40 safe-pb">
+        <div className="grid grid-cols-5 items-stretch">
+          {primaryItems.map(item => {
             const isActive = pathname === item.href
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-colors shrink-0 ${
-                  isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-400'
+                className={`flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+                  isActive ? 'text-blue-600' : 'text-gray-400'
                 }`}
               >
                 <span className="text-xl leading-none">{item.icon}</span>
@@ -436,8 +443,58 @@ export default function Sidebar() {
               </Link>
             )
           })}
+          {/* 더보기 */}
+          <button
+            onClick={() => setMoreOpen(v => !v)}
+            className={`flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+              moreActive || moreOpen ? 'text-blue-600' : 'text-gray-400'
+            }`}
+          >
+            <span className="text-xl leading-none">{moreOpen ? '✕' : '⋯'}</span>
+            <span className={`text-[10px] font-medium whitespace-nowrap mt-0.5 ${moreActive || moreOpen ? 'text-blue-600' : 'text-gray-400'}`}>
+              더보기
+            </span>
+          </button>
         </div>
       </nav>
+
+      {/* 모바일 더보기 시트 */}
+      {moreOpen && (
+        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMoreOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute left-0 right-0 bottom-0 bg-white rounded-t-3xl shadow-xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] fade-in"
+            style={{ marginBottom: 'calc(3.5rem + env(safe-area-inset-bottom))' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3" />
+            <div className="grid grid-cols-3 gap-2">
+              {moreItems.map(item => {
+                const isActive = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-4 rounded-2xl transition-colors ${
+                      isActive ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="text-2xl leading-none">{item.icon}</span>
+                    <span className="text-xs font-medium">{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+            <button
+              onClick={signOut}
+              className="w-full mt-3 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 py-3 rounded-2xl transition-colors"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
