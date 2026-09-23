@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApp, getRealCategoryExpenses, computeAccountBalance, getConsumptionType } from '@/lib/AppContext'
 import { isCardActive } from '@/lib/card'
+import { settleCardBills } from '@/lib/cardPayment'
 import { Transaction, NotificationLogItem } from '@/types'
 
 // 매일 바뀌는 기분전환 코멘트 (날짜 기준 고정 → 같은 날 새로고침해도 안 바뀜)
@@ -1083,7 +1084,6 @@ export default function Dashboard() {
             }
 
             if (widgetId === 'card_payment') {
-              const isCardPayCat = (catId: string) => categories.find(c => c.id === catId)?.role === 'card_payment'
               // 카드별·청구월별 지출 집계
               const chargesByCardMonth: Record<string, Record<string, number>> = {}
               transactions
@@ -1093,30 +1093,24 @@ export default function Dashboard() {
                   if (!chargesByCardMonth[t.cardId!]) chargesByCardMonth[t.cardId!] = {}
                   chargesByCardMonth[t.cardId!][m] = (chargesByCardMonth[t.cardId!][m] || 0) + (t.type === 'refund' ? -t.amount : t.amount)
                 })
-              // 카드별 납부 여부 판정 (3단계) 후 월별로 집계
-              const monthMap: Record<string, { total: number; allPaid: boolean }> = {}
+              // 청구월별로 묶은 뒤 카드별 납부 여부 판정 (여러 통장 분할 납부 합산)
+              const chargesByMonth: Record<string, { cardId: string; charged: number }[]> = {}
               cards.forEach(card => {
                 const cardMonths = chargesByCardMonth[card.id] || {}
                 Object.entries(cardMonths).forEach(([m, v]) => {
                   const total = Math.max(0, v)
                   if (total === 0) return
-                  const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === m)
-                  let isPaid = false
-                  if (billing) {
-                    isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
-                  } else {
-                    const payTxs = transactions.filter(t => isCardPayCat(t.categoryId) && t.billingMonth === m)
-                    const cardTxs = payTxs.filter(t => t.cardId === card.id)
-                    if (cardTxs.length > 0) {
-                      isPaid = cardTxs.reduce((s, t) => s + t.amount, 0) >= total
-                    } else {
-                      isPaid = !!payTxs.find(t => t.amount === total)
-                    }
-                  }
-                  if (!monthMap[m]) monthMap[m] = { total: 0, allPaid: true }
-                  monthMap[m].total += total
-                  if (!isPaid) monthMap[m].allPaid = false
+                  if (!chargesByMonth[m]) chargesByMonth[m] = []
+                  chargesByMonth[m].push({ cardId: card.id, charged: total })
                 })
+              })
+              const monthMap: Record<string, { total: number; allPaid: boolean }> = {}
+              Object.entries(chargesByMonth).forEach(([m, charges]) => {
+                const settled = settleCardBills(m, charges, { transactions, categories, cardBillings })
+                monthMap[m] = {
+                  total: settled.reduce((s, c) => s + c.charged, 0),
+                  allPaid: settled.every(c => c.isPaid),
+                }
               })
               const monthRows = Object.entries(monthMap)
                 .map(([month, { total, allPaid }]) => ({ month, total, isPaid: allPaid }))

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/AppContext'
 import { Budget, Category } from '@/types'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
+import { settleCardBills } from '@/lib/cardPayment'
 
 function fmtKRW(n: number) { return n.toLocaleString('ko-KR') + '원' }
 // FR-007
@@ -198,7 +199,7 @@ export default function BudgetPage() {
     .filter(c => c.amount > 0)
 
   // 전달 카드 사용액 → 이달 납부 예정 — 환급 차감
-  const prevCardBreakdown = cards
+  const prevCardCharges = cards
     .map(card => {
       const charged = transactions
         .filter(t => t.date.startsWith(prev) && t.type === 'expense' && t.paymentMethod === 'card' && t.cardId === card.id)
@@ -206,28 +207,12 @@ export default function BudgetPage() {
       const refunded = transactions
         .filter(t => t.date.startsWith(prev) && t.type === 'refund' && t.paymentMethod === 'card' && t.cardId === card.id)
         .reduce((s, t) => s + t.amount, 0)
-      const netCharged = Math.max(0, charged - refunded)
-      let paid = 0
-      let isPaid = false
-      const billing = cardBillings.find(b => b.cardId === card.id && b.billingMonth === prev)
-      if (billing) {
-        paid = billing.paidAmount
-        isPaid = billing.paidAmount >= billing.totalAmount && billing.totalAmount > 0
-      } else {
-        const payTxs = transactions.filter(t => t.date.startsWith(month) && isCardPaymentCat(t.categoryId) && t.billingMonth === prev)
-        const cardTxs = payTxs.filter(t => t.cardId === card.id)
-        if (cardTxs.length > 0) {
-          paid = cardTxs.reduce((s, t) => s + t.amount, 0)
-          isPaid = paid >= netCharged && netCharged > 0
-        } else {
-          const matchTx = payTxs.find(t => t.amount === netCharged)
-          paid = matchTx ? matchTx.amount : 0
-          isPaid = !!matchTx
-        }
-      }
-      return { ...card, charged: netCharged, paid, isPaid }
+      return { cardId: card.id, charged: Math.max(0, charged - refunded) }
     })
     .filter(c => c.charged > 0)
+  // 여러 통장에서 나눠 납부한 경우도 합계로 판정 (settleCardBills)
+  const prevCardBreakdown = settleCardBills(prev, prevCardCharges, { transactions, categories, cardBillings })
+    .map(s => ({ ...cards.find(c => c.id === s.cardId)!, charged: s.charged, paid: s.paid, isPaid: s.isPaid }))
 
   // billingMonth 없이 납부한 카드대금 합계 (구분 불가)
   const untaggedCardPayment = transactions
