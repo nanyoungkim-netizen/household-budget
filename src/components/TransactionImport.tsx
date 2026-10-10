@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext'
 import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Category } from '@/types'
 import { matchLibrary, isTransferDesc, normalizeDesc, CANON_CAT_NAMES } from '@/lib/descLibrary'
+import { isEncryptedOOXML, decryptOOXML, OfficeWrongPasswordError, OfficeUnsupportedError } from '@/lib/officeDecrypt'
 
 
 
@@ -424,6 +425,13 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setFileLoading(true)
     try {
       const buf = await file.arrayBuffer()
+      // 암호로 잠긴 xlsx는 SheetJS가 열지 못하므로 먼저 판별해 암호 입력으로 보낸다
+      if (isEncryptedOOXML(buf)) {
+        setPendingExcelFile(file)
+        setXlsxPasswordNeeded(true)
+        setFileLoading(false)
+        return
+      }
       const wb  = XLSX.read(buf, { type: 'array', cellDates: false })
       processWorkbook(wb)
     } catch (err: unknown) {
@@ -445,15 +453,32 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setFileLoading(true)
     try {
       const buf = await pendingExcelFile.arrayBuffer()
-      const wb  = XLSX.read(buf, { type: 'array', cellDates: false, password: xlsxPassword })
+      let wb: ReturnType<typeof XLSX.read>
+      if (isEncryptedOOXML(buf)) {
+        // .xlsx 암호(AES) — 브라우저 안에서 직접 복호화 (파일·암호가 서버로 가지 않음)
+        const plain = await decryptOOXML(buf, xlsxPassword)
+        wb = XLSX.read(plain, { type: 'array', cellDates: false })
+      } else {
+        // 구형 .xls 암호(XOR/RC4)는 SheetJS가 직접 처리
+        wb = XLSX.read(buf, { type: 'array', cellDates: false, password: xlsxPassword })
+      }
       setXlsxPasswordNeeded(false)
       processWorkbook(wb)
     } catch (err: unknown) {
-      const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
-      if (msg.includes('password') || msg.includes('incorrect') || msg.includes('encrypted')) {
+      if (err instanceof OfficeWrongPasswordError) {
         setXlsxPasswordError('비밀번호가 틀렸습니다. 다시 확인해주세요.')
+      } else if (err instanceof OfficeUnsupportedError) {
+        setXlsxPasswordError('지원하지 않는 암호 방식입니다. 엑셀에서 암호를 해제해 저장한 뒤 올려주세요.')
       } else {
-        setXlsxPasswordError('파일 처리 중 오류가 발생했습니다.')
+        const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+        // SheetJS는 '못 푸는 방식'에도 "password-protected"를 던지므로 이를 '틀린 암호'로 단정하지 않는다
+        if (msg.includes('incorrect')) {
+          setXlsxPasswordError('비밀번호가 틀렸습니다. 다시 확인해주세요.')
+        } else if (msg.includes('password')) {
+          setXlsxPasswordError('이 파일의 암호 방식은 아직 지원하지 않습니다. 엑셀에서 암호를 해제해 저장한 뒤 올려주세요.')
+        } else {
+          setXlsxPasswordError('파일 처리 중 오류가 발생했습니다.')
+        }
       }
     }
     setFileLoading(false)
@@ -873,7 +898,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                     className="px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">← 다시 선택</button>
                   <button onClick={handleExcelWithPassword} disabled={fileLoading || !xlsxPassword}
                     className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                    {fileLoading ? <><span className="animate-spin">⏳</span> 분석 중...</> : '🔓 파일 열기'}
+                    {fileLoading ? <><span className="animate-spin">⏳</span> 암호 확인 중...</> : '🔓 파일 열기'}
                   </button>
                 </div>
               </div>
