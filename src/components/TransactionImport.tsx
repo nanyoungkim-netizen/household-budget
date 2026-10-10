@@ -9,6 +9,7 @@ import { Transaction, PaymentMethod, Category } from '@/types'
 import { matchLibrary, isTransferDesc, normalizeDesc, CANON_CAT_NAMES } from '@/lib/descLibrary'
 import { isEncryptedOOXML, decryptOOXML, OfficeWrongPasswordError, OfficeUnsupportedError } from '@/lib/officeDecrypt'
 import SearchSelect, { SearchOption } from '@/components/SearchSelect'
+import { buildMatchHistory, matchSaving, matchTransferAccount, savingCategoryFor, isSavingCategory, isSavingLikeDesc } from '@/lib/importMatch'
 
 
 
@@ -58,10 +59,10 @@ function netInterestSweeps<R extends { _key: string; date: string; description: 
     used.add(cand._key)
     const before = cand.amount
     cand.amount = before - sw.amount
-    cand.note = `이자 ${before.toLocaleString()}원 − 달러 모으기 ${sw.amount.toLocaleString()}원 = ${cand.amount.toLocaleString()}원`
+    cand.note = `💱 이자 ${before.toLocaleString()}원 − 달러 모으기 ${sw.amount.toLocaleString()}원 = ${cand.amount.toLocaleString()}원`
     if (cand.amount <= 0) cand.include = false
     sw.include = false
-    sw.note = `같은 날 이자 ${before.toLocaleString()}원에서 차감됨 (가져오기 제외)`
+    sw.note = `💱 같은 날 이자 ${before.toLocaleString()}원에서 차감됨 (가져오기 제외)`
   }
   return out
 }
@@ -274,6 +275,8 @@ interface ImportRow {
   autoSuggested: boolean  // 자동추천 여부 표시
   suggestions?: CatSuggestion[]  // 적요 기반 카테고리 추천 후보(칩 표시용)
   note?: string                  // 자동 처리 안내 (예: 달러 모으기 상계)
+  savingId?: string              // 연동할 적금·예금·청약 상품
+  toAccountUnsure?: boolean      // 이체 받는 계좌를 찾지 못해 기본값으로 둠 → 확인 필요
 }
 
 interface TransactionImportProps {
@@ -589,6 +592,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   function buildRows() {
     // 과거 거래 색인은 행마다가 아니라 한 번만 만든다
     const pastIndex = buildPastIndex(data.transactions)
+    const matchHistory = buildMatchHistory(data.transactions)
     const incomeLeaf  = categories.filter(c => c.type === 'income'  && c.parentId !== null)
     const expenseLeaf = categories.filter(c => c.type === 'expense' && c.parentId !== null)
 
@@ -656,13 +660,44 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
       // 이체 자동 감지 — 카드 명세서는 전부 지출이므로 이체로 보지 않는다.
       // (통장 내역에서도 "우리카드 자동이체"처럼 지출 신호가 있으면 이체에서 제외)
-      const isTransfer = importSourceType !== 'card' && isTransferDesc(desc, txType)
-      const finalType: 'income' | 'expense' | 'transfer' = isTransfer ? 'transfer' : type
+      let finalType: 'income' | 'expense' | 'transfer' =
+        importSourceType !== 'card' && isTransferDesc(desc, txType) ? 'transfer' : type
 
       let categoryId = 'transfer'
       let autoSuggested = false
       let suggestions: CatSuggestion[] = []
-      if (!isTransfer) {
+      let toAccountId = secondAccountId
+      let toAccountUnsure = false
+      let savingId: string | undefined
+      let note: string | undefined
+
+      // 통장에서 나간 돈이 저축 상품 납입이면 → 저축 지출로 기록하고 상품에 연동 (상품 잔액에 반영됨)
+      const savingMatch = importSourceType !== 'card' && type === 'expense'
+        ? matchSaving(desc, data.savings, matchHistory) : null
+      const savingCat = savingMatch ? savingCategoryFor(savingMatch.saving, categories) : ''
+      if (savingMatch && savingCat) {
+        finalType = 'expense'
+        savingId = savingMatch.saving.id
+        categoryId = savingCat
+        autoSuggested = true
+        note = `🔗 ‘${savingMatch.saving.name}’ 납입으로 연동 (${savingMatch.reason})`
+      } else if (finalType === 'transfer') {
+        const acc = matchTransferAccount(desc, accounts, importAccountId, matchHistory)
+        if (acc) {
+          toAccountId = acc.account.id
+          note = `↪ ‘${acc.account.name}’(으)로 이체 (${acc.reason})`
+        } else if (isSavingLikeDesc(desc) && savingCategoryFor(null, categories)) {
+          // 저축성 출금인데 맞는 상품·계좌가 없으면 엉뚱한 계좌로 이체하지 말고 저축 지출로
+          finalType = 'expense'
+          categoryId = savingCategoryFor(null, categories)
+          note = '🔗 등록된 저축 상품이 없어 저축 지출로 넣었어요 — 상품을 고르면 연동돼요'
+        } else {
+          toAccountUnsure = true
+          note = '⚠️ 받는 계좌를 찾지 못했어요 — 확인해주세요'
+        }
+      }
+
+      if (finalType !== 'transfer' && !savingId && categoryId === 'transfer') {
         const catList = type === 'income' ? incomeLeaf : expenseLeaf
         suggestions = suggestCategories(desc, txType, type, {
           userRules: mappingRules, pastIndex, catList,
@@ -685,12 +720,15 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         type: finalType,
         categoryId,
         accountId: importAccountId,
-        toAccountId: secondAccountId,
+        toAccountId,
         paymentMethod: importSourceType === 'card' ? 'card' : 'account',
         cardId: importSourceType === 'card' ? importCardId : defaultCardId,
         include: true,
         autoSuggested,
         suggestions,
+        savingId,
+        toAccountUnsure,
+        note,
       })
     })
 
@@ -755,6 +793,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
           categoryId: r.categoryId,
           paymentMethod: r.paymentMethod,
           cardId: r.paymentMethod === 'card' ? r.cardId : undefined,
+          // 저축 카테고리일 때만 상품 연동 (거래 화면과 같은 기준)
+          ...(r.type === 'expense' && r.savingId && isSavingCategory(r.categoryId, categories)
+            ? { savingLinks: [{ savingId: r.savingId, amount: r.amount }] } : {}),
         }
       }
       addTransaction(tx)
@@ -771,6 +812,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     list.map(c => ({ value: c.id, label: c.name, icon: c.icon, group: parentNameOf(c) }))
   const incomeCatOptions  = catOptions(incomeLeaf)
   const expenseCatOptions = catOptions(expenseLeaf)
+  const SAVING_ICON = { saving: '💰', deposit: '🏦', subscription: '🏠' } as const
+  const SAVING_LABEL = { saving: '적금', deposit: '예금', subscription: '청약' } as const
+  const savingOptions: SearchOption[] = [
+    { value: '', label: '연동 안 함' },
+    ...data.savings.filter(sv => sv.status !== 'matured').map(sv => ({
+      value: sv.id, label: sv.name, icon: SAVING_ICON[sv.type], group: SAVING_LABEL[sv.type], keywords: sv.bank,
+    })),
+  ]
   const accountOptions: SearchOption[] = accounts.map(a => ({
     value: a.id, label: a.name, group: a.bank !== a.name ? a.bank : undefined, keywords: a.accountNumber,
   }))
@@ -799,7 +848,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   }
   const selectedCount = rows.filter(r => r.include).length
   const suggestedCount = rows.filter(r => r.include && r.autoSuggested).length
-  const sweepCount     = rows.filter(r => r.note && !r.include && r.type !== 'income').length
+  const sweepCount     = rows.filter(r => r.note?.startsWith('💱') && !r.include && r.type !== 'income').length
+  const unsureCount    = rows.filter(r => r.include && r.type === 'transfer' && r.toAccountUnsure).length
+  const linkedCount    = rows.filter(r => r.include && r.type === 'expense' && r.savingId).length
 
   const headerOptions = (
     <>
@@ -1156,6 +1207,12 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   {suggestedCount > 0 && (
                     <span className="text-xs text-blue-500">✨ {suggestedCount}건 카테고리 자동추천됨</span>
                   )}
+                  {linkedCount > 0 && (
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">🔗 저축 상품 {linkedCount}건 연동</span>
+                  )}
+                  {unsureCount > 0 && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ 받는 계좌 확인 필요 {unsureCount}건</span>
+                  )}
                   {sweepCount > 0 && (
                     <span className="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">💱 달러 모으기 {sweepCount}건을 이자에서 차감</span>
                   )}
@@ -1338,7 +1395,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                               )}
                             </div>
                             {row.note && (
-                              <div className="mt-1 text-[10px] leading-tight text-sky-600 whitespace-nowrap">💱 {row.note}</div>
+                              <div className={`mt-1 text-[10px] leading-tight whitespace-nowrap ${
+                                row.toAccountUnsure ? 'text-amber-600' : 'text-sky-600'}`}>{row.note}</div>
                             )}
                           </td>
                           {/* 거래유형 (원본) */}
@@ -1386,10 +1444,13 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                 <SearchSelect
                                   value={row.toAccountId}
                                   options={accountOptions}
-                                  onChange={v => updateRow(row._key, { toAccountId: v })}
+                                  onChange={v => updateRow(row._key, { toAccountId: v, toAccountUnsure: false,
+                                    note: row.toAccountUnsure ? undefined : row.note })}
                                   ariaLabel="이체 받는 계좌"
                                   placeholder="계좌 검색"
-                                  className="border border-blue-200 bg-blue-50 text-blue-700 rounded-lg px-2 py-1 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                  className={`border rounded-lg px-2 py-1 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                    row.toAccountUnsure ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-blue-200 bg-blue-50 text-blue-700'
+                                  }`}
                                 />
                               </div>
                             ) : (
@@ -1397,7 +1458,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                 <SearchSelect
                                   value={row.categoryId}
                                   options={row.type === 'income' ? incomeCatOptions : expenseCatOptions}
-                                  onChange={v => updateRow(row._key, { categoryId: v, autoSuggested: false })}
+                                  onChange={v => updateRow(row._key, { categoryId: v, autoSuggested: false,
+                                    ...(isSavingCategory(v, categories) ? {} : { savingId: undefined }) })}
                                   onCreate={q => {
                                     const t = row.type === 'income' ? 'income' : 'expense'
                                     const id = createCategory(q, t)
@@ -1410,6 +1472,19 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                     row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'
                                   }`}
                                 />
+                                {/* 저축 카테고리면 어느 상품에 납입했는지 연동 */}
+                                {row.include && row.type === 'expense' && isSavingCategory(row.categoryId, categories) && savingOptions.length > 1 && (
+                                  <SearchSelect
+                                    value={row.savingId || ''}
+                                    options={savingOptions}
+                                    onChange={v => updateRow(row._key, { savingId: v || undefined })}
+                                    ariaLabel="연동할 저축 상품"
+                                    placeholder="🔗 저축 상품 연동"
+                                    className={`border rounded-lg px-2 py-0.5 text-[11px] w-40 focus:outline-none focus:ring-1 focus:ring-emerald-400 ${
+                                      row.savingId ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-dashed border-gray-300 bg-white text-gray-500'
+                                    }`}
+                                  />
+                                )}
                                 {/* 적요 기반 추천 — 드롭다운을 열지 않고 한 번에 지정 */}
                                 {(() => {
                                   const sug = (row.suggestions || []).filter(s => s.categoryId !== row.categoryId).slice(0, 2)
