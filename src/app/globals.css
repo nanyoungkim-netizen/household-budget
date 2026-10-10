@@ -65,3 +65,10 @@ nav .overflow-x-auto::-webkit-scrollbar { display: none; }
 
 .animate-fade-in { animation: toastFadeIn 0.25s ease; }
 @keyframes toastFadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+/* 가져오기 검토 표: 가로 스크롤바를 항상 보이게(맥 기본은 숨김) + 잡기 쉽게 두껍게.
+   scrollbar-color 같은 표준 속성을 쓰면 크롬이 아래 스타일을 무시하고 다시 숨기므로 쓰지 않는다. */
+.import-scroll::-webkit-scrollbar { width: 10px; height: 12px; }
+.import-scroll::-webkit-scrollbar-track { background: #F2F4F6; }
+.import-scroll::-webkit-scrollbar-thumb { background: #B8C0CC; border-radius: 6px; border: 2px solid #F2F4F6; }
+.import-scroll::-webkit-scrollbar-thumb:hover { background: #8B95A3; }

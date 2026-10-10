@@ -8,6 +8,7 @@ import { isCardActive } from '@/lib/card'
 import { Transaction, PaymentMethod, Category } from '@/types'
 import { matchLibrary, isTransferDesc, normalizeDesc, CANON_CAT_NAMES } from '@/lib/descLibrary'
 import { isEncryptedOOXML, decryptOOXML, OfficeWrongPasswordError, OfficeUnsupportedError } from '@/lib/officeDecrypt'
+import SearchSelect, { SearchOption } from '@/components/SearchSelect'
 
 
 
@@ -32,6 +33,37 @@ interface SuggestCtx {
   /** 과거 거래를 미리 정규화해 둔 색인 (행마다 재계산하지 않도록) */
   pastIndex: { desc: string; categoryId: string; type: string }[]
   catList: Category[]
+}
+
+/**
+ * 토스 "통장 이자 → 달러로 모으기"처럼 받은 이자를 곧바로 다른 곳으로 옮기는 출금은
+ * 같은 날 '통장 이자' 입금에서 차감해 순이자만 남긴다. (예: 이자 46원 − 달러 모으기 40원 = 6원)
+ * 출금 줄은 가져오기에서 제외하고, 두 줄 모두 무엇을 했는지 안내 문구를 단다.
+ */
+function netInterestSweeps<R extends { _key: string; date: string; description: string; amount: number;
+  type: string; include: boolean; note?: string }>(rows: R[]): R[] {
+  const isSweep = (r: R) => {
+    const d = normalizeDesc(r.description)
+    return r.type !== 'income' && d.includes('이자') && (d.includes('모으기') || d.includes('달러'))
+  }
+  const isInterest = (r: R) => r.type === 'income' && normalizeDesc(r.description).includes('이자')
+  const out = rows.map(r => ({ ...r }))
+  const used = new Set<string>()
+  for (const sw of out.filter(isSweep)) {
+    // 같은 날, 아직 짝이 없고, 금액이 충분한 이자 입금 중 차이가 가장 작은 것
+    const cand = out
+      .filter(r => isInterest(r) && r.date === sw.date && !used.has(r._key) && r.amount >= sw.amount)
+      .sort((a, b) => (a.amount - sw.amount) - (b.amount - sw.amount))[0]
+    if (!cand) continue
+    used.add(cand._key)
+    const before = cand.amount
+    cand.amount = before - sw.amount
+    cand.note = `이자 ${before.toLocaleString()}원 − 달러 모으기 ${sw.amount.toLocaleString()}원 = ${cand.amount.toLocaleString()}원`
+    if (cand.amount <= 0) cand.include = false
+    sw.include = false
+    sw.note = `같은 날 이자 ${before.toLocaleString()}원에서 차감됨 (가져오기 제외)`
+  }
+  return out
 }
 
 /** 과거 거래 색인 — buildRows에서 한 번만 만든다 */
@@ -241,6 +273,7 @@ interface ImportRow {
   include: boolean
   autoSuggested: boolean  // 자동추천 여부 표시
   suggestions?: CatSuggestion[]  // 적요 기반 카테고리 추천 후보(칩 표시용)
+  note?: string                  // 자동 처리 안내 (예: 달러 모으기 상계)
 }
 
 interface TransactionImportProps {
@@ -310,11 +343,6 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
   const [headerType,    setHeaderType]    = useState<'income' | 'expense' | 'transfer' | 'refund' | ''>('')
   const [headerCatId,   setHeaderCatId]   = useState('')
   const [headerAccId,   setHeaderAccId]   = useState('')
-
-  // FR-07: 새 카테고리 추가
-  const [newCatRowKey,   setNewCatRowKey]   = useState<string | null>(null)
-  const [newCatName,     setNewCatName]     = useState('')
-  const [newCatType,     setNewCatType]     = useState<'income' | 'expense'>('expense')
 
   function toggleBulkSelect(key: string, checked: boolean) {
     setBulkSelected(prev => {
@@ -667,7 +695,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     })
 
     setExcludedCount(skipped)
-    setRows(importRows)
+    setRows(netInterestSweeps(importRows))
     setStep('review')
   }
 
@@ -676,28 +704,6 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
     setRows(rs => rs.map(r => r._key === key ? { ...r, ...patch } : r))
   }
 
-  // FR-07: 새 카테고리 추가 + 기초설정 자동 동기화
-  function addNewCategory(rowKey: string) {
-    const name = newCatName.trim()
-    if (!name) return
-    if (categories.some(c => c.name === name)) {
-      alert('이미 존재하는 카테고리입니다')
-      return
-    }
-    const parentId = newCatType === 'income' ? 'pg_income' : 'pg_etc'
-    const newCat: Category = {
-      id: `cat_${Date.now()}`,
-      name,
-      type: newCatType,
-      icon: newCatType === 'income' ? '💰' : '📦',
-      color: '#CFD8DC',
-      parentId,
-    }
-    setCategories([...categories, newCat])
-    updateRow(rowKey, { categoryId: newCat.id, type: newCatType, autoSuggested: false })
-    setNewCatRowKey(null)
-    setNewCatName('')
-  }
 
   // FR-06: 헤더 일괄 적용
   function applyHeaderType(t: 'income' | 'expense' | 'transfer' | 'refund') {
@@ -758,8 +764,42 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   const incomeLeaf    = categories.filter(c => c.type === 'income'  && c.parentId !== null)
   const expenseLeaf   = categories.filter(c => c.type === 'expense' && c.parentId !== null)
+
+  // ── 검색 드롭다운용 옵션 ─────────────────────────────────────────────────
+  const parentNameOf = (c: Category) => (c.parentId ? categories.find(p => p.id === c.parentId)?.name : undefined)
+  const catOptions = (list: Category[]): SearchOption[] =>
+    list.map(c => ({ value: c.id, label: c.name, icon: c.icon, group: parentNameOf(c) }))
+  const incomeCatOptions  = catOptions(incomeLeaf)
+  const expenseCatOptions = catOptions(expenseLeaf)
+  const accountOptions: SearchOption[] = accounts.map(a => ({
+    value: a.id, label: a.name, group: a.bank !== a.name ? a.bank : undefined, keywords: a.accountNumber,
+  }))
+
+  /** 검색 드롭다운에서 바로 새 카테고리 만들기. 저축성 이름이면 저축 대분류 아래에 둔다(실소비 제외). */
+  function createCategory(name: string, type: 'income' | 'expense'): string | null {
+    const n = name.trim()
+    if (!n) return null
+    const exist = categories.find(c => c.type === type && c.name === n)
+    if (exist) return exist.id
+    const parents = categories.filter(c => c.parentId === null && c.type === type)
+    const savingLike = /잔돈|모으기|적금|저축|청약/.test(n)
+    const parent = type === 'income'
+      ? parents.find(c => c.id === 'pg_income') ?? parents[0]
+      : (savingLike ? parents.find(c => c.role === 'savings') : undefined)
+        ?? parents.find(c => c.id === 'pg_etc') ?? parents[parents.length - 1]
+    const newCat: Category = {
+      id: `cat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: n, type,
+      icon: savingLike ? '🐷' : type === 'income' ? '💰' : '📦',
+      color: '#CFD8DC',
+      ...(parent ? { parentId: parent.id } : {}),
+    }
+    setCategories([...categories, newCat])
+    return newCat.id
+  }
   const selectedCount = rows.filter(r => r.include).length
   const suggestedCount = rows.filter(r => r.include && r.autoSuggested).length
+  const sweepCount     = rows.filter(r => r.note && !r.include && r.type !== 'income').length
 
   const headerOptions = (
     <>
@@ -770,7 +810,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
-      <div className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[95vh]">
+      <div className={`bg-white rounded-t-3xl md:rounded-2xl w-full shadow-2xl flex flex-col ${
+        step === 'review' ? 'max-w-[1500px] h-[96vh]' : 'max-w-4xl max-h-[95vh]'
+      }`}>
 
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
@@ -1099,7 +1141,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
         {/* ── Step 3: 검토 & 수정 ── */}
         {step === 'review' && (
           <>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 flex flex-col">
               {/* 상단 요약 */}
               <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between flex-shrink-0">
                 <div className="text-sm text-blue-700 flex items-center gap-2 flex-wrap">
@@ -1113,6 +1155,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                   )}
                   {suggestedCount > 0 && (
                     <span className="text-xs text-blue-500">✨ {suggestedCount}건 카테고리 자동추천됨</span>
+                  )}
+                  {sweepCount > 0 && (
+                    <span className="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">💱 달러 모으기 {sweepCount}건을 이자에서 차감</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
@@ -1129,7 +1174,7 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
 
               {/* 일괄 변경 툴바 */}
               {bulkSelected.size > 0 && (
-                <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex flex-wrap items-center gap-2">
+                <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex flex-wrap items-center gap-2 flex-shrink-0">
                   <span className="text-xs font-semibold text-indigo-700">{bulkSelected.size}개 선택됨</span>
                   <select
                     value={bulkType}
@@ -1142,16 +1187,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                     <option value="refund">환급</option>
                   </select>
                   {bulkType !== 'transfer' && (
-                    <select
+                    <SearchSelect
                       value={bulkCatId}
-                      onChange={e => setBulkCatId(e.target.value)}
-                      className="border border-indigo-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    >
-                      <option value="">-- 카테고리 선택 --</option>
-                      {(bulkType === 'income' ? incomeLeaf : expenseLeaf).map(c => (
-                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                      ))}
-                    </select>
+                      options={bulkType === 'income' ? incomeCatOptions : expenseCatOptions}
+                      onChange={setBulkCatId}
+                      ariaLabel="일괄 카테고리"
+                      placeholder="카테고리 검색"
+                      className="border border-indigo-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-40"
+                    />
                   )}
                   <button
                     onClick={applyBulk}
@@ -1168,8 +1211,8 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                 </div>
               )}
 
-              {/* 검토 테이블 */}
-              <div className="overflow-x-auto">
+              {/* 검토 테이블 — 이 영역 안에서 가로·세로 스크롤 (가로 스크롤바가 항상 화면 하단에 보임) */}
+              <div className="import-scroll flex-1 min-h-0 overflow-auto">
                 <table className="w-full text-sm">
                   {/* FR-11: sticky 헤더 + FR-06: 헤더 일괄 적용 */}
                   <thead className="sticky top-0 z-10">
@@ -1227,13 +1270,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                       </td>
                       {/* 카테고리 전체 적용 */}
                       <td className="px-3 py-1">
-                        <select value={headerCatId}
-                          onChange={e => applyHeaderCat(e.target.value)}
-                          className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-32">
-                          <option value="">— 카테고리</option>
-                          {expenseLeaf.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                          {incomeLeaf.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                        </select>
+                        <SearchSelect
+                          value={headerCatId}
+                          options={[...expenseCatOptions, ...incomeCatOptions]}
+                          onChange={applyHeaderCat}
+                          ariaLabel="카테고리 전체 적용"
+                          placeholder="— 카테고리 전체적용"
+                          className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-40"
+                        />
                       </td>
                       {/* 계좌 전체 적용 */}
                       {importSourceType === 'card' ? (
@@ -1241,12 +1285,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                       ) : (
                         <>
                           <td className="px-3 py-1">
-                            <select value={headerAccId}
-                              onChange={e => applyHeaderAcc(e.target.value)}
-                              className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-28">
-                              <option value="">— 계좌</option>
-                              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                            </select>
+                            <SearchSelect
+                              value={headerAccId}
+                              options={accountOptions}
+                              onChange={applyHeaderAcc}
+                              ariaLabel="계좌 전체 적용"
+                              placeholder="— 계좌 전체적용"
+                              className="border border-indigo-200 rounded-lg px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 w-32"
+                            />
                           </td>
                           <td className="px-3 py-1" />
                         </>
@@ -1291,6 +1337,9 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                 <span title="카테고리 자동추천됨" className="text-yellow-400 text-xs">✨</span>
                               )}
                             </div>
+                            {row.note && (
+                              <div className="mt-1 text-[10px] leading-tight text-sky-600 whitespace-nowrap">💱 {row.note}</div>
+                            )}
                           </td>
                           {/* 거래유형 (원본) */}
                           {colTxType >= 0 && (
@@ -1334,34 +1383,33 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                             {isTransferRow ? (
                               <div className="flex items-center gap-1 text-xs text-blue-500 whitespace-nowrap">
                                 <span>→</span>
-                                <select value={row.toAccountId}
-                                  onChange={e => updateRow(row._key, { toAccountId: e.target.value })}
-                                  className="border border-blue-200 bg-blue-50 text-blue-700 rounded-lg px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                >
-                                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
+                                <SearchSelect
+                                  value={row.toAccountId}
+                                  options={accountOptions}
+                                  onChange={v => updateRow(row._key, { toAccountId: v })}
+                                  ariaLabel="이체 받는 계좌"
+                                  placeholder="계좌 검색"
+                                  className="border border-blue-200 bg-blue-50 text-blue-700 rounded-lg px-2 py-1 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                />
                               </div>
                             ) : (
                               <div className="flex flex-col gap-1">
-                                <select value={row.categoryId}
-                                  onChange={e => {
-                                    if (e.target.value === '__new__') {
-                                      setNewCatRowKey(row._key)
-                                      setNewCatType(row.type === 'income' ? 'income' : 'expense')
-                                      setNewCatName('')
-                                    } else {
-                                      updateRow(row._key, { categoryId: e.target.value, autoSuggested: false })
-                                    }
+                                <SearchSelect
+                                  value={row.categoryId}
+                                  options={row.type === 'income' ? incomeCatOptions : expenseCatOptions}
+                                  onChange={v => updateRow(row._key, { categoryId: v, autoSuggested: false })}
+                                  onCreate={q => {
+                                    const t = row.type === 'income' ? 'income' : 'expense'
+                                    const id = createCategory(q, t)
+                                    if (id) updateRow(row._key, { categoryId: id, type: t, autoSuggested: false })
                                   }}
-                                  className={`border rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                                    row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
+                                  createLabel="새 카테고리로 추가"
+                                  ariaLabel="카테고리"
+                                  placeholder="카테고리 검색"
+                                  className={`border rounded-lg px-2 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                    row.autoSuggested ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'
                                   }`}
-                                >
-                                  {catList.map(c => (
-                                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                                  ))}
-                                  <option value="__new__">➕ 새 카테고리 추가</option>
-                                </select>
+                                />
                                 {/* 적요 기반 추천 — 드롭다운을 열지 않고 한 번에 지정 */}
                                 {(() => {
                                   const sug = (row.suggestions || []).filter(s => s.categoryId !== row.categoryId).slice(0, 2)
@@ -1386,31 +1434,6 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                                     </div>
                                   )
                                 })()}
-                                {/* FR-07: 새 카테고리 인라인 추가 UI */}
-                                {newCatRowKey === row._key && (
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <input
-                                      autoFocus
-                                      type="text"
-                                      value={newCatName}
-                                      onChange={e => setNewCatName(e.target.value)}
-                                      onKeyDown={e => {
-                                        if (e.key === 'Enter') addNewCategory(row._key)
-                                        if (e.key === 'Escape') setNewCatRowKey(null)
-                                      }}
-                                      placeholder="카테고리명"
-                                      className="border border-indigo-300 rounded px-1.5 py-0.5 text-[10px] w-20 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                                    />
-                                    <button
-                                      onClick={() => addNewCategory(row._key)}
-                                      className="text-[10px] bg-indigo-500 text-white rounded px-1.5 py-0.5 hover:bg-indigo-600"
-                                    >추가</button>
-                                    <button
-                                      onClick={() => setNewCatRowKey(null)}
-                                      className="text-[10px] text-gray-400 hover:text-gray-600"
-                                    >✕</button>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </td>
@@ -1424,12 +1447,14 @@ export default function TransactionImport({ onClose }: TransactionImportProps) {
                           ) : (
                             <>
                               <td className="px-3 py-2">
-                                <select value={row.accountId}
-                                  onChange={e => updateRow(row._key, { accountId: e.target.value })}
-                                  className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                >
-                                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
+                                <SearchSelect
+                                  value={row.accountId}
+                                  options={accountOptions}
+                                  onChange={v => updateRow(row._key, { accountId: v })}
+                                  ariaLabel="계좌"
+                                  placeholder="계좌 검색"
+                                  className="border border-gray-200 bg-white rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                />
                               </td>
                               {/* 결제수단 (이체면 비활성) */}
                               <td className="px-3 py-2">
